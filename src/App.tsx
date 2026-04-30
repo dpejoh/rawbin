@@ -67,6 +67,7 @@ export default function App() {
         navRef={railRef}
         userInitials={userInitials}
         onSignOut={signOut}
+        onNavigate={handleNavigate}
       />
 
       <mdui-layout-main>
@@ -82,6 +83,7 @@ export default function App() {
           icon="vpn_key--outlined"
           active-icon="vpn_key"
           value="keybox"
+          onClick={() => handleNavigate('keybox')}
         >
           Keybox
         </mdui-navigation-bar-item>
@@ -89,6 +91,7 @@ export default function App() {
           icon="content_paste--outlined"
           active-icon="content_paste"
           value="clipboards"
+          onClick={() => handleNavigate('clipboards')}
         >
           Boards
         </mdui-navigation-bar-item>
@@ -96,6 +99,7 @@ export default function App() {
           icon="folder--outlined"
           active-icon="folder"
           value="files"
+          onClick={() => handleNavigate('files')}
         >
           Files
         </mdui-navigation-bar-item>

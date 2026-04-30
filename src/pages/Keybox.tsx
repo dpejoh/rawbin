@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { snackbar } from 'mdui';
-import { useMduiInput, useMduiSwitch } from '../hooks/useMdui';
+import { useMduiSwitch } from '../hooks/useMdui';
 import RawUrlRow from '../components/RawUrlRow';
 import SaveButton from '../components/SaveButton';
 
@@ -18,7 +18,6 @@ export default function Keybox({ token }: KeyboxProps) {
   const [isLoading,    setIsLoading]    = useState(true);
   const [isSaving,     setIsSaving]     = useState(false);
 
-  const contentRef  = useMduiInput(content, setContent);
   const switchRef   = useMduiSwitch(useBase64, setUseBase64);
   const pasteRef = useRef<any>(null);
 
@@ -130,14 +129,12 @@ export default function Keybox({ token }: KeyboxProps) {
             ))}
           </div>
         ) : (
-          <mdui-text-field
-            ref={contentRef}
-            variant="outlined"
-            autosize
-            min-rows={12}
-            max-rows={20}
+          <textarea
+            value={content}
+            onChange={e => setContent(e.target.value)}
+            className="keybox-textarea"
+            rows={12}
             placeholder="Paste your keybox here…"
-            style={{ width: '100%', fontFamily: "'Geist Mono', monospace" }}
           />
         )}
       </mdui-card>

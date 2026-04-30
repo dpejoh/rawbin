@@ -226,3 +226,22 @@ mdui-layout-main {
   border-radius: var(--mdui-shape-corner-extra-small);
   animation: shimmer 1.5s ease-in-out infinite;
 }
+
+.keybox-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: 'Geist Mono', monospace;
+  font-size: var(--mdui-typescale-body-large-font-size, 16px);
+  line-height: 1.5;
+  color: var(--mdui-color-on-surface);
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: vertical;
+  padding: 0;
+}
+
+.keybox-textarea::placeholder {
+  color: var(--mdui-color-on-surface-variant);
+  opacity: 0.6;
+}

@@ -5,9 +5,10 @@ interface NavRailProps {
   navRef: RefObject<any>;
   userInitials: string;
   onSignOut: () => void;
+  onNavigate: (page: string) => void;
 }
 
-export default function NavRail({ navRef, userInitials, onSignOut }: NavRailProps) {
+export default function NavRail({ navRef, userInitials, onSignOut, onNavigate }: NavRailProps) {
   const menuRef = useRef<any>(null);
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export default function NavRail({ navRef, userInitials, onSignOut }: NavRailProp
         icon="vpn_key--outlined"
         active-icon="vpn_key"
         value="keybox"
+        onClick={() => onNavigate('keybox')}
       >
         Keybox
       </mdui-navigation-rail-item>
@@ -44,6 +46,7 @@ export default function NavRail({ navRef, userInitials, onSignOut }: NavRailProp
         icon="content_paste--outlined"
         active-icon="content_paste"
         value="clipboards"
+        onClick={() => onNavigate('clipboards')}
       >
         Boards
       </mdui-navigation-rail-item>
@@ -52,6 +55,7 @@ export default function NavRail({ navRef, userInitials, onSignOut }: NavRailProp
         icon="folder--outlined"
         active-icon="folder"
         value="files"
+        onClick={() => onNavigate('files')}
       >
         Files
       </mdui-navigation-rail-item>

@@ -46,7 +46,6 @@ export default function ClipboardEditor({
   const [editingSlug,  setEditingSlug]  = useState(false);
   const [isSaving,     setIsSaving]     = useState(false);
 
-  const contentRef  = useMduiInput(content, setContent);
   const nameRef     = useMduiInput(name, setName);
   const slugRef     = useMduiInput(slug, setSlug);
   const switchRef   = useMduiSwitch(useBase64, setUseBase64);
@@ -171,12 +170,11 @@ export default function ClipboardEditor({
         )}
       </div>
 
-      <mdui-text-field
-        ref={contentRef}
-        variant="outlined"
-        autosize
-        min-rows={10}
-        max-rows={20}
+      <textarea
+        value={content}
+        onChange={e => setContent(e.target.value)}
+        className="keybox-textarea"
+        rows={10}
         placeholder="Start typing…"
         style={{ width: '100%', marginBottom: 16 }}
       />
