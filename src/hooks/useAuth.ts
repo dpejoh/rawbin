@@ -1,14 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import netlifyIdentity from "netlify-identity-widget";
 
-interface IdentityUser {
-  id: string;
-  email?: string;
-  jwt: (forceRefresh?: boolean) => Promise<string>;
-}
-
-const SITE_URL = window.location.origin;
-
 export interface AuthUser {
   email: string;
   id: string;
@@ -27,50 +19,60 @@ export default function useAuth(): UseAuthReturn {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const handleUser = useCallback((u: IdentityUser | null) => {
+  const handleUser = useCallback(async (u: unknown) => {
     if (!u) {
       setUser(null);
       setToken(null);
       setIsLoading(false);
       return;
     }
-    setUser({ email: u.email ?? "", id: u.id });
-    u.jwt()
-      .then((t: string) => setToken(t))
-      .catch(() => setToken(null))
-      .finally(() => setIsLoading(false));
+    const userData = u as { email?: string; id: string };
+    setUser({ email: userData.email ?? "", id: userData.id });
+
+    try {
+      const jwt = await netlifyIdentity.refresh();
+      setToken(jwt);
+    } catch {
+      setToken(null);
+    }
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
-    const onInit = () => {
-      const currentUser = netlifyIdentity.currentUser() as IdentityUser | null;
-      if (currentUser) {
-        handleUser(currentUser);
+    const onInit = (u: unknown) => {
+      if (u) {
+        handleUser(u);
       } else {
         setIsLoading(false);
         netlifyIdentity.open();
       }
     };
 
-    const onLogin = (u: unknown) => handleUser(u as IdentityUser);
+    const onLogin = (u: unknown) => handleUser(u);
 
     const onLogout = () => {
-      handleUser(null);
+      setUser(null);
+      setToken(null);
+      setIsLoading(false);
       netlifyIdentity.open();
+    };
+
+    const onError = (err: unknown) => {
+      console.error("[Identity]", err);
     };
 
     netlifyIdentity.on("init", onInit);
     netlifyIdentity.on("login", onLogin);
     netlifyIdentity.on("logout", onLogout);
+    netlifyIdentity.on("error", onError);
 
-    netlifyIdentity.init({
-      APIUrl: `${SITE_URL}/.netlify/identity`,
-    });
+    netlifyIdentity.init();
 
     return () => {
       netlifyIdentity.off("init", onInit);
       netlifyIdentity.off("login", onLogin);
       netlifyIdentity.off("logout", onLogout);
+      netlifyIdentity.off("error", onError);
     };
   }, [handleUser]);
 
