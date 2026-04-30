@@ -110,12 +110,11 @@ export default function FilesPage({ token }: FilesPageProps) {
     if (res.ok) {
       setAllItems(prev => prev.filter(f => f.id !== deleteTarget.id));
       snackbar({ message: 'Deleted', placement: 'bottom', autoCloseDelay: 2000 });
-      fetchFiles();
     } else {
       snackbar({ message: 'Failed to delete', placement: 'bottom', autoCloseDelay: 3000 });
     }
     setDeleteTarget(null);
-  }, [token, deleteTarget, fetchFiles]);
+  }, [token, deleteTarget]);
 
   const handleCreateFolder = useCallback(async (name: string) => {
     if (!token) return;
@@ -132,11 +131,10 @@ export default function FilesPage({ token }: FilesPageProps) {
         parentId: currentFolderId, isFolder: true, createdAt: now, updatedAt: now,
       }]);
       snackbar({ message: 'Folder created', placement: 'bottom', autoCloseDelay: 2000 });
-      fetchFiles();
     } else {
       snackbar({ message: (await res.text()) || 'Failed to create folder', placement: 'bottom', autoCloseDelay: 3000 });
     }
-  }, [token, currentFolderId, fetchFiles]);
+  }, [token, currentFolderId]);
 
   const uploadFile = useCallback(async (file: File): Promise<string> => {
     if (!token) throw new Error('No token');
@@ -167,12 +165,11 @@ export default function FilesPage({ token }: FilesPageProps) {
         size: file.size, parentId: currentFolderId, createdAt: now, updatedAt: now,
       }]);
       snackbar({ message: 'File uploaded', placement: 'bottom', autoCloseDelay: 2000 });
-      fetchFiles();
     } catch {
       snackbar({ message: 'Upload failed', placement: 'bottom', autoCloseDelay: 3000 });
     }
     e.target.value = '';
-  }, [token, uploadFile, fetchFiles, currentFolderId]);
+  }, [token, uploadFile, currentFolderId]);
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
@@ -193,7 +190,6 @@ export default function FilesPage({ token }: FilesPageProps) {
       } catch { fail++; }
     }
     if (newItems.length > 0) setAllItems(prev => [...prev, ...newItems]);
-    fetchFiles();
     snackbar({
       message: fail === 0
         ? `${ok} file${ok !== 1 ? 's' : ''} uploaded`
@@ -201,7 +197,7 @@ export default function FilesPage({ token }: FilesPageProps) {
       placement: 'bottom',
       autoCloseDelay: 3000,
     });
-  }, [uploadFile, fetchFiles, currentFolderId]);
+  }, [uploadFile, currentFolderId]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -365,7 +361,7 @@ export default function FilesPage({ token }: FilesPageProps) {
         token={token}
         currentFolderId={currentFolderId}
         onClose={() => setUploadOpen(false)}
-        onUploaded={() => { setUploadOpen(false); fetchFiles(); }}
+        onUploaded={() => setUploadOpen(false)}
       />
 
       <CreateFolderDialog
