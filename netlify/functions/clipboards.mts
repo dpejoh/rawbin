@@ -70,9 +70,12 @@ export default async (req: Request) => {
   const segments = path.split("/").filter(Boolean);
   const rawId = segments[segments.length - 1];
 
-  const isRawRequest = rawId && segments.length >= 2 && segments[segments.length - 2] === "clipboards";
+  const isRawRequest = method === "GET" && !!rawId && (
+    (segments[0] === "clips" && segments.length >= 2) ||
+    (segments[segments.length - 2] === "clipboards")
+  );
 
-  if (method === "GET" && isRawRequest) {
+  if (isRawRequest && rawId) {
     const index = await getIndex();
     const item = findBySlug(index, rawId);
     if (!item) {
