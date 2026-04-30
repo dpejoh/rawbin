@@ -214,3 +214,15 @@ mdui-layout-main {
   display: flex;
   gap: 8px;
 }
+
+@keyframes shimmer {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
+.skeleton {
+  background: var(--mdui-color-surface-container-high);
+  border-radius: var(--mdui-shape-corner-extra-small);
+  animation: shimmer 1.5s ease-in-out infinite;
+}

@@ -174,7 +174,7 @@ export default function ClipboardEditor({
       <mdui-text-field
         ref={contentRef}
         variant="outlined"
-        multiline
+        autosize
         min-rows={10}
         max-rows={20}
         placeholder="Start typing…"

@@ -30,7 +30,7 @@ export default function ClipboardList({
     const handler = (e: MouseEvent) => {
       const item = (e.target as HTMLElement).closest('mdui-list-item');
       if (item) {
-        const id = item.getAttribute('value');
+        const id = item.getAttribute('data-value');
         if (id) onSelect(id);
       }
     };
@@ -71,14 +71,7 @@ export default function ClipboardList({
     return (
       <div className="clipboard-panel" style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {Array.from({ length: 5 }).map((_, i) => (
-          <mdui-skeleton
-            key={i}
-            style={{
-              height: 64,
-              borderRadius: 'var(--mdui-shape-corner-small)',
-              display: 'block',
-            }}
-          />
+          <div key={i} className="skeleton" style={{ height: 64 }} />
         ))}
       </div>
     );
@@ -92,7 +85,7 @@ export default function ClipboardList({
           return (
             <mdui-list-item
               key={cb.id}
-              value={cb.id}
+              data-value={cb.id}
               icon="description"
               rounded
               style={

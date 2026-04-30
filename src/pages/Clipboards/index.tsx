@@ -17,6 +17,21 @@ function clipboardUrl(id: string, slug?: string): string {
 
 export default function ClipboardsPage({ token }: ClipboardsPageProps) {
   const isMobile = useIsMobile();
+  const pageRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = pageRef.current;
+    if (!el) return;
+    const handler = (e: MouseEvent) => {
+      const btn = (e.target as HTMLElement).closest('[data-action]') as HTMLElement | null;
+      if (!btn) return;
+      const action = btn.getAttribute('data-action');
+      if (action === 'new-clipboard') setCreateOpen(true);
+      else if (action === 'back') setMobileEditorOpen(false);
+    };
+    el.addEventListener('click', handler);
+    return () => el.removeEventListener('click', handler);
+  }, []);
   const {
     clipboards, selected, isLoading,
     fetchAll, select, create, update, remove,
@@ -104,8 +119,8 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
         <mdui-button
           variant="text"
           icon="arrow_back"
+          data-action="back"
           style={{ margin: 8 }}
-          onClick={() => setMobileEditorOpen(false)}
         >
           Back
         </mdui-button>
@@ -121,7 +136,7 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
   const isEmpty = !isLoading && clipboards.length === 0;
 
   return (
-    <div className={`page-fill${isMobile ? ' mobile-pb' : ''}`}>
+    <div ref={pageRef} className={`page-fill${isMobile ? ' mobile-pb' : ''}`}>
       <div
         style={{
           display: 'flex',
@@ -141,7 +156,7 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
             Freeform text storage with raw endpoints.
           </p>
         </div>
-        <mdui-button variant="tonal" icon="add" onClick={() => setCreateOpen(true)}>
+        <mdui-button variant="tonal" icon="add" data-action="new-clipboard">
           New Clipboard
         </mdui-button>
       </div>

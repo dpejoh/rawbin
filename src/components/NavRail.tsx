@@ -19,50 +19,44 @@ export default function NavRail({ navRef, userInitials, onSignOut }: NavRailProp
   }, [onSignOut]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <mdui-navigation-rail
-        ref={navRef}
-        label-visibility="selected"
-        style={{ flex: 1 }}
+    <mdui-navigation-rail ref={navRef} label-visibility="selected">
+      <mdui-icon
+        slot="header"
+        name="key"
+        style={{
+          fontSize: 28,
+          color: 'var(--mdui-color-primary)',
+          padding: '12px 0 20px',
+          display: 'block',
+          textAlign: 'center',
+        }}
+      />
+
+      <mdui-navigation-rail-item
+        icon="vpn_key--outlined"
+        active-icon="vpn_key"
+        value="keybox"
       >
-        <mdui-icon
-          slot="header"
-          name="key"
-          style={{
-            fontSize: 28,
-            color: 'var(--mdui-color-primary)',
-            padding: '12px 0 20px',
-            display: 'block',
-            textAlign: 'center',
-          }}
-        />
+        Keybox
+      </mdui-navigation-rail-item>
 
-        <mdui-navigation-rail-item
-          icon="vpn_key--outlined"
-          active-icon="vpn_key"
-          value="keybox"
-        >
-          Keybox
-        </mdui-navigation-rail-item>
+      <mdui-navigation-rail-item
+        icon="content_paste--outlined"
+        active-icon="content_paste"
+        value="clipboards"
+      >
+        Boards
+      </mdui-navigation-rail-item>
 
-        <mdui-navigation-rail-item
-          icon="content_paste--outlined"
-          active-icon="content_paste"
-          value="clipboards"
-        >
-          Boards
-        </mdui-navigation-rail-item>
+      <mdui-navigation-rail-item
+        icon="folder--outlined"
+        active-icon="folder"
+        value="files"
+      >
+        Files
+      </mdui-navigation-rail-item>
 
-        <mdui-navigation-rail-item
-          icon="folder--outlined"
-          active-icon="folder"
-          value="files"
-        >
-          Files
-        </mdui-navigation-rail-item>
-      </mdui-navigation-rail>
-
-      <div className="nav-footer">
+      <div slot="bottom" className="nav-footer">
         <mdui-dropdown placement="right-end">
           <mdui-avatar
             slot="trigger"
@@ -75,6 +69,6 @@ export default function NavRail({ navRef, userInitials, onSignOut }: NavRailProp
           </mdui-menu>
         </mdui-dropdown>
       </div>
-    </div>
+    </mdui-navigation-rail>
   );
 }

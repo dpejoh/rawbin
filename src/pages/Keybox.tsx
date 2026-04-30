@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { snackbar } from 'mdui';
 import { useMduiInput, useMduiSwitch } from '../hooks/useMdui';
 import RawUrlRow from '../components/RawUrlRow';
@@ -20,6 +20,7 @@ export default function Keybox({ token }: KeyboxProps) {
 
   const contentRef  = useMduiInput(content, setContent);
   const switchRef   = useMduiSwitch(useBase64, setUseBase64);
+  const pasteRef = useRef<any>(null);
 
   useEffect(() => {
     async function load() {
@@ -82,6 +83,13 @@ export default function Keybox({ token }: KeyboxProps) {
     }
   }, []);
 
+  useEffect(() => {
+    const el = pasteRef.current;
+    if (!el) return;
+    el.addEventListener('click', handlePaste);
+    return () => el.removeEventListener('click', handlePaste);
+  }, [handlePaste]);
+
   const hasUnsaved = useMemo(
     () => content !== savedContent || useBase64 !== savedBase64,
     [content, savedContent, useBase64, savedBase64],
@@ -118,21 +126,14 @@ export default function Keybox({ token }: KeyboxProps) {
         {isLoading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[288, 24, 24].map((h, i) => (
-              <mdui-skeleton
-                key={i}
-                style={{
-                  height: h,
-                  borderRadius: 'var(--mdui-shape-corner-extra-small)',
-                  display: 'block',
-                }}
-              />
+              <div key={i} className="skeleton" style={{ height: h }} />
             ))}
           </div>
         ) : (
           <mdui-text-field
             ref={contentRef}
             variant="outlined"
-            multiline
+            autosize
             min-rows={12}
             max-rows={20}
             placeholder="Paste your keybox here…"
@@ -150,9 +151,9 @@ export default function Keybox({ token }: KeyboxProps) {
         </p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <mdui-button
+            ref={pasteRef}
             variant="outlined"
             icon="content_paste"
-            onClick={handlePaste}
           >
             Paste
           </mdui-button>

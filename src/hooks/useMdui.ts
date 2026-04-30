@@ -17,9 +17,15 @@ export function useMduiInput(
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const handler = () => onChange(el.value ?? '');
+    const handler = () => {
+      onChange(el.value ?? '');
+    };
     el.addEventListener('input', handler);
-    return () => el.removeEventListener('input', handler);
+    el.addEventListener('change', handler);
+    return () => {
+      el.removeEventListener('input', handler);
+      el.removeEventListener('change', handler);
+    };
   }, [onChange]);
 
   return ref;
@@ -80,7 +86,9 @@ export function useMduiNav(
     const el = ref.current;
     if (!el) return;
     const handler = (e: Event) => {
-      onChange((e.target as any)?.value ?? '');
+      const val = (e.target as any)?.value ?? el.value;
+      console.log('[MDUI Nav] change:', val, 'target:', e.target, 'el.value:', el.value);
+      onChange(val);
     };
     el.addEventListener('change', handler);
     return () => el.removeEventListener('change', handler);
@@ -96,5 +104,16 @@ export function useMduiProps(props: Record<string, unknown>): Ref {
     if (!el) return;
     for (const [k, v] of Object.entries(props)) el[k] = v;
   }, [props]);
+  return ref;
+}
+
+export function useNativeClick(handler: () => void): Ref {
+  const ref = useRef<any>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.addEventListener('click', handler);
+    return () => el.removeEventListener('click', handler);
+  }, [handler]);
   return ref;
 }
