@@ -18,7 +18,7 @@ export function useMduiInput(
     const el = ref.current;
     if (!el) return;
     const handler = () => {
-      onChange(el.value ?? '');
+      queueMicrotask(() => onChange(el.value ?? ''));
     };
     el.addEventListener('input', handler);
     el.addEventListener('change', handler);
@@ -86,8 +86,9 @@ export function useMduiNav(
     const el = ref.current;
     if (!el) return;
     const handler = (e: Event) => {
-      const val = (e.target as any)?.value ?? el.value;
-      console.log('[MDUI Nav] change:', val, 'target:', e.target, 'el.value:', el.value);
+      const ce = e as any;
+      const val = ce.detail?.value ?? ce.target?.value ?? el.value ?? '';
+      console.log('[MDUI Nav] change:', { val, detail: ce.detail, target: ce.target, elValue: el.value });
       onChange(val);
     };
     el.addEventListener('change', handler);
