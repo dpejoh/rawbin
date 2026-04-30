@@ -1,5 +1,8 @@
+import { useMemo } from 'react';
 import { relativeTime } from '../../utils/time';
+import { detectContentType } from '../../utils/detectType';
 import type { Clipboard } from '../../hooks/useClipboards';
+import type { ContentType } from '../../utils/detectType';
 
 interface ClipboardListProps {
   clipboards: Clipboard[];
@@ -11,6 +14,28 @@ interface ClipboardListProps {
   onDelete: (id: string) => void;
 }
 
+const typeColorMap: Record<string, string> = {
+  json:  'var(--mdui-color-tertiary)',
+  xml:   'var(--mdui-color-secondary)',
+  pem:   'var(--mdui-color-primary)',
+  yaml:  'var(--mdui-color-tertiary)',
+  toml:  'var(--mdui-color-secondary)',
+  text:  'var(--mdui-color-on-surface-variant)',
+  empty: 'var(--mdui-color-outline)',
+  base64:'var(--mdui-color-on-surface-variant)',
+};
+
+const typeBgMap: Record<string, string> = {
+  json:  'var(--mdui-color-tertiary-container)',
+  xml:   'var(--mdui-color-secondary-container)',
+  pem:   'var(--mdui-color-primary-container)',
+  yaml:  'var(--mdui-color-tertiary-container)',
+  toml:  'var(--mdui-color-secondary-container)',
+  text:  'var(--mdui-color-surface-container-high)',
+  empty: 'var(--mdui-color-surface-container)',
+  base64:'var(--mdui-color-surface-container-high)',
+};
+
 export default function ClipboardList({
   clipboards,
   selectedId,
@@ -20,6 +45,15 @@ export default function ClipboardList({
   onCopyUrl,
   onDelete,
 }: ClipboardListProps) {
+  const typeInfoMap = useMemo(() => {
+    const map: Record<string, { type: ContentType; label: string; color: string }> = {};
+    for (const cb of clipboards) {
+      const info = detectContentType(cb.content ?? '');
+      map[cb.id] = info;
+    }
+    return map;
+  }, [clipboards]);
+
   if (isLoading) {
     return (
       <div className="clipboard-panel" style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -35,6 +69,7 @@ export default function ClipboardList({
       <mdui-list>
         {clipboards.map((cb) => {
           const isActive = cb.id === selectedId;
+          const typeInfo = typeInfoMap[cb.id];
           return (
             <mdui-list-item
               key={cb.id}
@@ -44,8 +79,19 @@ export default function ClipboardList({
               onClick={() => onSelect(cb.id)}
             >
               {cb.name}
-              <span slot="description">
+              <span slot="description" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 {relativeTime(cb.updatedAt)} · {cb.content.length.toLocaleString()} chars
+                {typeInfo && typeInfo.type !== 'text' && typeInfo.type !== 'empty' && (
+                  <span
+                    className="type-badge"
+                    style={{
+                      color: typeColorMap[typeInfo.type] ?? 'var(--mdui-color-on-surface-variant)',
+                      backgroundColor: typeBgMap[typeInfo.type] ?? 'var(--mdui-color-surface-container-high)',
+                    }}
+                  >
+                    {typeInfo.label}
+                  </span>
+                )}
               </span>
 
               <div slot="end-icon" onClick={(e) => e.stopPropagation()}>

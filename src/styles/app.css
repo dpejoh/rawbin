@@ -61,11 +61,49 @@ mdui-layout-main {
   text-align: center;
 }
 
+.nav-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 20px;
+}
+
+.nav-wordmark {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--mdui-color-on-surface);
+  letter-spacing: 0.02em;
+}
+
+.nav-group-label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mdui-color-on-surface-variant);
+  padding: 4px 16px 4px;
+  opacity: 0.5;
+}
+
 .nav-footer {
   padding: 12px;
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 8px;
   border-top: 1px solid var(--mdui-color-outline-variant);
+  position: relative;
+}
+
+.nav-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mdui-color-primary);
+  position: absolute;
+  bottom: 14px;
+  left: calc(50% + 10px);
+  opacity: 0.8;
 }
 
 .page {
@@ -95,6 +133,16 @@ mdui-layout-main {
   background: var(--mdui-color-surface-container);
   border-radius: var(--mdui-shape-corner-extra-small);
   padding: 8px 12px;
+  border: 0.5px solid var(--mdui-color-outline-variant);
+}
+
+.url-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mdui-color-primary);
+  flex-shrink: 0;
+  opacity: 0.7;
 }
 
 .raw-url-text {
@@ -244,4 +292,15 @@ mdui-layout-main {
 .keybox-textarea::placeholder {
   color: var(--mdui-color-on-surface-variant);
   opacity: 0.6;
+}
+
+.type-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  border-radius: 3px;
+  padding: 0 5px;
+  line-height: 16px;
+  text-transform: uppercase;
 }

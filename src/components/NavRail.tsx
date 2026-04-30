@@ -5,22 +5,24 @@ interface NavRailProps {
   userInitials: string;
   onSignOut: () => void;
   onNavigate: (page: string) => void;
+  clipboardCount?: number;
+  fileCount?: number;
 }
 
-export default function NavRail({ navRef, userInitials, onSignOut, onNavigate }: NavRailProps) {
+export default function NavRail({ navRef, userInitials, onSignOut, onNavigate, clipboardCount, fileCount }: NavRailProps) {
   return (
     <mdui-navigation-rail ref={navRef} label-visibility="selected">
-      <mdui-icon
-        slot="header"
-        name="key"
-        style={{
-          fontSize: 28,
-          color: 'var(--mdui-color-primary)',
-          padding: '12px 0 20px',
-          display: 'block',
-          textAlign: 'center',
-        }}
-      />
+      <div slot="header" className="nav-header">
+        <mdui-icon
+          name="key"
+          style={{
+            fontSize: 22,
+            color: 'var(--mdui-color-primary)',
+            display: 'block',
+          }}
+        />
+        <span className="nav-wordmark">keybox</span>
+      </div>
 
       <mdui-navigation-rail-item
         icon="vpn_key--outlined"
@@ -38,6 +40,9 @@ export default function NavRail({ navRef, userInitials, onSignOut, onNavigate }:
         onClick={() => onNavigate('clipboards')}
       >
         Boards
+        {clipboardCount !== undefined && clipboardCount > 0 && (
+          <mdui-badge slot="badge">{clipboardCount}</mdui-badge>
+        )}
       </mdui-navigation-rail-item>
 
       <mdui-navigation-rail-item
@@ -47,6 +52,9 @@ export default function NavRail({ navRef, userInitials, onSignOut, onNavigate }:
         onClick={() => onNavigate('files')}
       >
         Files
+        {fileCount !== undefined && fileCount > 0 && (
+          <mdui-badge slot="badge">{fileCount}</mdui-badge>
+        )}
       </mdui-navigation-rail-item>
 
       <div slot="bottom" className="nav-footer">
@@ -61,6 +69,7 @@ export default function NavRail({ navRef, userInitials, onSignOut, onNavigate }:
             <mdui-menu-item value="signout" icon="logout" onClick={onSignOut}>Sign out</mdui-menu-item>
           </mdui-menu>
         </mdui-dropdown>
+        <span className="nav-status-dot" />
       </div>
     </mdui-navigation-rail>
   );

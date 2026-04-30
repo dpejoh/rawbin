@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { setTheme, setColorScheme } from 'mdui';
 import { useMduiNav } from './hooks/useMdui';
 import NavRail from './components/NavRail';
+import CommandPalette from './components/CommandPalette';
 import Keybox from './pages/Keybox';
 import ClipboardsPage from './pages/Clipboards';
 import FilesPage from './pages/Files';
@@ -104,6 +105,13 @@ export default function App() {
           Files
         </mdui-navigation-bar-item>
       </mdui-navigation-bar>
+
+      {token && (
+        <CommandPalette
+          token={token}
+          onNavigate={handleNavigate}
+        />
+      )}
     </mdui-layout>
   );
 }

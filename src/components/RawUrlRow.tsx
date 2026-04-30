@@ -21,6 +21,7 @@ export default function RawUrlRow({ url }: RawUrlRowProps) {
 
   return (
     <div className="raw-url-strip">
+      <span className="url-status-dot" />
       <span className="raw-url-text">{url}</span>
       <mdui-tooltip content="Copy raw URL">
         <mdui-button-icon
