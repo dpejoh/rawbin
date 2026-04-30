@@ -43,16 +43,6 @@ async function saveIndex(index: FileMeta[]): Promise<void> {
   await store.set("index", JSON.stringify(index));
 }
 
-async function getContent(id: string): Promise<string | null> {
-  const store = getStoreInstance();
-  return store.get(id);
-}
-
-async function setContent(id: string, content: string): Promise<void> {
-  const store = getStoreInstance();
-  await store.set(id, content);
-}
-
 async function deleteContent(id: string): Promise<void> {
   const store = getStoreInstance();
   await store.delete(id);
@@ -110,10 +100,13 @@ export default async (req: Request) => {
     if (!item || item.isFolder) {
       return new Response("Not found", { status: 404 });
     }
-    const content = await getContent(item.id);
+
+    const store = getStoreInstance();
+    const content = await store.get(item.id, { type: "arrayBuffer" });
     if (!content) {
       return new Response("Not found", { status: 404 });
     }
+
     return new Response(content, {
       status: 200,
       headers: { "Content-Type": item.mimeType },
@@ -130,6 +123,8 @@ export default async (req: Request) => {
   if (!user) {
     return new Response("Unauthorized", { status: 401 });
   }
+
+  const store = getStoreInstance();
 
   switch (method) {
     case "GET": {
@@ -201,7 +196,11 @@ export default async (req: Request) => {
         }
 
         const { name, content, mimeType, parentId } = body as { name: string; content: string; mimeType: string; parentId?: string };
-        const size = Buffer.from(content, "base64").length;
+
+        const buf = Buffer.from(content, "base64");
+        const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+        const size = buf.byteLength;
+
         const id = randomUUID();
         const now = new Date().toISOString();
         const meta: FileMeta = { id, name, mimeType, size, parentId: parentId ?? "", createdAt: now, updatedAt: now };
@@ -209,7 +208,7 @@ export default async (req: Request) => {
         const index = await getIndex();
         index.push(meta);
         await saveIndex(index);
-        await setContent(id, content);
+        await store.set(id, ab);
 
         return new Response(JSON.stringify({ id }), {
           status: 200,
@@ -237,7 +236,6 @@ export default async (req: Request) => {
 
         const mimeType = fileRes.headers.get("content-type") ?? "application/octet-stream";
         const arrayBuffer = await fileRes.arrayBuffer();
-        const base64 = Buffer.from(arrayBuffer).toString("base64");
         const size = arrayBuffer.byteLength;
 
         const id = randomUUID();
@@ -247,7 +245,7 @@ export default async (req: Request) => {
         const index = await getIndex();
         index.push(meta);
         await saveIndex(index);
-        await setContent(id, base64);
+        await store.set(id, arrayBuffer);
 
         return new Response(JSON.stringify({ id }), {
           status: 200,
