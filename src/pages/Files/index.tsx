@@ -108,6 +108,7 @@ export default function FilesPage({ token }: FilesPageProps) {
       body: JSON.stringify({ id: deleteTarget.id }),
     });
     if (res.ok) {
+      setAllItems(prev => prev.filter(f => f.id !== deleteTarget.id));
       snackbar({ message: 'Deleted', placement: 'bottom', autoCloseDelay: 2000 });
       fetchFiles();
     } else {
@@ -124,6 +125,12 @@ export default function FilesPage({ token }: FilesPageProps) {
       body: JSON.stringify({ name, parentId: currentFolderId }),
     });
     if (res.ok) {
+      const { id } = await res.json() as { id: string };
+      const now = new Date().toISOString();
+      setAllItems(prev => [...prev, {
+        id, name, mimeType: 'inode/directory', size: 0,
+        parentId: currentFolderId, isFolder: true, createdAt: now, updatedAt: now,
+      }]);
       snackbar({ message: 'Folder created', placement: 'bottom', autoCloseDelay: 2000 });
       fetchFiles();
     } else {
@@ -131,8 +138,8 @@ export default function FilesPage({ token }: FilesPageProps) {
     }
   }, [token, currentFolderId, fetchFiles]);
 
-  const uploadFile = useCallback(async (file: File) => {
-    if (!token) return;
+  const uploadFile = useCallback(async (file: File): Promise<string> => {
+    if (!token) throw new Error('No token');
     const base64 = await fileToBase64(file);
     const res = await fetch('/.netlify/functions/files', {
       method: 'POST',
@@ -145,31 +152,47 @@ export default function FilesPage({ token }: FilesPageProps) {
       }),
     });
     if (!res.ok) throw new Error('Upload failed');
+    const { id } = await res.json() as { id: string };
+    return id;
   }, [token, currentFolderId]);
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !token) return;
     try {
-      await uploadFile(file);
+      const id = await uploadFile(file);
+      const now = new Date().toISOString();
+      setAllItems(prev => [...prev, {
+        id, name: file.name, mimeType: file.type || 'application/octet-stream',
+        size: file.size, parentId: currentFolderId, createdAt: now, updatedAt: now,
+      }]);
       snackbar({ message: 'File uploaded', placement: 'bottom', autoCloseDelay: 2000 });
       fetchFiles();
     } catch {
       snackbar({ message: 'Upload failed', placement: 'bottom', autoCloseDelay: 3000 });
     }
     e.target.value = '';
-  }, [token, uploadFile, fetchFiles]);
+  }, [token, uploadFile, fetchFiles, currentFolderId]);
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(0);
     const files = Array.from(e.dataTransfer.files);
     if (!files.length) return;
+    const now = new Date().toISOString();
     let ok = 0; let fail = 0;
+    const newItems: FileItem[] = [];
     for (const f of files) {
-      try { await uploadFile(f); ok++; }
-      catch { fail++; }
+      try {
+        const id = await uploadFile(f);
+        newItems.push({
+          id, name: f.name, mimeType: f.type || 'application/octet-stream',
+          size: f.size, parentId: currentFolderId, createdAt: now, updatedAt: now,
+        });
+        ok++;
+      } catch { fail++; }
     }
+    if (newItems.length > 0) setAllItems(prev => [...prev, ...newItems]);
     fetchFiles();
     snackbar({
       message: fail === 0
@@ -178,7 +201,7 @@ export default function FilesPage({ token }: FilesPageProps) {
       placement: 'bottom',
       autoCloseDelay: 3000,
     });
-  }, [uploadFile, fetchFiles]);
+  }, [uploadFile, fetchFiles, currentFolderId]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 

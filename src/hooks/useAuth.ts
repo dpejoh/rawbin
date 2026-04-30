@@ -59,6 +59,7 @@ export default function useAuth(): UseAuthReturn {
 
     const onError = (err: unknown) => {
       console.error("[Identity]", err);
+      setIsLoading(false);
     };
 
     netlifyIdentity.on("init", onInit);
@@ -68,7 +69,10 @@ export default function useAuth(): UseAuthReturn {
 
     netlifyIdentity.init();
 
+    const fallback = setTimeout(() => setIsLoading(false), 3000);
+
     return () => {
+      clearTimeout(fallback);
       netlifyIdentity.off("init", onInit);
       netlifyIdentity.off("login", onLogin);
       netlifyIdentity.off("logout", onLogout);
