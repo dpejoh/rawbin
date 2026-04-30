@@ -125,59 +125,62 @@ export default function ClipboardEditor({
         )}
       </div>
 
-      <RawUrlRow url={rawUrl} />
+      <mdui-card variant="filled" style={{ padding: 16, marginBottom: 16, display: 'block' }}>
+        <RawUrlRow url={rawUrl} />
 
-      {savedSlug && canonicalUrl !== rawUrl && (
-        <p
-          className="mdui-typescale-body-small"
-          style={{ margin: '8px 0 0', color: 'var(--mdui-color-on-surface-variant)' }}
-        >
-          Also at: {canonicalUrl}
-        </p>
-      )}
+        {savedSlug && canonicalUrl !== rawUrl && (
+          <p
+            className="mdui-typescale-body-small"
+            style={{ margin: '8px 0 0', color: 'var(--mdui-color-on-surface-variant)' }}
+          >
+            Also at: {canonicalUrl}
+          </p>
+        )}
 
-      <div className="meta-row" style={{ marginTop: 12, marginBottom: 16 }}>
-        <span
-          className="mdui-typescale-body-small"
-          style={{ color: 'var(--mdui-color-on-surface-variant)', whiteSpace: 'nowrap' }}
-        >
-          Custom URL: /clips/
-        </span>
-        {editingSlug ? (
-          <mdui-text-field
-            ref={slugRef}
-            variant="outlined"
-            placeholder="custom-slug"
-            style={{ width: 200 }}
-            onBlur={saveSlug}
-            onKeyDown={(e: React.KeyboardEvent) => {
-              if (e.key === 'Enter') saveSlug();
-              if (e.key === 'Escape') { setSlug(savedSlug); setEditingSlug(false); }
-            }}
-          />
-        ) : (
+        <div className="meta-row" style={{ marginTop: 12, marginBottom: 0 }}>
           <span
             className="mdui-typescale-body-small"
-            style={{
-              cursor: 'pointer',
-              color: slug ? 'var(--mdui-color-primary)' : 'var(--mdui-color-on-surface-variant)',
-              fontFamily: "'Geist Mono', monospace",
-            }}
-            onClick={() => setEditingSlug(true)}
+            style={{ color: 'var(--mdui-color-on-surface-variant)', whiteSpace: 'nowrap' }}
           >
-            {slug || 'set custom URL…'}
+            Custom URL: /clips/
           </span>
-        )}
-      </div>
+          {editingSlug ? (
+            <mdui-text-field
+              ref={slugRef}
+              variant="outlined"
+              placeholder="custom-slug"
+              style={{ width: 200 }}
+              onBlur={saveSlug}
+              onKeyDown={(e: React.KeyboardEvent) => {
+                if (e.key === 'Enter') saveSlug();
+                if (e.key === 'Escape') { setSlug(savedSlug); setEditingSlug(false); }
+              }}
+            />
+          ) : (
+            <span
+              className="mdui-typescale-body-small"
+              style={{
+                cursor: 'pointer',
+                color: slug ? 'var(--mdui-color-primary)' : 'var(--mdui-color-on-surface-variant)',
+                fontFamily: "'Geist Mono', monospace",
+              }}
+              onClick={() => setEditingSlug(true)}
+            >
+              {slug || 'set custom URL…'}
+            </span>
+          )}
+        </div>
+      </mdui-card>
 
-      <textarea
-        value={content}
-        onChange={e => setContent(e.target.value)}
-        className="keybox-textarea"
-        rows={10}
-        placeholder="Start typing…"
-        style={{ width: '100%', marginBottom: 16 }}
-      />
+      <mdui-card variant="filled" style={{ padding: 16, marginBottom: 16, display: 'block', maxHeight: 400, overflow: 'auto' }}>
+        <textarea
+          value={content}
+          onChange={e => setContent(e.target.value)}
+          className="keybox-textarea"
+          rows={10}
+          placeholder="Start typing…"
+        />
+      </mdui-card>
 
       <div className="save-row">
         <p
