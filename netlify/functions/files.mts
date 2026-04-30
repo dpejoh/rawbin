@@ -21,6 +21,8 @@ interface FileMeta {
   name: string;
   mimeType: string;
   size: number;
+  parentId: string;
+  isFolder?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -56,6 +58,18 @@ async function deleteContent(id: string): Promise<void> {
   await store.delete(id);
 }
 
+function collectDescendants(index: FileMeta[], parentId: string): string[] {
+  const ids: string[] = [];
+  const children = index.filter((f) => f.parentId === parentId);
+  for (const child of children) {
+    ids.push(child.id);
+    if (child.isFolder) {
+      ids.push(...collectDescendants(index, child.id));
+    }
+  }
+  return ids;
+}
+
 export default async (req: Request) => {
   const method = req.method;
   const url = new URL(req.url);
@@ -71,7 +85,7 @@ export default async (req: Request) => {
   if (isRawRequest && rawId) {
     const index = await getIndex();
     const item = index.find((f) => f.id === rawId);
-    if (!item) {
+    if (!item || item.isFolder) {
       return new Response("Not found", { status: 404 });
     }
     const content = await getContent(item.id);
@@ -98,8 +112,12 @@ export default async (req: Request) => {
   switch (method) {
     case "GET": {
       const index = await getIndex();
-      const result = index.map(({ id, name, mimeType, size, createdAt, updatedAt }) => ({
-        id, name, mimeType, size, createdAt, updatedAt,
+      const parentId = url.searchParams.get("parentId") ?? "";
+      const filtered = parentId
+        ? index.filter((f) => f.parentId === parentId)
+        : index;
+      const result = filtered.map(({ id, name, mimeType, size, parentId, isFolder, createdAt, updatedAt }) => ({
+        id, name, mimeType, size, parentId, isFolder, createdAt, updatedAt,
       }));
       return new Response(JSON.stringify(result), {
         status: 200,
@@ -109,6 +127,39 @@ export default async (req: Request) => {
 
     case "POST": {
       const contentType = req.headers.get("content-type") ?? "";
+      const isFolderEndpoint = url.searchParams.has("folder");
+
+      if (isFolderEndpoint) {
+        let body: unknown;
+        try {
+          body = (await req.json()) as unknown;
+        } catch {
+          return new Response("Invalid JSON", { status: 400 });
+        }
+        if (
+          typeof body !== "object" || body === null ||
+          !("name" in body) || typeof (body as Record<string, unknown>).name !== "string"
+        ) {
+          return new Response("Invalid body. Required: name", { status: 400 });
+        }
+        const { name, parentId } = body as { name: string; parentId?: string };
+        if (!name.trim()) {
+          return new Response("Name is required", { status: 400 });
+        }
+        const id = randomUUID();
+        const now = new Date().toISOString();
+        const meta: FileMeta = {
+          id, name: name.trim(), mimeType: "inode/directory", size: 0,
+          parentId: parentId ?? "", isFolder: true, createdAt: now, updatedAt: now,
+        };
+        const index = await getIndex();
+        index.push(meta);
+        await saveIndex(index);
+        return new Response(JSON.stringify({ id }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
 
       if (contentType.includes("application/json")) {
         let body: unknown;
@@ -127,11 +178,11 @@ export default async (req: Request) => {
           return new Response("Invalid body. Required: name, content (base64), mimeType", { status: 400 });
         }
 
-        const { name, content, mimeType } = body as { name: string; content: string; mimeType: string };
+        const { name, content, mimeType, parentId } = body as { name: string; content: string; mimeType: string; parentId?: string };
         const size = Buffer.from(content, "base64").length;
         const id = randomUUID();
         const now = new Date().toISOString();
-        const meta: FileMeta = { id, name, mimeType, size, createdAt: now, updatedAt: now };
+        const meta: FileMeta = { id, name, mimeType, size, parentId: parentId ?? "", createdAt: now, updatedAt: now };
 
         const index = await getIndex();
         index.push(meta);
@@ -147,6 +198,7 @@ export default async (req: Request) => {
       if (url.searchParams.has("url")) {
         const name = url.searchParams.get("name") ?? "unnamed";
         const fileUrl = url.searchParams.get("url") ?? "";
+        const parentId = url.searchParams.get("parentId") ?? "";
         if (!fileUrl) {
           return new Response("url query param is required", { status: 400 });
         }
@@ -168,7 +220,7 @@ export default async (req: Request) => {
 
         const id = randomUUID();
         const now = new Date().toISOString();
-        const meta: FileMeta = { id, name, mimeType, size, createdAt: now, updatedAt: now };
+        const meta: FileMeta = { id, name, mimeType, size, parentId, createdAt: now, updatedAt: now };
 
         const index = await getIndex();
         index.push(meta);
@@ -201,14 +253,17 @@ export default async (req: Request) => {
 
       const delId = (body as { id: string }).id;
       const index = await getIndex();
-      const idx = index.findIndex((f) => f.id === delId);
-      if (idx === -1) {
+      const item = index.find((f) => f.id === delId);
+      if (!item) {
         return new Response("Not found", { status: 404 });
       }
 
-      index.splice(idx, 1);
-      await saveIndex(index);
-      await deleteContent(delId);
+      const idsToDelete = [delId, ...collectDescendants(index, delId)];
+      const newIndex = index.filter((f) => !idsToDelete.includes(f.id));
+      await saveIndex(newIndex);
+      for (const id of idsToDelete) {
+        await deleteContent(id);
+      }
 
       return new Response("Deleted", { status: 200 });
     }
