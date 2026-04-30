@@ -18,6 +18,16 @@
   to = "/.netlify/functions/clipboards/:splat"
   status = 200
 
+[[redirects]]
+  from = "/file"
+  to = "/.netlify/functions/files"
+  status = 200
+
+[[redirects]]
+  from = "/file/*"
+  to = "/.netlify/functions/files/:splat"
+  status = 200
+
 [[headers]]
   for = "/*"
   [headers.values]

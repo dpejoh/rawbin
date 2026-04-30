@@ -1,6 +1,7 @@
 import { BottomNavigation, BottomNavigationAction, Paper } from "@mui/material";
 import KeyIcon from "@mui/icons-material/Key";
 import ContentPasteIcon from "@mui/icons-material/ContentPaste";
+import FolderIcon from "@mui/icons-material/Folder";
 import type { Page } from "./NavRail";
 
 interface BottomNavProps {
@@ -25,9 +26,7 @@ export default function BottomNav({ activePage, onNavigate }: BottomNavProps) {
           icon={<KeyIcon />}
           sx={{
             color: "text.secondary",
-            "&.Mui-selected": {
-              color: "primary.main",
-            },
+            "&.Mui-selected": { color: "primary.main" },
           }}
         />
         <BottomNavigationAction
@@ -36,9 +35,16 @@ export default function BottomNav({ activePage, onNavigate }: BottomNavProps) {
           icon={<ContentPasteIcon />}
           sx={{
             color: "text.secondary",
-            "&.Mui-selected": {
-              color: "primary.main",
-            },
+            "&.Mui-selected": { color: "primary.main" },
+          }}
+        />
+        <BottomNavigationAction
+          value="files"
+          label="Files"
+          icon={<FolderIcon />}
+          sx={{
+            color: "text.secondary",
+            "&.Mui-selected": { color: "primary.main" },
           }}
         />
       </BottomNavigation>

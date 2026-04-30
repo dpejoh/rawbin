@@ -17,6 +17,7 @@ import BottomNav from "./components/BottomNav";
 import SnackbarProvider from "./components/SnackbarProvider";
 import Keybox from "./pages/Keybox";
 import ClipboardsPage from "./pages/Clipboards";
+import FilesPage from "./pages/Files";
 import useAuth from "./hooks/useAuth";
 
 export default function App() {
@@ -108,6 +109,7 @@ export default function App() {
           >
             {page === "keybox" && <Keybox token={token} />}
             {page === "clipboards" && <ClipboardsPage token={token} />}
+            {page === "files" && <FilesPage token={token} />}
           </Box>
         </Box>
       </SnackbarProvider>

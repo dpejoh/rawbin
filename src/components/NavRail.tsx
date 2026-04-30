@@ -10,10 +10,11 @@ import {
 } from "@mui/material";
 import KeyIcon from "@mui/icons-material/Key";
 import ContentPasteIcon from "@mui/icons-material/ContentPaste";
+import FolderIcon from "@mui/icons-material/Folder";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { useCallback, useMemo, useState } from "react";
 
-export type Page = "keybox" | "clipboards";
+export type Page = "keybox" | "clipboards" | "files";
 
 interface NavRailProps {
   activePage: Page;
@@ -40,6 +41,7 @@ export default function NavRail({
     () => [
       { id: "keybox" as const, icon: <KeyIcon />, label: "Keybox" },
       { id: "clipboards" as const, icon: <ContentPasteIcon />, label: "Boards" },
+      { id: "files" as const, icon: <FolderIcon />, label: "Files" },
     ],
     []
   );
