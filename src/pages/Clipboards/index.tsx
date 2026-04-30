@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Stack, Typography, Button, Skeleton, useMediaQuery, Fab, Box } from "@mui/material";
+import { Stack, Typography, Button, useMediaQuery, Box } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import ContentPasteIcon from "@mui/icons-material/ContentPaste";
 import { useSnackbar } from "notistack";
@@ -11,6 +11,11 @@ import useClipboards from "../../hooks/useClipboards";
 
 interface ClipboardsPageProps {
   token: string | null;
+}
+
+function clipboardUrl(id: string, slug?: string): string {
+  const path = slug ? `/clipboard/${slug}` : `/clipboard/${id}`;
+  return `${window.location.origin}${path}`;
 }
 
 export default function ClipboardsPage({ token }: ClipboardsPageProps) {
@@ -45,20 +50,15 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
       if (!contentCache[id]) {
         const c = await fetchRawContent(id);
         setContentCache((prev) => ({ ...prev, [id]: c }));
-        // patch the clipboard in the list with content
-        const cb = clipboards.find((c) => c.id === id);
-        if (cb) {
-          // We need to update selected content - handled by ClipboardEditor via contentCache
-        }
       }
     },
-    [select, isMobile, contentCache, fetchRawContent, clipboards]
+    [select, isMobile, contentCache, fetchRawContent]
   );
 
   const handleCreate = useCallback(
-    async (name: string) => {
+    async (name: string, slug?: string) => {
       if (!token) return;
-      const id = await create(token, name);
+      const id = await create(token, name, slug);
       if (id) {
         enqueueSnackbar("Clipboard created", { variant: "success" });
         select(id);
@@ -71,7 +71,7 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
   );
 
   const handleUpdate = useCallback(
-    async (tok: string, id: string, data: { name?: string; content?: string }): Promise<boolean> => {
+    async (tok: string, id: string, data: { name?: string; content?: string; slug?: string }): Promise<boolean> => {
       const ok = await update(tok, id, data);
       return ok;
     },
@@ -95,7 +95,6 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
 
   const handleRename = useCallback(
     (id: string) => {
-      // on mobile, open the editor so they can click the title
       if (isMobile) {
         select(id);
         setMobileEditorOpen(true);
@@ -106,7 +105,8 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
 
   const handleCopyUrl = useCallback(
     async (id: string) => {
-      const url = `${window.location.origin}/.netlify/functions/clipboards/${id}`;
+      const cb = clipboards.find((c) => c.id === id);
+      const url = clipboardUrl(id, cb?.slug);
       try {
         await navigator.clipboard.writeText(url);
         enqueueSnackbar("Raw URL copied", { variant: "info" });
@@ -114,7 +114,7 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
         enqueueSnackbar("Failed to copy", { variant: "error" });
       }
     },
-    [enqueueSnackbar]
+    [clipboards, enqueueSnackbar]
   );
 
   const selectedClipboardWithContent = useMemo(() => {

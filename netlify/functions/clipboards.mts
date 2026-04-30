@@ -19,6 +19,7 @@ async function verifyToken(token: string): Promise<{ email: string; id: string }
 interface ClipboardMeta {
   id: string;
   name: string;
+  slug?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -54,17 +55,30 @@ async function deleteContent(id: string): Promise<void> {
   await store.delete(id);
 }
 
+function findBySlug(index: ClipboardMeta[], slugOrId: string): ClipboardMeta | undefined {
+  return index.find((c) => c.id === slugOrId || c.slug === slugOrId);
+}
+
+function isValidSlug(s: string): boolean {
+  return /^[a-zA-Z0-9_-]+$/.test(s);
+}
+
 export default async (req: Request) => {
   const method = req.method;
   const url = new URL(req.url);
   const path = url.pathname;
   const segments = path.split("/").filter(Boolean);
-  const id = segments[segments.length - 1];
+  const rawId = segments[segments.length - 1];
 
-  const isRawRequest = id && segments.length >= 2 && segments[segments.length - 2] === "clipboards" && id.length === 36;
+  const isRawRequest = rawId && segments.length >= 2 && segments[segments.length - 2] === "clipboards";
 
   if (method === "GET" && isRawRequest) {
-    const content = await getContent(id);
+    const index = await getIndex();
+    const item = findBySlug(index, rawId);
+    if (!item) {
+      return new Response("Not found", { status: 404 });
+    }
+    const content = await getContent(item.id);
     if (!content) {
       return new Response("Not found", { status: 404 });
     }
@@ -119,21 +133,39 @@ export default async (req: Request) => {
         return new Response("Invalid body", { status: 400 });
       }
 
-      const name = (body as { name: string }).name.trim();
-      if (!name) {
+      const { name, slug } = body as { name: string; slug?: string };
+      const trimmedName = name.trim();
+      if (!trimmedName) {
         return new Response("Name is required", { status: 400 });
+      }
+
+      if (slug !== undefined && slug !== "") {
+        const trimmedSlug = slug.trim();
+        if (!isValidSlug(trimmedSlug)) {
+          return new Response("Slug must be alphanumeric (hyphens and underscores allowed)", { status: 400 });
+        }
+        const index = await getIndex();
+        if (index.some((c) => c.slug === trimmedSlug)) {
+          return new Response("Slug already in use", { status: 409 });
+        }
       }
 
       const clipId = randomUUID();
       const now = new Date().toISOString();
-      const meta: ClipboardMeta = { id: clipId, name, createdAt: now, updatedAt: now };
+      const meta: ClipboardMeta = {
+        id: clipId,
+        name: trimmedName,
+        createdAt: now,
+        updatedAt: now,
+      };
+      if (slug) meta.slug = slug.trim();
 
       const index = await getIndex();
       index.push(meta);
       await saveIndex(index);
       await setContent(clipId, "");
 
-      return new Response(JSON.stringify({ id: clipId }), {
+      return new Response(JSON.stringify({ id: clipId, slug: meta.slug }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
@@ -156,7 +188,7 @@ export default async (req: Request) => {
         return new Response("Invalid body", { status: 400 });
       }
 
-      const putData = body as { id: string; name?: string; content?: string };
+      const putData = body as { id: string; name?: string; content?: string; slug?: string };
       const index = await getIndex();
       const item = index.find((i) => i.id === putData.id);
       if (!item) {
@@ -164,9 +196,26 @@ export default async (req: Request) => {
       }
 
       const now = new Date().toISOString();
+
       if (putData.name !== undefined) {
         item.name = putData.name.trim();
       }
+
+      if (putData.slug !== undefined) {
+        const trimmedSlug = putData.slug.trim();
+        if (trimmedSlug !== "") {
+          if (!isValidSlug(trimmedSlug)) {
+            return new Response("Slug must be alphanumeric (hyphens and underscores allowed)", { status: 400 });
+          }
+          if (index.some((c) => c.slug === trimmedSlug && c.id !== putData.id)) {
+            return new Response("Slug already in use", { status: 409 });
+          }
+          item.slug = trimmedSlug;
+        } else {
+          item.slug = undefined;
+        }
+      }
+
       if (putData.content !== undefined) {
         const encoded = Buffer.from(putData.content).toString("base64");
         await setContent(item.id, encoded);

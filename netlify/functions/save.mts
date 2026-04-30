@@ -47,11 +47,13 @@ export default async (req: Request) => {
     return new Response("Invalid body", { status: 400 });
   }
 
-  const content = (body as { content: string }).content;
-  const encoded = Buffer.from(content).toString("base64");
+  const { content, useBase64 } = body as { content: string; useBase64?: boolean };
+  const shouldEncode = useBase64 !== false;
+  const stored = shouldEncode ? Buffer.from(content).toString("base64") : content;
 
   const store = getStore("keybox");
-  await store.set("content", encoded);
+  await store.set("content", stored);
+  await store.set("_meta", JSON.stringify({ useBase64: shouldEncode }));
 
   return new Response("Saved", { status: 200 });
 };

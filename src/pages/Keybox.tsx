@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Stack, Typography, Paper, TextField, Skeleton } from "@mui/material";
+import { Stack, Typography, Paper, TextField, Skeleton, Switch, FormControlLabel } from "@mui/material";
 import { useSnackbar } from "notistack";
 import RawUrlRow from "../components/RawUrlRow";
 import SaveButton from "../components/SaveButton";
@@ -8,24 +8,35 @@ interface KeyboxProps {
   token: string | null;
 }
 
-const RAW_URL = `${window.location.origin}/.netlify/functions/raw`;
+const RAW_URL = `${window.location.origin}/paste`;
 
 export default function Keybox({ token }: KeyboxProps) {
   const { enqueueSnackbar } = useSnackbar();
   const [content, setContent] = useState("");
   const [savedContent, setSavedContent] = useState("");
+  const [useBase64, setUseBase64] = useState(true);
+  const [savedBase64, setSavedBase64] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(RAW_URL);
-        if (res.ok) {
-          const text = await res.text();
-          const decoded = atob(text);
+        const [contentRes, metaRes] = await Promise.all([
+          fetch(RAW_URL),
+          fetch(`${RAW_URL}?meta`),
+        ]);
+        if (contentRes.ok) {
+          const text = await contentRes.text();
+          let meta = { useBase64: true };
+          try {
+            if (metaRes.ok) meta = JSON.parse(await metaRes.text()) as { useBase64: boolean };
+          } catch { /* ignore */ }
+          const decoded = meta.useBase64 ? atob(text) : text;
           setContent(decoded);
           setSavedContent(decoded);
+          setUseBase64(meta.useBase64);
+          setSavedBase64(meta.useBase64);
         }
       } catch {
         // no content yet
@@ -46,10 +57,11 @@ export default function Keybox({ token }: KeyboxProps) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, useBase64 }),
       });
       if (res.ok) {
         setSavedContent(content);
+        setSavedBase64(useBase64);
         enqueueSnackbar("Keybox saved", { variant: "success" });
       } else {
         enqueueSnackbar("Failed to save. Try again.", { variant: "error" });
@@ -59,11 +71,11 @@ export default function Keybox({ token }: KeyboxProps) {
     } finally {
       setIsSaving(false);
     }
-  }, [token, content, enqueueSnackbar]);
+  }, [token, content, useBase64, enqueueSnackbar]);
 
   const hasUnsaved = useMemo(
-    () => content !== savedContent,
-    [content, savedContent]
+    () => content !== savedContent || useBase64 !== savedBase64,
+    [content, savedContent, useBase64, savedBase64]
   );
 
   const charCount = useMemo(
@@ -78,7 +90,7 @@ export default function Keybox({ token }: KeyboxProps) {
           Keybox
         </Typography>
         <Typography variant="body2" sx={{ color: "text.secondary" }}>
-          Your private keybox. Stored as base64.
+          Your private keybox. {useBase64 ? "Stored as base64." : "Stored as plain text."}
         </Typography>
       </Stack>
 
@@ -116,11 +128,27 @@ export default function Keybox({ token }: KeyboxProps) {
         <Typography variant="caption" sx={{ color: "text.secondary" }}>
           {charCount} characters
         </Typography>
-        <SaveButton
-          loading={isSaving}
-          hasUnsaved={hasUnsaved}
-          onSave={handleSave}
-        />
+        <Stack direction="row" alignItems="center" spacing={2}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={useBase64}
+                onChange={(e) => setUseBase64(e.target.checked)}
+                size="small"
+              />
+            }
+            label={
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                Base64
+              </Typography>
+            }
+          />
+          <SaveButton
+            loading={isSaving}
+            hasUnsaved={hasUnsaved}
+            onSave={handleSave}
+          />
+        </Stack>
       </Stack>
     </Stack>
   );

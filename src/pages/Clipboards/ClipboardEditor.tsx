@@ -3,17 +3,21 @@ import {
   Stack,
   Typography,
   TextField,
-  Skeleton,
 } from "@mui/material";
 import { useSnackbar } from "notistack";
 import RawUrlRow from "../../components/RawUrlRow";
 import SaveButton from "../../components/SaveButton";
 import type { Clipboard } from "../../hooks/useClipboards";
 
+function clipboardUrl(id: string, slug?: string): string {
+  const path = slug ? `/clipboard/${slug}` : `/clipboard/${id}`;
+  return `${window.location.origin}${path}`;
+}
+
 interface ClipboardEditorProps {
   clipboard: Clipboard;
   token: string | null;
-  onUpdate: (token: string, id: string, data: { name?: string; content?: string }) => Promise<boolean>;
+  onUpdate: (token: string, id: string, data: { name?: string; content?: string; slug?: string }) => Promise<boolean>;
 }
 
 export default function ClipboardEditor({
@@ -26,7 +30,10 @@ export default function ClipboardEditor({
   const [savedContent, setSavedContent] = useState(clipboard.content ?? "");
   const [name, setName] = useState(clipboard.name);
   const [savedName, setSavedName] = useState(clipboard.name);
+  const [slug, setSlug] = useState(clipboard.slug ?? "");
+  const [savedSlug, setSavedSlug] = useState(clipboard.slug ?? "");
   const [isEditingName, setIsEditingName] = useState(false);
+  const [isEditingSlug, setIsEditingSlug] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -34,7 +41,9 @@ export default function ClipboardEditor({
     setSavedContent(clipboard.content ?? "");
     setName(clipboard.name);
     setSavedName(clipboard.name);
-  }, [clipboard.id, clipboard.content, clipboard.name]);
+    setSlug(clipboard.slug ?? "");
+    setSavedSlug(clipboard.slug ?? "");
+  }, [clipboard.id, clipboard.content, clipboard.name, clipboard.slug]);
 
   const handleSaveName = useCallback(async () => {
     if (!token || name === savedName) {
@@ -50,6 +59,21 @@ export default function ClipboardEditor({
     }
     setIsEditingName(false);
   }, [token, name, savedName, clipboard.id, onUpdate, enqueueSnackbar]);
+
+  const handleSaveSlug = useCallback(async () => {
+    if (!token || slug === savedSlug) {
+      setIsEditingSlug(false);
+      return;
+    }
+    const ok = await onUpdate(token, clipboard.id, { slug: slug || undefined });
+    if (ok) {
+      setSavedSlug(slug);
+      enqueueSnackbar("Custom URL updated", { variant: "success" });
+    } else {
+      enqueueSnackbar("Failed to update URL", { variant: "error" });
+    }
+    setIsEditingSlug(false);
+  }, [token, slug, savedSlug, clipboard.id, onUpdate, enqueueSnackbar]);
 
   const handleSaveContent = useCallback(async () => {
     if (!token) return;
@@ -74,7 +98,8 @@ export default function ClipboardEditor({
     [content]
   );
 
-  const rawUrl = `${window.location.origin}/.netlify/functions/clipboards/${clipboard.id}`;
+  const rawUrl = clipboardUrl(clipboard.id, savedSlug || undefined);
+  const canonicalUrl = clipboardUrl(clipboard.id);
 
   return (
     <Stack spacing={3} sx={{ flex: 1, p: 4, overflow: "auto" }}>
@@ -117,6 +142,54 @@ export default function ClipboardEditor({
       </Stack>
 
       <RawUrlRow url={rawUrl} />
+
+      {savedSlug && canonicalUrl !== rawUrl && (
+        <Typography variant="caption" sx={{ color: "text.secondary" }}>
+          Also available at: {canonicalUrl}
+        </Typography>
+      )}
+
+      <Stack direction="row" alignItems="center" spacing={1}>
+        <Typography variant="caption" sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
+          Custom URL:
+        </Typography>
+        <Typography variant="caption" sx={{ color: "text.secondary" }}>
+          /clipboard/
+        </Typography>
+        {isEditingSlug ? (
+          <TextField
+            variant="standard"
+            value={slug}
+            onChange={(e) => setSlug(e.target.value)}
+            onBlur={handleSaveSlug}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSaveSlug();
+              if (e.key === "Escape") {
+                setSlug(savedSlug);
+                setIsEditingSlug(false);
+              }
+            }}
+            autoFocus
+            size="small"
+            placeholder="custom-slug"
+            inputProps={{ style: { fontSize: "12px", fontFamily: '"Geist Mono", monospace' } }}
+            sx={{ width: 200 }}
+          />
+        ) : (
+          <Typography
+            variant="caption"
+            sx={{
+              color: slug ? "primary.main" : "text.secondary",
+              cursor: "pointer",
+              fontFamily: '"Geist Mono", monospace',
+              "&:hover": { textDecoration: "underline" },
+            }}
+            onClick={() => setIsEditingSlug(true)}
+          >
+            {slug || "set custom URL..."}
+          </Typography>
+        )}
+      </Stack>
 
       <TextField
         variant="standard"

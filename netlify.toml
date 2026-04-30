@@ -3,6 +3,21 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[[redirects]]
+  from = "/paste"
+  to = "/.netlify/functions/raw"
+  status = 200
+
+[[redirects]]
+  from = "/clipboard"
+  to = "/.netlify/functions/clipboards"
+  status = 200
+
+[[redirects]]
+  from = "/clipboard/*"
+  to = "/.netlify/functions/clipboards/:splat"
+  status = 200
+
 [[headers]]
   for = "/*"
   [headers.values]

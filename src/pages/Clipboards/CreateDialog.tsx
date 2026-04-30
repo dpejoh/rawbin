@@ -6,27 +6,31 @@ import {
   DialogActions,
   TextField,
   Button,
+  Stack,
 } from "@mui/material";
 
 interface CreateDialogProps {
   open: boolean;
   onClose: () => void;
-  onCreate: (name: string) => Promise<void>;
+  onCreate: (name: string, slug?: string) => Promise<void>;
 }
 
 export default function CreateDialog({ open, onClose, onCreate }: CreateDialogProps) {
   const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
 
   const handleCreate = useCallback(async () => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    await onCreate(trimmed);
+    await onCreate(trimmed, slug.trim() || undefined);
     setName("");
+    setSlug("");
     onClose();
-  }, [name, onCreate, onClose]);
+  }, [name, slug, onCreate, onClose]);
 
   const handleClose = useCallback(() => {
     setName("");
+    setSlug("");
     onClose();
   }, [onClose]);
 
@@ -34,18 +38,28 @@ export default function CreateDialog({ open, onClose, onCreate }: CreateDialogPr
     <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth>
       <DialogTitle>New Clipboard</DialogTitle>
       <DialogContent>
-        <TextField
-          label="Name"
-          variant="outlined"
-          fullWidth
-          autoFocus
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleCreate();
-          }}
-          sx={{ mt: 1 }}
-        />
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <TextField
+            label="Name"
+            variant="outlined"
+            fullWidth
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleCreate();
+            }}
+          />
+          <TextField
+            label="Custom URL (optional)"
+            variant="outlined"
+            fullWidth
+            value={slug}
+            onChange={(e) => setSlug(e.target.value)}
+            placeholder="my-custom-link"
+            helperText="Alphanumeric, hyphens, underscores"
+          />
+        </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={handleClose} variant="text">
