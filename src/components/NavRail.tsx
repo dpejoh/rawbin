@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import type { RefObject } from 'react';
 
 interface NavRailProps {
@@ -8,13 +8,14 @@ interface NavRailProps {
 }
 
 export default function NavRail({ navRef, userInitials, onSignOut }: NavRailProps) {
-  const signOutRef = useRef<any>(null);
+  const menuRef = useRef<any>(null);
 
   useEffect(() => {
-    const el = signOutRef.current;
+    const el = menuRef.current;
     if (!el) return;
-    el.addEventListener('click', onSignOut);
-    return () => el.removeEventListener('click', onSignOut);
+    const handler = () => onSignOut();
+    el.addEventListener('change', handler);
+    return () => el.removeEventListener('change', handler);
   }, [onSignOut]);
 
   return (
@@ -37,21 +38,24 @@ export default function NavRail({ navRef, userInitials, onSignOut }: NavRailProp
         />
 
         <mdui-navigation-rail-item
-          icon="vpn_key"
+          icon="vpn_key--outlined"
+          active-icon="vpn_key"
           value="keybox"
         >
           Keybox
         </mdui-navigation-rail-item>
 
         <mdui-navigation-rail-item
-          icon="content_paste"
+          icon="content_paste--outlined"
+          active-icon="content_paste"
           value="clipboards"
         >
           Boards
         </mdui-navigation-rail-item>
 
         <mdui-navigation-rail-item
-          icon="folder"
+          icon="folder--outlined"
+          active-icon="folder"
           value="files"
         >
           Files
@@ -66,8 +70,8 @@ export default function NavRail({ navRef, userInitials, onSignOut }: NavRailProp
           >
             {userInitials}
           </mdui-avatar>
-          <mdui-menu>
-            <mdui-menu-item ref={signOutRef} icon="logout">Sign out</mdui-menu-item>
+          <mdui-menu ref={menuRef}>
+            <mdui-menu-item value="signout" icon="logout">Sign out</mdui-menu-item>
           </mdui-menu>
         </mdui-dropdown>
       </div>

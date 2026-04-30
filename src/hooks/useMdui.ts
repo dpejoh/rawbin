@@ -80,8 +80,7 @@ export function useMduiNav(
     const el = ref.current;
     if (!el) return;
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      onChange(detail?.value ?? el.value ?? '');
+      onChange((e.target as any)?.value ?? '');
     };
     el.addEventListener('change', handler);
     return () => el.removeEventListener('change', handler);

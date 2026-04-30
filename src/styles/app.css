@@ -42,13 +42,7 @@ mdui-layout-main {
   .mobile-pb { padding-bottom: 0 !important; }
 }
 
-mdui-navigation-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 1200;
-}
+
 
 .mobile-pb {
   padding-bottom: 80px;

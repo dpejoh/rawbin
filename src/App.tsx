@@ -79,19 +79,22 @@ export default function App() {
 
       <mdui-navigation-bar ref={barRef} label-visibility="selected">
         <mdui-navigation-bar-item
-          icon="vpn_key"
+          icon="vpn_key--outlined"
+          active-icon="vpn_key"
           value="keybox"
         >
           Keybox
         </mdui-navigation-bar-item>
         <mdui-navigation-bar-item
-          icon="content_paste"
+          icon="content_paste--outlined"
+          active-icon="content_paste"
           value="clipboards"
         >
           Boards
         </mdui-navigation-bar-item>
         <mdui-navigation-bar-item
-          icon="folder"
+          icon="folder--outlined"
+          active-icon="folder"
           value="files"
         >
           Files

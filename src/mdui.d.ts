@@ -17,6 +17,7 @@ declare global {
         'end-icon'?: string;
         href?: string;
         disabled?: boolean;
+        loading?: boolean;
         'full-width'?: boolean;
       };
       'mdui-button-icon': CustomElement & { icon?: string; href?: string; disabled?: boolean };
@@ -43,6 +44,7 @@ declare global {
       };
       'mdui-list':      CustomElement;
       'mdui-list-item': CustomElement & {
+        value?: string;
         icon?: string;
         'active-icon'?: string;
         rounded?: boolean;
