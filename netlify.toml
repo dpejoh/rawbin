@@ -4,17 +4,17 @@
   functions = "netlify/functions"
 
 [[redirects]]
-  from = "/paste"
+  from = "/key"
   to = "/.netlify/functions/raw"
   status = 200
 
 [[redirects]]
-  from = "/clipboard"
+  from = "/clips"
   to = "/.netlify/functions/clipboards"
   status = 200
 
 [[redirects]]
-  from = "/clipboard/*"
+  from = "/clips/*"
   to = "/.netlify/functions/clipboards/:splat"
   status = 200
 

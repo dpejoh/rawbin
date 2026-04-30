@@ -8,7 +8,7 @@ interface KeyboxProps {
   token: string | null;
 }
 
-const RAW_URL = `${window.location.origin}/paste`;
+const RAW_URL = `${window.location.origin}/key`;
 
 export default function Keybox({ token }: KeyboxProps) {
   const { enqueueSnackbar } = useSnackbar();

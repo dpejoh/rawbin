@@ -14,7 +14,7 @@ interface ClipboardsPageProps {
 }
 
 function clipboardUrl(id: string, slug?: string): string {
-  const path = slug ? `/clipboard/${slug}` : `/clipboard/${id}`;
+  const path = slug ? `/clips/${slug}` : `/clips/${id}`;
   return `${window.location.origin}${path}`;
 }
 

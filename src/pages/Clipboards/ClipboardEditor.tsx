@@ -10,7 +10,7 @@ import SaveButton from "../../components/SaveButton";
 import type { Clipboard } from "../../hooks/useClipboards";
 
 function clipboardUrl(id: string, slug?: string): string {
-  const path = slug ? `/clipboard/${slug}` : `/clipboard/${id}`;
+  const path = slug ? `/clips/${slug}` : `/clips/${id}`;
   return `${window.location.origin}${path}`;
 }
 
@@ -154,7 +154,7 @@ export default function ClipboardEditor({
           Custom URL:
         </Typography>
         <Typography variant="caption" sx={{ color: "text.secondary" }}>
-          /clipboard/
+          /clips/
         </Typography>
         {isEditingSlug ? (
           <TextField
