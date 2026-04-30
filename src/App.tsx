@@ -1,5 +1,15 @@
 import { useState, useCallback, useMemo } from "react";
-import { ThemeProvider, CssBaseline, Box, useMediaQuery, CircularProgress, Stack } from "@mui/material";
+import {
+  ThemeProvider,
+  CssBaseline,
+  Box,
+  useMediaQuery,
+  CircularProgress,
+  Stack,
+  Button,
+  Typography,
+} from "@mui/material";
+import LockOpenIcon from "@mui/icons-material/LockOpen";
 import theme from "./theme/theme";
 import NavRail from "./components/NavRail";
 import type { Page } from "./components/NavRail";
@@ -11,7 +21,7 @@ import useAuth from "./hooks/useAuth";
 
 export default function App() {
   const isMobile = useMediaQuery("(max-width: 599px)");
-  const { user, token, isLoading, signOut } = useAuth();
+  const { user, token, isLoading, signOut, openLogin } = useAuth();
   const [page, setPage] = useState<Page>("keybox");
 
   const userInitials = useMemo(
@@ -45,7 +55,21 @@ export default function App() {
           justifyContent="center"
           sx={{ height: "100vh", bgcolor: "background.default", gap: 2, px: 3 }}
         >
-          {/* netlify-identity-widget will auto-show its modal */}
+          <LockOpenIcon sx={{ fontSize: 48, color: "outline.main" }} />
+          <Typography variant="h5" sx={{ color: "text.primary" }}>
+            Sign in to Keybox
+          </Typography>
+          <Typography variant="body2" sx={{ color: "text.secondary", textAlign: "center" }}>
+            Authenticate with your Netlify Identity account to continue.
+          </Typography>
+          <Button
+            variant="contained"
+            size="large"
+            onClick={openLogin}
+            sx={{ textTransform: "none", mt: 1 }}
+          >
+            Sign In
+          </Button>
         </Stack>
       </ThemeProvider>
     );
