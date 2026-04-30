@@ -84,7 +84,29 @@ export default async (req: Request) => {
 
   if (isRawRequest && rawId) {
     const index = await getIndex();
-    const item = index.find((f) => f.id === rawId);
+
+    let item: FileMeta | undefined;
+
+    if (rawId.length === 36) {
+      item = index.find((f) => f.id === rawId);
+    }
+
+    if (!item) {
+      const pathParts = segments.slice(1);
+      let parentId = "";
+      for (let i = 0; i < pathParts.length; i++) {
+        const part = pathParts[i]!;
+        const candidates = index.filter((f) => f.parentId === parentId && f.name === part);
+        if (i === pathParts.length - 1) {
+          item = candidates.find((f) => !f.isFolder);
+        } else {
+          const folder = candidates.find((f) => f.isFolder);
+          if (!folder) break;
+          parentId = folder.id;
+        }
+      }
+    }
+
     if (!item || item.isFolder) {
       return new Response("Not found", { status: 404 });
     }
