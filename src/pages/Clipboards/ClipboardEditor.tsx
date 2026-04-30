@@ -3,6 +3,8 @@ import {
   Stack,
   Typography,
   TextField,
+  Switch,
+  FormControlLabel,
 } from "@mui/material";
 import { useSnackbar } from "notistack";
 import RawUrlRow from "../../components/RawUrlRow";
@@ -14,10 +16,19 @@ function clipboardUrl(id: string, slug?: string): string {
   return `${window.location.origin}${path}`;
 }
 
+function decodeContent(raw: string, useBase64: boolean): string {
+  if (!useBase64) return raw;
+  try { return atob(raw); } catch { return raw; }
+}
+
+function encodeContent(raw: string, useBase64: boolean): string {
+  return useBase64 ? btoa(raw) : raw;
+}
+
 interface ClipboardEditorProps {
   clipboard: Clipboard;
   token: string | null;
-  onUpdate: (token: string, id: string, data: { name?: string; content?: string; slug?: string }) => Promise<boolean>;
+  onUpdate: (token: string, id: string, data: { name?: string; content?: string; slug?: string; useBase64?: boolean }) => Promise<boolean>;
 }
 
 export default function ClipboardEditor({
@@ -26,8 +37,16 @@ export default function ClipboardEditor({
   onUpdate,
 }: ClipboardEditorProps) {
   const { enqueueSnackbar } = useSnackbar();
-  const [content, setContent] = useState(clipboard.content ?? "");
-  const [savedContent, setSavedContent] = useState(clipboard.content ?? "");
+
+  const initialDecoded = useMemo(
+    () => decodeContent(clipboard.content ?? "", clipboard.useBase64 !== false),
+    [clipboard.content, clipboard.useBase64]
+  );
+
+  const [content, setContent] = useState(initialDecoded);
+  const [useBase64, setUseBase64] = useState(clipboard.useBase64 !== false);
+  const [savedContent, setSavedContent] = useState(initialDecoded);
+  const [savedBase64, setSavedBase64] = useState(clipboard.useBase64 !== false);
   const [name, setName] = useState(clipboard.name);
   const [savedName, setSavedName] = useState(clipboard.name);
   const [slug, setSlug] = useState(clipboard.slug ?? "");
@@ -37,13 +56,16 @@ export default function ClipboardEditor({
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    setContent(clipboard.content ?? "");
-    setSavedContent(clipboard.content ?? "");
+    const decoded = decodeContent(clipboard.content ?? "", clipboard.useBase64 !== false);
+    setContent(decoded);
+    setSavedContent(decoded);
+    setUseBase64(clipboard.useBase64 !== false);
+    setSavedBase64(clipboard.useBase64 !== false);
     setName(clipboard.name);
     setSavedName(clipboard.name);
     setSlug(clipboard.slug ?? "");
     setSavedSlug(clipboard.slug ?? "");
-  }, [clipboard.id, clipboard.content, clipboard.name, clipboard.slug]);
+  }, [clipboard.id, clipboard.content, clipboard.name, clipboard.slug, clipboard.useBase64]);
 
   const handleSaveName = useCallback(async () => {
     if (!token || name === savedName) {
@@ -78,19 +100,21 @@ export default function ClipboardEditor({
   const handleSaveContent = useCallback(async () => {
     if (!token) return;
     setIsSaving(true);
-    const ok = await onUpdate(token, clipboard.id, { content });
+    const stored = encodeContent(content, useBase64);
+    const ok = await onUpdate(token, clipboard.id, { content: stored, useBase64 });
     if (ok) {
       setSavedContent(content);
+      setSavedBase64(useBase64);
       enqueueSnackbar("Saved", { variant: "success" });
     } else {
       enqueueSnackbar("Failed to save. Try again.", { variant: "error" });
     }
     setIsSaving(false);
-  }, [token, content, clipboard.id, onUpdate, enqueueSnackbar]);
+  }, [token, content, useBase64, clipboard.id, onUpdate, enqueueSnackbar]);
 
   const hasUnsaved = useMemo(
-    () => content !== savedContent,
-    [content, savedContent]
+    () => content !== savedContent || useBase64 !== savedBase64,
+    [content, savedContent, useBase64, savedBase64]
   );
 
   const charCount = useMemo(
@@ -209,11 +233,27 @@ export default function ClipboardEditor({
         <Typography variant="caption" sx={{ color: "text.secondary" }}>
           {charCount} characters
         </Typography>
-        <SaveButton
-          loading={isSaving}
-          hasUnsaved={hasUnsaved}
-          onSave={handleSaveContent}
-        />
+        <Stack direction="row" alignItems="center" spacing={2}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={useBase64}
+                onChange={(e) => setUseBase64(e.target.checked)}
+                size="small"
+              />
+            }
+            label={
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                Base64
+              </Typography>
+            }
+          />
+          <SaveButton
+            loading={isSaving}
+            hasUnsaved={hasUnsaved}
+            onSave={handleSaveContent}
+          />
+        </Stack>
       </Stack>
     </Stack>
   );

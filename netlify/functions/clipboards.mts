@@ -20,6 +20,7 @@ interface ClipboardMeta {
   id: string;
   name: string;
   slug?: string;
+  useBase64?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -136,7 +137,7 @@ export default async (req: Request) => {
         return new Response("Invalid body", { status: 400 });
       }
 
-      const { name, slug } = body as { name: string; slug?: string };
+      const { name, slug, useBase64: useBase64Post } = body as { name: string; slug?: string; useBase64?: boolean };
       const trimmedName = name.trim();
       if (!trimmedName) {
         return new Response("Name is required", { status: 400 });
@@ -158,6 +159,7 @@ export default async (req: Request) => {
       const meta: ClipboardMeta = {
         id: clipId,
         name: trimmedName,
+        useBase64: useBase64Post !== false,
         createdAt: now,
         updatedAt: now,
       };
@@ -191,7 +193,7 @@ export default async (req: Request) => {
         return new Response("Invalid body", { status: 400 });
       }
 
-      const putData = body as { id: string; name?: string; content?: string; slug?: string };
+      const putData = body as { id: string; name?: string; content?: string; slug?: string; useBase64?: boolean };
       const index = await getIndex();
       const item = index.find((i) => i.id === putData.id);
       if (!item) {
@@ -219,9 +221,13 @@ export default async (req: Request) => {
         }
       }
 
+      if (putData.useBase64 !== undefined) {
+        item.useBase64 = putData.useBase64;
+      }
+
       if (putData.content !== undefined) {
-        const encoded = Buffer.from(putData.content).toString("base64");
-        await setContent(item.id, encoded);
+        const stored = item.useBase64 !== false ? Buffer.from(putData.content).toString("base64") : putData.content;
+        await setContent(item.id, stored);
       }
       item.updatedAt = now;
       await saveIndex(index);
