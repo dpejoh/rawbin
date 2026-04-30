@@ -181,28 +181,6 @@ export default function FilesPage({ token }: FilesPageProps) {
   }, [uploadFile, fetchFiles]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const topRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = topRef.current;
-    if (!el) return;
-    const handler = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const btn = target.closest('[data-action]') as HTMLElement | null;
-      if (!btn) return;
-      const action = btn.getAttribute('data-action');
-      const id = btn.getAttribute('data-id') || '';
-      if (action === 'new-folder') setFolderOpen(true);
-      else if (action === 'upload') setUploadOpen(true);
-      else if (action === 'go-back') goBack();
-      else if (action === 'copy-url') handleCopyUrl(id);
-      else if (action === 'delete-file') setDeleteTarget(allItems.find(f => f.id === id) ?? null);
-      else if (action === 'confirm-delete') handleDelete();
-      else if (action === 'cancel-delete') setDeleteTarget(null);
-    };
-    el.addEventListener('click', handler);
-    return () => el.removeEventListener('click', handler);
-  }, [goBack, handleCopyUrl, allItems, handleDelete]);
 
   const totalSize   = visibleItems.reduce((acc, f) => acc + f.size, 0);
   const fileCount   = visibleItems.filter(f => !f.isFolder).length;
@@ -210,7 +188,6 @@ export default function FilesPage({ token }: FilesPageProps) {
 
   return (
     <div
-      ref={topRef}
       style={{ position: 'relative', minHeight: '100%' }}
       onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
       onDragEnter={e => { e.preventDefault(); setIsDragging(n => n + 1); }}
@@ -254,11 +231,11 @@ export default function FilesPage({ token }: FilesPageProps) {
             <mdui-button
               variant="outlined"
               icon="create_new_folder"
-              data-action="new-folder"
+              onClick={() => setFolderOpen(true)}
             >
               Folder
             </mdui-button>
-            <mdui-button variant="tonal" icon="upload" data-action="upload">
+            <mdui-button variant="tonal" icon="upload" onClick={() => setUploadOpen(true)}>
               Upload
             </mdui-button>
           </div>
@@ -267,7 +244,7 @@ export default function FilesPage({ token }: FilesPageProps) {
         {visibleItems.length > 0 && (
           <div className="meta-row" style={{ marginBottom: 16 }}>
             {hasParent && (
-              <mdui-button-icon icon="arrow_back" data-action="go-back" />
+              <mdui-button-icon icon="arrow_back" onClick={goBack} />
             )}
             <span
               className="mdui-typescale-body-small"
@@ -341,8 +318,7 @@ export default function FilesPage({ token }: FilesPageProps) {
                   <mdui-tooltip content="Copy raw URL">
                     <mdui-button-icon
                       icon={copiedId === file.id ? 'check' : 'content_copy'}
-                      data-action="copy-url"
-                      data-id={file.id}
+                      onClick={(e) => { e.stopPropagation(); handleCopyUrl(file.id); }}
                       style={copiedId === file.id ? { color: 'var(--mdui-color-primary)' } : undefined}
                     />
                   </mdui-tooltip>
@@ -351,8 +327,7 @@ export default function FilesPage({ token }: FilesPageProps) {
                 <mdui-tooltip content="Delete">
                   <mdui-button-icon
                     icon="delete_outline"
-                    data-action="delete-file"
-                    data-id={file.id}
+                    onClick={(e) => { e.stopPropagation(); setDeleteTarget(file); }}
                     style={{ color: 'var(--mdui-color-on-surface-variant)' }}
                   />
                 </mdui-tooltip>
@@ -388,13 +363,13 @@ export default function FilesPage({ token }: FilesPageProps) {
             ? 'This will permanently remove the folder and all its contents.'
             : 'This will permanently remove the file and its raw endpoint.'}
         </p>
-        <mdui-button slot="action" variant="text" data-action="cancel-delete">
+        <mdui-button slot="action" variant="text" onClick={() => setDeleteTarget(null)}>
           Cancel
         </mdui-button>
         <mdui-button
           slot="action"
           variant="tonal"
-          data-action="confirm-delete"
+          onClick={handleDelete}
           style={{ color: 'var(--mdui-color-error)' }}
         >
           Delete

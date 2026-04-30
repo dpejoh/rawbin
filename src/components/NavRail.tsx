@@ -1,4 +1,3 @@
-import { useRef, useEffect } from 'react';
 import type { RefObject } from 'react';
 
 interface NavRailProps {
@@ -9,16 +8,6 @@ interface NavRailProps {
 }
 
 export default function NavRail({ navRef, userInitials, onSignOut, onNavigate }: NavRailProps) {
-  const menuRef = useRef<any>(null);
-
-  useEffect(() => {
-    const el = menuRef.current;
-    if (!el) return;
-    const handler = () => onSignOut();
-    el.addEventListener('change', handler);
-    return () => el.removeEventListener('change', handler);
-  }, [onSignOut]);
-
   return (
     <mdui-navigation-rail ref={navRef} label-visibility="selected">
       <mdui-icon
@@ -68,8 +57,8 @@ export default function NavRail({ navRef, userInitials, onSignOut, onNavigate }:
           >
             {userInitials}
           </mdui-avatar>
-          <mdui-menu ref={menuRef}>
-            <mdui-menu-item value="signout" icon="logout">Sign out</mdui-menu-item>
+          <mdui-menu>
+            <mdui-menu-item value="signout" icon="logout" onClick={onSignOut}>Sign out</mdui-menu-item>
           </mdui-menu>
         </mdui-dropdown>
       </div>

@@ -88,7 +88,6 @@ export function useMduiNav(
     const handler = (e: Event) => {
       const ce = e as any;
       const val = ce.detail?.value ?? ce.target?.value ?? el.value ?? '';
-      console.log('[MDUI Nav] change:', { val, detail: ce.detail, target: ce.target, elValue: el.value });
       onChange(val);
     };
     el.addEventListener('change', handler);
