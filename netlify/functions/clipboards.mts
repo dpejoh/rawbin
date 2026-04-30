@@ -1,4 +1,3 @@
-import type { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
 import { randomUUID } from "node:crypto";
 
@@ -9,59 +8,63 @@ interface ClipboardMeta {
   updatedAt: string;
 }
 
+function getStoreInstance() {
+  return getStore("clipboards");
+}
+
 async function getIndex(): Promise<ClipboardMeta[]> {
-  const store = getStore("clipboards");
+  const store = getStoreInstance();
   const raw = await store.get("index");
   if (!raw) return [];
   return JSON.parse(raw) as ClipboardMeta[];
 }
 
 async function saveIndex(index: ClipboardMeta[]): Promise<void> {
-  const store = getStore("clipboards");
+  const store = getStoreInstance();
   await store.set("index", JSON.stringify(index));
 }
 
 async function getContent(id: string): Promise<string | null> {
-  const store = getStore("clipboards");
+  const store = getStoreInstance();
   return store.get(id);
 }
 
 async function setContent(id: string, content: string): Promise<void> {
-  const store = getStore("clipboards");
+  const store = getStoreInstance();
   await store.set(id, content);
 }
 
 async function deleteContent(id: string): Promise<void> {
-  const store = getStore("clipboards");
+  const store = getStoreInstance();
   await store.delete(id);
 }
 
-function isAuthenticated(context: HandlerContext): boolean {
-  return Boolean(context.clientContext?.user);
-}
-
-const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
-  const method = event.httpMethod;
-  const path = event.path;
+export default async (
+  req: Request,
+  context: { clientContext?: { user?: { email?: string; id?: string } } }
+) => {
+  const method = req.method;
+  const url = new URL(req.url);
+  const path = url.pathname;
   const segments = path.split("/").filter(Boolean);
   const id = segments[segments.length - 1];
 
-  const isRawRequest = id && segments[segments.length - 2] === "clipboards" && id.length === 36;
+  const isRawRequest = id && segments.length >= 2 && segments[segments.length - 2] === "clipboards" && id.length === 36;
 
   if (method === "GET" && isRawRequest) {
     const content = await getContent(id);
     if (!content) {
-      return { statusCode: 404, body: "Not found" };
+      return new Response("Not found", { status: 404 });
     }
-    return {
-      statusCode: 200,
+    return new Response(content, {
+      status: 200,
       headers: { "Content-Type": "text/plain" },
-      body: content,
-    };
+    });
   }
 
-  if (!isAuthenticated(context)) {
-    return { statusCode: 401, body: "Unauthorized" };
+  const user = context.clientContext?.user;
+  if (!user) {
+    return new Response("Unauthorized", { status: 401 });
   }
 
   switch (method) {
@@ -75,19 +78,18 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         ...item,
         content: contentMap[item.id] ?? "",
       }));
-      return {
-        statusCode: 200,
+      return new Response(JSON.stringify(result), {
+        status: 200,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(result),
-      };
+      });
     }
 
     case "POST": {
       let body: unknown;
       try {
-        body = JSON.parse(event.body ?? "{}") as unknown;
+        body = (await req.json()) as unknown;
       } catch {
-        return { statusCode: 400, body: "Invalid JSON" };
+        return new Response("Invalid JSON", { status: 400 });
       }
 
       if (
@@ -96,36 +98,35 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         !("name" in body) ||
         typeof (body as Record<string, unknown>).name !== "string"
       ) {
-        return { statusCode: 400, body: "Invalid body" };
+        return new Response("Invalid body", { status: 400 });
       }
 
       const name = (body as { name: string }).name.trim();
       if (!name) {
-        return { statusCode: 400, body: "Name is required" };
+        return new Response("Name is required", { status: 400 });
       }
 
-      const id = randomUUID();
+      const clipId = randomUUID();
       const now = new Date().toISOString();
-      const meta: ClipboardMeta = { id, name, createdAt: now, updatedAt: now };
+      const meta: ClipboardMeta = { id: clipId, name, createdAt: now, updatedAt: now };
 
       const index = await getIndex();
       index.push(meta);
       await saveIndex(index);
-      await setContent(id, "");
+      await setContent(clipId, "");
 
-      return {
-        statusCode: 200,
+      return new Response(JSON.stringify({ id: clipId }), {
+        status: 200,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      };
+      });
     }
 
     case "PUT": {
       let body: unknown;
       try {
-        body = JSON.parse(event.body ?? "{}") as unknown;
+        body = (await req.json()) as unknown;
       } catch {
-        return { statusCode: 400, body: "Invalid JSON" };
+        return new Response("Invalid JSON", { status: 400 });
       }
 
       if (
@@ -134,14 +135,14 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         !("id" in body) ||
         typeof (body as Record<string, unknown>).id !== "string"
       ) {
-        return { statusCode: 400, body: "Invalid body" };
+        return new Response("Invalid body", { status: 400 });
       }
 
       const putData = body as { id: string; name?: string; content?: string };
       const index = await getIndex();
       const item = index.find((i) => i.id === putData.id);
       if (!item) {
-        return { statusCode: 404, body: "Not found" };
+        return new Response("Not found", { status: 404 });
       }
 
       const now = new Date().toISOString();
@@ -155,15 +156,15 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       item.updatedAt = now;
       await saveIndex(index);
 
-      return { statusCode: 200, body: "Updated" };
+      return new Response("Updated", { status: 200 });
     }
 
     case "DELETE": {
       let body: unknown;
       try {
-        body = JSON.parse(event.body ?? "{}") as unknown;
+        body = (await req.json()) as unknown;
       } catch {
-        return { statusCode: 400, body: "Invalid JSON" };
+        return new Response("Invalid JSON", { status: 400 });
       }
 
       if (
@@ -172,26 +173,24 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         !("id" in body) ||
         typeof (body as Record<string, unknown>).id !== "string"
       ) {
-        return { statusCode: 400, body: "Invalid body" };
+        return new Response("Invalid body", { status: 400 });
       }
 
       const delId = (body as { id: string }).id;
       const index = await getIndex();
       const idx = index.findIndex((i) => i.id === delId);
       if (idx === -1) {
-        return { statusCode: 404, body: "Not found" };
+        return new Response("Not found", { status: 404 });
       }
 
       index.splice(idx, 1);
       await saveIndex(index);
       await deleteContent(delId);
 
-      return { statusCode: 200, body: "Deleted" };
+      return new Response("Deleted", { status: 200 });
     }
 
     default:
-      return { statusCode: 405, body: "Method Not Allowed" };
+      return new Response("Method Not Allowed", { status: 405 });
   }
 };
-
-export { handler };

@@ -1,21 +1,20 @@
-import type { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
 
-const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
+export default async (req: Request, context: { clientContext?: { user?: { email?: string; id?: string } } }) => {
   const user = context.clientContext?.user;
   if (!user) {
-    return { statusCode: 401, body: "Unauthorized" };
+    return new Response("Unauthorized", { status: 401 });
   }
 
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
+  if (req.method !== "POST") {
+    return new Response("Method Not Allowed", { status: 405 });
   }
 
   let body: unknown;
   try {
-    body = JSON.parse(event.body ?? "{}") as unknown;
+    body = (await req.json()) as unknown;
   } catch {
-    return { statusCode: 400, body: "Invalid JSON" };
+    return new Response("Invalid JSON", { status: 400 });
   }
 
   if (
@@ -24,7 +23,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     !("content" in body) ||
     typeof (body as Record<string, unknown>).content !== "string"
   ) {
-    return { statusCode: 400, body: "Invalid body" };
+    return new Response("Invalid body", { status: 400 });
   }
 
   const content = (body as { content: string }).content;
@@ -33,7 +32,5 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   const store = getStore("keybox");
   await store.set("content", encoded);
 
-  return { statusCode: 200, body: "Saved" };
+  return new Response("Saved", { status: 200 });
 };
-
-export { handler };

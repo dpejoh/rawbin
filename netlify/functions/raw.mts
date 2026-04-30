@@ -1,18 +1,16 @@
-import type { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
 
 const BLOCKED_AGENTS = ["googlebot", "bingbot", "baiduspider", "crawler", "spider", "scraper"];
-
 const RATE_LIMIT = 30;
 const RATE_WINDOW_MS = 60_000;
 
-const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) => {
-  const ua = (event.headers["user-agent"] ?? "").toLowerCase();
+export default async (req: Request) => {
+  const ua = (req.headers.get("user-agent") ?? "").toLowerCase();
   if (BLOCKED_AGENTS.some((bot) => ua.includes(bot))) {
-    return { statusCode: 403, body: "Forbidden" };
+    return new Response("Forbidden", { status: 403 });
   }
 
-  const ip = event.headers["x-forwarded-for"] ?? event.headers["client-ip"] ?? "unknown";
+  const ip = req.headers.get("x-forwarded-for") ?? req.headers.get("client-ip") ?? "unknown";
 
   try {
     const rateStore = getStore("keybox-rate-limit");
@@ -31,10 +29,10 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
     record.count += 1;
 
     if (record.count > RATE_LIMIT) {
-      return { statusCode: 429, body: "Too Many Requests" };
+      return new Response("Too Many Requests", { status: 429 });
     }
 
-    await rateStore.set(rateKey, JSON.stringify(record), { ttl: RATE_WINDOW_MS / 1000 } as never);
+    await rateStore.set(rateKey, JSON.stringify(record));
   } catch {
     // rate limiting failure is non-critical
   }
@@ -43,14 +41,11 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
   const value = await store.get("content");
 
   if (!value) {
-    return { statusCode: 404, body: "Not found" };
+    return new Response("Not found", { status: 404 });
   }
 
-  return {
-    statusCode: 200,
+  return new Response(value, {
+    status: 200,
     headers: { "Content-Type": "text/plain" },
-    body: value,
-  };
+  });
 };
-
-export { handler };
