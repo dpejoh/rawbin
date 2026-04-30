@@ -1,13 +1,5 @@
-import { useState, useCallback } from "react";
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Button,
-  Stack,
-} from "@mui/material";
+import { useState, useCallback } from 'react';
+import { useMduiDialog, useMduiInput } from '../../hooks/useMdui';
 
 interface CreateDialogProps {
   open: boolean;
@@ -16,63 +8,57 @@ interface CreateDialogProps {
 }
 
 export default function CreateDialog({ open, onClose, onCreate }: CreateDialogProps) {
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+
+  const dialogRef = useMduiDialog(open, onClose);
+  const nameRef   = useMduiInput(name, setName);
+  const slugRef   = useMduiInput(slug, setSlug);
 
   const handleCreate = useCallback(async () => {
     const trimmed = name.trim();
     if (!trimmed) return;
     await onCreate(trimmed, slug.trim() || undefined);
-    setName("");
-    setSlug("");
+    setName('');
+    setSlug('');
     onClose();
   }, [name, slug, onCreate, onClose]);
 
   const handleClose = useCallback(() => {
-    setName("");
-    setSlug("");
+    setName('');
+    setSlug('');
     onClose();
   }, [onClose]);
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth>
-      <DialogTitle>New Clipboard</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField
-            label="Name"
-            variant="outlined"
-            fullWidth
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleCreate();
-            }}
-          />
-          <TextField
-            label="Custom URL (optional)"
-            variant="outlined"
-            fullWidth
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            placeholder="my-custom-link"
-            helperText="Alphanumeric, hyphens, underscores"
-          />
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose} variant="text">
-          Cancel
-        </Button>
-        <Button
-          onClick={handleCreate}
-          variant="contained"
-          disabled={!name.trim()}
-        >
-          Create
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <mdui-dialog
+      ref={dialogRef}
+      headline="New Clipboard"
+      close-on-overlay-click
+      close-on-esc
+    >
+      <div className="field-group">
+        <mdui-text-field
+          ref={nameRef}
+          variant="outlined"
+          label="Name"
+          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') handleCreate(); }}
+        />
+        <mdui-text-field
+          ref={slugRef}
+          variant="outlined"
+          label="Custom URL (optional)"
+          placeholder="my-custom-link"
+          helper="Alphanumeric, hyphens, underscores"
+        />
+      </div>
+
+      <mdui-button slot="action" variant="text" onClick={handleClose}>
+        Cancel
+      </mdui-button>
+      <mdui-button slot="action" variant="tonal" onClick={handleCreate}>
+        Create
+      </mdui-button>
+    </mdui-dialog>
   );
 }

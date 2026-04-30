@@ -1,19 +1,12 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import {
-  Stack,
-  Typography,
-  TextField,
-  Switch,
-  FormControlLabel,
-} from "@mui/material";
-import { useSnackbar } from "notistack";
-import RawUrlRow from "../../components/RawUrlRow";
-import SaveButton from "../../components/SaveButton";
-import type { Clipboard } from "../../hooks/useClipboards";
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { snackbar } from 'mdui';
+import { useMduiInput, useMduiSwitch } from '../../hooks/useMdui';
+import RawUrlRow from '../../components/RawUrlRow';
+import SaveButton from '../../components/SaveButton';
+import type { Clipboard } from '../../hooks/useClipboards';
 
 function clipboardUrl(id: string, slug?: string): string {
-  const path = slug ? `/clips/${slug}` : `/clips/${id}`;
-  return `${window.location.origin}${path}`;
+  return `${window.location.origin}${slug ? `/clips/${slug}` : `/clips/${id}`}`;
 }
 
 function decodeContent(raw: string, useBase64: boolean): string {
@@ -21,14 +14,14 @@ function decodeContent(raw: string, useBase64: boolean): string {
   try { return atob(raw); } catch { return raw; }
 }
 
-function encodeContent(raw: string, useBase64: boolean): string {
-  return useBase64 ? btoa(raw) : raw;
-}
-
 interface ClipboardEditorProps {
   clipboard: Clipboard;
   token: string | null;
-  onUpdate: (token: string, id: string, data: { name?: string; content?: string; slug?: string; useBase64?: boolean }) => Promise<boolean>;
+  onUpdate: (
+    token: string,
+    id: string,
+    data: { name?: string; content?: string; slug?: string; useBase64?: boolean },
+  ) => Promise<boolean>;
 }
 
 export default function ClipboardEditor({
@@ -36,225 +29,178 @@ export default function ClipboardEditor({
   token,
   onUpdate,
 }: ClipboardEditorProps) {
-  const { enqueueSnackbar } = useSnackbar();
-
   const initialDecoded = useMemo(
-    () => decodeContent(clipboard.content ?? "", clipboard.useBase64 !== false),
-    [clipboard.content, clipboard.useBase64]
+    () => decodeContent(clipboard.content ?? '', clipboard.useBase64 !== false),
+    [clipboard.id],
   );
 
-  const [content, setContent] = useState(initialDecoded);
-  const [useBase64, setUseBase64] = useState(clipboard.useBase64 !== false);
+  const [content,      setContent]      = useState(initialDecoded);
+  const [useBase64,    setUseBase64]    = useState(clipboard.useBase64 !== false);
   const [savedContent, setSavedContent] = useState(initialDecoded);
-  const [savedBase64, setSavedBase64] = useState(clipboard.useBase64 !== false);
-  const [name, setName] = useState(clipboard.name);
-  const [savedName, setSavedName] = useState(clipboard.name);
-  const [slug, setSlug] = useState(clipboard.slug ?? "");
-  const [savedSlug, setSavedSlug] = useState(clipboard.slug ?? "");
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [isEditingSlug, setIsEditingSlug] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [savedBase64,  setSavedBase64]  = useState(clipboard.useBase64 !== false);
+  const [name,         setName]         = useState(clipboard.name);
+  const [savedName,    setSavedName]    = useState(clipboard.name);
+  const [slug,         setSlug]         = useState(clipboard.slug ?? '');
+  const [savedSlug,    setSavedSlug]    = useState(clipboard.slug ?? '');
+  const [editingName,  setEditingName]  = useState(false);
+  const [editingSlug,  setEditingSlug]  = useState(false);
+  const [isSaving,     setIsSaving]     = useState(false);
+
+  const contentRef  = useMduiInput(content, setContent);
+  const nameRef     = useMduiInput(name, setName);
+  const slugRef     = useMduiInput(slug, setSlug);
+  const switchRef   = useMduiSwitch(useBase64, setUseBase64);
 
   useEffect(() => {
-    const decoded = decodeContent(clipboard.content ?? "", clipboard.useBase64 !== false);
-    setContent(decoded);
-    setSavedContent(decoded);
+    const decoded = decodeContent(clipboard.content ?? '', clipboard.useBase64 !== false);
+    setContent(decoded);       setSavedContent(decoded);
     setUseBase64(clipboard.useBase64 !== false);
     setSavedBase64(clipboard.useBase64 !== false);
-    setName(clipboard.name);
-    setSavedName(clipboard.name);
-    setSlug(clipboard.slug ?? "");
-    setSavedSlug(clipboard.slug ?? "");
+    setName(clipboard.name);   setSavedName(clipboard.name);
+    setSlug(clipboard.slug ?? '');
+    setSavedSlug(clipboard.slug ?? '');
   }, [clipboard.id, clipboard.content, clipboard.name, clipboard.slug, clipboard.useBase64]);
 
-  const handleSaveName = useCallback(async () => {
-    if (!token || name === savedName) {
-      setIsEditingName(false);
-      return;
-    }
+  const saveName = useCallback(async () => {
+    if (!token || name === savedName) { setEditingName(false); return; }
     const ok = await onUpdate(token, clipboard.id, { name });
-    if (ok) {
-      setSavedName(name);
-      enqueueSnackbar("Renamed", { variant: "success" });
-    } else {
-      enqueueSnackbar("Failed to rename", { variant: "error" });
-    }
-    setIsEditingName(false);
-  }, [token, name, savedName, clipboard.id, onUpdate, enqueueSnackbar]);
+    if (ok) { setSavedName(name); snackbar({ message: 'Renamed', placement: 'bottom', autoCloseDelay: 2000 }); }
+    else snackbar({ message: 'Failed to rename', placement: 'bottom', autoCloseDelay: 3000 });
+    setEditingName(false);
+  }, [token, name, savedName, clipboard.id, onUpdate]);
 
-  const handleSaveSlug = useCallback(async () => {
-    if (!token || slug === savedSlug) {
-      setIsEditingSlug(false);
-      return;
-    }
+  const saveSlug = useCallback(async () => {
+    if (!token || slug === savedSlug) { setEditingSlug(false); return; }
     const ok = await onUpdate(token, clipboard.id, { slug: slug || undefined });
-    if (ok) {
-      setSavedSlug(slug);
-      enqueueSnackbar("Custom URL updated", { variant: "success" });
-    } else {
-      enqueueSnackbar("Failed to update URL", { variant: "error" });
-    }
-    setIsEditingSlug(false);
-  }, [token, slug, savedSlug, clipboard.id, onUpdate, enqueueSnackbar]);
+    if (ok) { setSavedSlug(slug); snackbar({ message: 'Custom URL updated', placement: 'bottom', autoCloseDelay: 2000 }); }
+    else snackbar({ message: 'Failed to update URL', placement: 'bottom', autoCloseDelay: 3000 });
+    setEditingSlug(false);
+  }, [token, slug, savedSlug, clipboard.id, onUpdate]);
 
-  const handleSaveContent = useCallback(async () => {
+  const saveContent = useCallback(async () => {
     if (!token) return;
     setIsSaving(true);
-    const stored = encodeContent(content, useBase64);
-    const ok = await onUpdate(token, clipboard.id, { content: stored, useBase64 });
+    const ok = await onUpdate(token, clipboard.id, { content, useBase64 });
     if (ok) {
       setSavedContent(content);
       setSavedBase64(useBase64);
-      enqueueSnackbar("Saved", { variant: "success" });
+      snackbar({ message: 'Saved', placement: 'bottom', autoCloseDelay: 2000 });
     } else {
-      enqueueSnackbar("Failed to save. Try again.", { variant: "error" });
+      snackbar({ message: 'Failed to save. Try again.', placement: 'bottom', autoCloseDelay: 3000 });
     }
     setIsSaving(false);
-  }, [token, content, useBase64, clipboard.id, onUpdate, enqueueSnackbar]);
+  }, [token, content, useBase64, clipboard.id, onUpdate]);
 
   const hasUnsaved = useMemo(
     () => content !== savedContent || useBase64 !== savedBase64,
-    [content, savedContent, useBase64, savedBase64]
+    [content, savedContent, useBase64, savedBase64],
   );
 
-  const charCount = useMemo(
-    () => content.length.toLocaleString(),
-    [content]
-  );
-
-  const rawUrl = clipboardUrl(clipboard.id, savedSlug || undefined);
+  const rawUrl      = clipboardUrl(clipboard.id, savedSlug || undefined);
   const canonicalUrl = clipboardUrl(clipboard.id);
 
   return (
-    <Stack spacing={3} sx={{ flex: 1, p: 4, overflow: "auto" }}>
-      <Stack>
-        {isEditingName ? (
-          <TextField
-            variant="standard"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={handleSaveName}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSaveName();
-              if (e.key === "Escape") {
-                setName(savedName);
-                setIsEditingName(false);
-              }
-            }}
+    <div className="page" style={{ flex: 1, overflow: 'auto' }}>
+      <div style={{ marginBottom: 24 }}>
+        {editingName ? (
+          <mdui-text-field
+            ref={nameRef}
+            variant="outlined"
             autoFocus
-            sx={{
-              "& .MuiInputBase-input": {
-                fontSize: "22px",
-                fontWeight: 400,
-                fontFamily: '"Geist Mono", monospace',
-              },
+            onBlur={saveName}
+            onKeyDown={(e: React.KeyboardEvent) => {
+              if (e.key === 'Enter') saveName();
+              if (e.key === 'Escape') { setName(savedName); setEditingName(false); }
             }}
+            style={{ width: '100%' }}
           />
         ) : (
-          <Typography
-            variant="h6"
-            sx={{
-              color: "text.primary",
-              cursor: "pointer",
-              "&:hover": { color: "primary.main" },
-            }}
-            onClick={() => setIsEditingName(true)}
+          <p
+            className="mdui-typescale-headline-small"
+            style={{ margin: 0, cursor: 'pointer', color: 'var(--mdui-color-on-surface)' }}
+            onClick={() => setEditingName(true)}
+            title="Click to rename"
           >
             {name}
-          </Typography>
+          </p>
         )}
-      </Stack>
+      </div>
 
       <RawUrlRow url={rawUrl} />
 
       {savedSlug && canonicalUrl !== rawUrl && (
-        <Typography variant="caption" sx={{ color: "text.secondary" }}>
-          Also available at: {canonicalUrl}
-        </Typography>
+        <p
+          className="mdui-typescale-body-small"
+          style={{ margin: '8px 0 0', color: 'var(--mdui-color-on-surface-variant)' }}
+        >
+          Also at: {canonicalUrl}
+        </p>
       )}
 
-      <Stack direction="row" alignItems="center" spacing={1}>
-        <Typography variant="caption" sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
-          Custom URL:
-        </Typography>
-        <Typography variant="caption" sx={{ color: "text.secondary" }}>
-          /clips/
-        </Typography>
-        {isEditingSlug ? (
-          <TextField
-            variant="standard"
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            onBlur={handleSaveSlug}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSaveSlug();
-              if (e.key === "Escape") {
-                setSlug(savedSlug);
-                setIsEditingSlug(false);
-              }
-            }}
-            autoFocus
-            size="small"
+      <div className="meta-row" style={{ marginTop: 12, marginBottom: 16 }}>
+        <span
+          className="mdui-typescale-body-small"
+          style={{ color: 'var(--mdui-color-on-surface-variant)', whiteSpace: 'nowrap' }}
+        >
+          Custom URL: /clips/
+        </span>
+        {editingSlug ? (
+          <mdui-text-field
+            ref={slugRef}
+            variant="outlined"
             placeholder="custom-slug"
-            inputProps={{ style: { fontSize: "12px", fontFamily: '"Geist Mono", monospace' } }}
-            sx={{ width: 200 }}
+            style={{ width: 200 }}
+            onBlur={saveSlug}
+            onKeyDown={(e: React.KeyboardEvent) => {
+              if (e.key === 'Enter') saveSlug();
+              if (e.key === 'Escape') { setSlug(savedSlug); setEditingSlug(false); }
+            }}
           />
         ) : (
-          <Typography
-            variant="caption"
-            sx={{
-              color: slug ? "primary.main" : "text.secondary",
-              cursor: "pointer",
-              fontFamily: '"Geist Mono", monospace',
-              "&:hover": { textDecoration: "underline" },
+          <span
+            className="mdui-typescale-body-small"
+            style={{
+              cursor: 'pointer',
+              color: slug ? 'var(--mdui-color-primary)' : 'var(--mdui-color-on-surface-variant)',
+              fontFamily: "'Geist Mono', monospace",
             }}
-            onClick={() => setIsEditingSlug(true)}
+            onClick={() => setEditingSlug(true)}
           >
-            {slug || "set custom URL..."}
-          </Typography>
+            {slug || 'set custom URL…'}
+          </span>
         )}
-      </Stack>
+      </div>
 
-      <TextField
-        variant="standard"
+      <mdui-text-field
+        ref={contentRef}
+        variant="outlined"
         multiline
-        fullWidth
-        minRows={10}
-        placeholder="Start typing..."
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        inputProps={{ spellCheck: false }}
-        sx={{
-          "& .MuiInputBase-root": { fontFamily: '"Geist Mono", monospace', fontSize: "16px" },
-        }}
+        min-rows={10}
+        max-rows={20}
+        placeholder="Start typing…"
+        style={{ width: '100%', marginBottom: 16 }}
       />
 
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Typography variant="caption" sx={{ color: "text.secondary" }}>
-          {charCount} characters
-        </Typography>
-        <Stack direction="row" alignItems="center" spacing={2}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={useBase64}
-                onChange={(e) => setUseBase64(e.target.checked)}
-                size="small"
-              />
-            }
-            label={
-              <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                Base64
-              </Typography>
-            }
-          />
-          <SaveButton
-            loading={isSaving}
-            hasUnsaved={hasUnsaved}
-            onSave={handleSaveContent}
-          />
-        </Stack>
-      </Stack>
-    </Stack>
+      <div className="save-row">
+        <p
+          className="mdui-typescale-body-small"
+          style={{ margin: 0, color: 'var(--mdui-color-on-surface-variant)' }}
+        >
+          {content.length.toLocaleString()} characters
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <mdui-switch ref={switchRef} />
+            <span
+              className="mdui-typescale-body-small"
+              style={{ color: 'var(--mdui-color-on-surface-variant)' }}
+            >
+              Base64
+            </span>
+          </label>
+          <SaveButton loading={isSaving} hasUnsaved={hasUnsaved} onSave={saveContent} />
+        </div>
+      </div>
+    </div>
   );
 }

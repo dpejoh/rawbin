@@ -1,0 +1,214 @@
+body {
+  margin: 0;
+  font-family: 'Geist Mono', monospace;
+}
+
+:root {
+  --mdui-typescale-display-large-font-family:   'Geist Mono', monospace;
+  --mdui-typescale-display-medium-font-family:  'Geist Mono', monospace;
+  --mdui-typescale-display-small-font-family:   'Geist Mono', monospace;
+  --mdui-typescale-headline-large-font-family:  'Geist Mono', monospace;
+  --mdui-typescale-headline-medium-font-family: 'Geist Mono', monospace;
+  --mdui-typescale-headline-small-font-family:  'Geist Mono', monospace;
+  --mdui-typescale-title-large-font-family:     'Geist Mono', monospace;
+  --mdui-typescale-title-medium-font-family:    'Geist Mono', monospace;
+  --mdui-typescale-title-small-font-family:     'Geist Mono', monospace;
+  --mdui-typescale-label-large-font-family:     'Geist Mono', monospace;
+  --mdui-typescale-label-medium-font-family:    'Geist Mono', monospace;
+  --mdui-typescale-label-small-font-family:     'Geist Mono', monospace;
+  --mdui-typescale-body-large-font-family:      'Geist Mono', monospace;
+  --mdui-typescale-body-medium-font-family:     'Geist Mono', monospace;
+  --mdui-typescale-body-small-font-family:      'Geist Mono', monospace;
+}
+
+mdui-layout {
+  height: 100vh;
+}
+
+mdui-layout-main {
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 599px) {
+  mdui-navigation-rail { display: none; }
+  .desktop-only { display: none !important; }
+}
+
+@media (min-width: 600px) {
+  mdui-navigation-bar { display: none; }
+  .mobile-only { display: none !important; }
+  .mobile-pb { padding-bottom: 0 !important; }
+}
+
+.mobile-pb {
+  padding-bottom: 80px;
+}
+
+.auth-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  gap: 16px;
+  padding: 24px;
+  box-sizing: border-box;
+  background: var(--mdui-color-surface);
+  text-align: center;
+}
+
+.nav-footer {
+  padding: 12px;
+  display: flex;
+  justify-content: center;
+  border-top: 1px solid var(--mdui-color-outline-variant);
+}
+
+.page {
+  padding: 32px;
+  max-width: 800px;
+  box-sizing: border-box;
+}
+
+.page-fill {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.raw-url-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--mdui-color-surface-container);
+  border-radius: var(--mdui-shape-corner-extra-small);
+  padding: 8px 12px;
+}
+
+.raw-url-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Geist Mono', monospace;
+  font-size: 13px;
+  color: var(--mdui-color-on-surface);
+}
+
+.unsaved-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mdui-color-primary);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.save-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.save-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.clipboard-panel {
+  width: 320px;
+  min-width: 320px;
+  background: var(--mdui-color-surface-container);
+  height: 100%;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--mdui-shape-corner-small);
+  background: var(--mdui-color-surface-container);
+  transition: background 150ms;
+}
+
+.file-row:hover {
+  background: var(--mdui-color-surface-container-high);
+}
+
+.file-row--folder {
+  cursor: pointer;
+}
+
+.file-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 999;
+  background: color-mix(in srgb, var(--mdui-color-surface) 85%, transparent);
+  border: 2px dashed var(--mdui-color-primary);
+  border-radius: var(--mdui-shape-corner-medium);
+  margin: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.upload-dropzone {
+  border: 1px dashed var(--mdui-color-outline);
+  border-radius: var(--mdui-shape-corner-medium);
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 150ms;
+}
+
+.upload-dropzone:hover {
+  background: var(--mdui-color-surface-container);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 16px;
+  padding: 64px 24px;
+  text-align: center;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.mode-toggle {
+  display: flex;
+  gap: 8px;
+}

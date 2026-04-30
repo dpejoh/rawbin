@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
-import { Stack, Typography, Paper, TextField, Skeleton, Switch, FormControlLabel } from "@mui/material";
-import { useSnackbar } from "notistack";
-import RawUrlRow from "../components/RawUrlRow";
-import SaveButton from "../components/SaveButton";
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { snackbar } from 'mdui';
+import { useMduiInput, useMduiSwitch } from '../hooks/useMdui';
+import RawUrlRow from '../components/RawUrlRow';
+import SaveButton from '../components/SaveButton';
 
 interface KeyboxProps {
   token: string | null;
@@ -11,13 +11,15 @@ interface KeyboxProps {
 const RAW_URL = `${window.location.origin}/key`;
 
 export default function Keybox({ token }: KeyboxProps) {
-  const { enqueueSnackbar } = useSnackbar();
-  const [content, setContent] = useState("");
-  const [savedContent, setSavedContent] = useState("");
-  const [useBase64, setUseBase64] = useState(true);
-  const [savedBase64, setSavedBase64] = useState(true);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [content,      setContent]      = useState('');
+  const [savedContent, setSavedContent] = useState('');
+  const [useBase64,    setUseBase64]    = useState(true);
+  const [savedBase64,  setSavedBase64]  = useState(true);
+  const [isLoading,    setIsLoading]    = useState(true);
+  const [isSaving,     setIsSaving]     = useState(false);
+
+  const contentRef  = useMduiInput(content, setContent);
+  const switchRef   = useMduiSwitch(useBase64, setUseBase64);
 
   useEffect(() => {
     async function load() {
@@ -38,11 +40,8 @@ export default function Keybox({ token }: KeyboxProps) {
           setUseBase64(meta.useBase64);
           setSavedBase64(meta.useBase64);
         }
-      } catch {
-        // no content yet
-      } finally {
-        setIsLoading(false);
-      }
+      } catch { /* no content yet */ }
+      finally { setIsLoading(false); }
     }
     load();
   }, []);
@@ -51,10 +50,10 @@ export default function Keybox({ token }: KeyboxProps) {
     if (!token) return;
     setIsSaving(true);
     try {
-      const res = await fetch("/.netlify/functions/save", {
-        method: "POST",
+      const res = await fetch('/.netlify/functions/save', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ content, useBase64 }),
@@ -62,94 +61,117 @@ export default function Keybox({ token }: KeyboxProps) {
       if (res.ok) {
         setSavedContent(content);
         setSavedBase64(useBase64);
-        enqueueSnackbar("Keybox saved", { variant: "success" });
+        snackbar({ message: 'Keybox saved', placement: 'bottom', autoCloseDelay: 2500 });
       } else {
-        enqueueSnackbar("Failed to save. Try again.", { variant: "error" });
+        snackbar({ message: 'Failed to save. Try again.', placement: 'bottom', autoCloseDelay: 3000 });
       }
     } catch {
-      enqueueSnackbar("Failed to save. Try again.", { variant: "error" });
+      snackbar({ message: 'Failed to save. Try again.', placement: 'bottom', autoCloseDelay: 3000 });
     } finally {
       setIsSaving(false);
     }
-  }, [token, content, useBase64, enqueueSnackbar]);
+  }, [token, content, useBase64]);
+
+  const handlePaste = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      setContent(text);
+      snackbar({ message: 'Pasted from clipboard', placement: 'bottom', autoCloseDelay: 2000 });
+    } catch {
+      snackbar({ message: 'Failed to read clipboard', placement: 'bottom', autoCloseDelay: 2500 });
+    }
+  }, []);
 
   const hasUnsaved = useMemo(
     () => content !== savedContent || useBase64 !== savedBase64,
-    [content, savedContent, useBase64, savedBase64]
+    [content, savedContent, useBase64, savedBase64],
   );
 
-  const charCount = useMemo(
-    () => content.length.toLocaleString(),
-    [content]
-  );
+  const charCount = useMemo(() => content.length.toLocaleString(), [content]);
 
   return (
-    <Stack spacing={3} sx={{ p: 4, maxWidth: 800 }}>
-      <Stack>
-        <Typography variant="h4" sx={{ color: "text.primary" }}>
+    <div className="page">
+      <div style={{ marginBottom: 24 }}>
+        <p className="mdui-typescale-headline-medium" style={{ margin: '0 0 4px' }}>
           Keybox
-        </Typography>
-        <Typography variant="body2" sx={{ color: "text.secondary" }}>
-          Your private keybox. {useBase64 ? "Stored as base64." : "Stored as plain text."}
-        </Typography>
-      </Stack>
+        </p>
+        <p
+          className="mdui-typescale-body-medium"
+          style={{ margin: 0, color: 'var(--mdui-color-on-surface-variant)' }}
+        >
+          Your private keybox.{' '}
+          {useBase64 ? 'Stored as base64.' : 'Stored as plain text.'}
+        </p>
+      </div>
 
-      <Paper
-        elevation={0}
-        sx={{ p: 2, bgcolor: "surfaceContainer.main", borderRadius: 2 }}
-      >
-        <Typography variant="caption" sx={{ color: "outline.main", mb: 0.5, display: "block", fontSize: "11px", fontWeight: 500 }}>
-          RAW URL
-        </Typography>
+      <mdui-card variant="filled" style={{ padding: 16, marginBottom: 16, display: 'block' }}>
+        <p
+          className="mdui-typescale-label-small"
+          style={{ margin: '0 0 6px', color: 'var(--mdui-color-outline)', textTransform: 'uppercase', letterSpacing: '0.08em' }}
+        >
+          Raw URL
+        </p>
         <RawUrlRow url={RAW_URL} />
-      </Paper>
+      </mdui-card>
 
-      <Paper elevation={0} sx={{ p: 2, bgcolor: "surfaceContainer.main", borderRadius: 2 }}>
+      <mdui-card variant="filled" style={{ padding: 16, marginBottom: 16, display: 'block', maxHeight: 400, overflow: 'auto' }}>
         {isLoading ? (
-          <Skeleton variant="rectangular" height={288} sx={{ borderRadius: 1 }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[288, 24, 24].map((h, i) => (
+              <mdui-skeleton
+                key={i}
+                style={{
+                  height: h,
+                  borderRadius: 'var(--mdui-shape-corner-extra-small)',
+                  display: 'block',
+                }}
+              />
+            ))}
+          </div>
         ) : (
-          <TextField
-            variant="standard"
+          <mdui-text-field
+            ref={contentRef}
+            variant="outlined"
             multiline
-            fullWidth
-            minRows={12}
-            placeholder="Paste your keybox here..."
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            inputProps={{ spellCheck: false }}
-            sx={{
-              "& .MuiInputBase-root": { fontFamily: '"Geist Mono", monospace', fontSize: "16px" },
-            }}
+            min-rows={12}
+            max-rows={20}
+            placeholder="Paste your keybox here…"
+            style={{ width: '100%', fontFamily: "'Geist Mono', monospace" }}
           />
         )}
-      </Paper>
+      </mdui-card>
 
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Typography variant="caption" sx={{ color: "text.secondary" }}>
+      <div className="save-row">
+        <p
+          className="mdui-typescale-body-small"
+          style={{ margin: 0, color: 'var(--mdui-color-on-surface-variant)' }}
+        >
           {charCount} characters
-        </Typography>
-        <Stack direction="row" alignItems="center" spacing={2}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={useBase64}
-                onChange={(e) => setUseBase64(e.target.checked)}
-                size="small"
-              />
-            }
-            label={
-              <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                Base64
-              </Typography>
-            }
-          />
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <mdui-button
+            variant="outlined"
+            icon="content_paste"
+            onClick={handlePaste}
+          >
+            Paste
+          </mdui-button>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <mdui-switch ref={switchRef} />
+            <span
+              className="mdui-typescale-body-small"
+              style={{ color: 'var(--mdui-color-on-surface-variant)' }}
+            >
+              Base64
+            </span>
+          </label>
           <SaveButton
             loading={isSaving}
             hasUnsaved={hasUnsaved}
             onSave={handleSave}
           />
-        </Stack>
-      </Stack>
-    </Stack>
+        </div>
+      </div>
+    </div>
   );
 }

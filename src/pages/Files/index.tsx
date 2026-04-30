@@ -1,35 +1,8 @@
-import { useEffect, useState, useCallback, useRef } from "react";
-import {
-  Stack,
-  Typography,
-  Button,
-  IconButton,
-  Skeleton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Tooltip,
-  Breadcrumbs,
-  Link,
-  Box,
-} from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import CloudUploadIcon from "@mui/icons-material/CloudUpload";
-import InsertLinkIcon from "@mui/icons-material/InsertLink";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import CheckIcon from "@mui/icons-material/Check";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import FolderIcon from "@mui/icons-material/Folder";
-import FolderOpenIcon from "@mui/icons-material/FolderOpen";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import CreateNewFolderIcon from "@mui/icons-material/CreateNewFolder";
-import DescriptionIcon from "@mui/icons-material/Description";
-import ImageIcon from "@mui/icons-material/Image";
-import ArchiveIcon from "@mui/icons-material/Archive";
-import DataObjectIcon from "@mui/icons-material/DataObject";
-import { useSnackbar } from "notistack";
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { snackbar } from 'mdui';
+import { useMduiDialog, useMduiInput } from '../../hooks/useMdui';
+import { relativeTime, formatSize } from '../../utils/time';
+import { fileToBase64 } from '../../utils/upload';
 
 interface FileItem {
   id: string;
@@ -42,35 +15,17 @@ interface FileItem {
   updatedAt: string;
 }
 
-interface FolderBreadcrumb {
+interface Breadcrumb {
   id: string;
   name: string;
 }
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function relativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return `${Math.floor(days / 30)}mo ago`;
-}
-
-function fileIcon(mimeType: string, isFolder?: boolean) {
-  if (isFolder) return <FolderIcon />;
-  if (mimeType.startsWith("image/")) return <ImageIcon />;
-  if (mimeType.includes("zip") || mimeType.includes("tar") || mimeType.includes("rar") || mimeType.includes("7z")) return <ArchiveIcon />;
-  if (mimeType.includes("json") || mimeType.includes("xml") || mimeType.includes("yaml")) return <DataObjectIcon />;
-  return <DescriptionIcon />;
+function fileIconName(mimeType: string, isFolder?: boolean): string {
+  if (isFolder) return 'folder';
+  if (mimeType.startsWith('image/')) return 'image';
+  if (/zip|tar|rar|7z/.test(mimeType)) return 'archive';
+  if (/json|xml|yaml/.test(mimeType)) return 'data_object';
+  return 'description';
 }
 
 function fileUrl(id: string): string {
@@ -82,417 +37,347 @@ interface FilesPageProps {
 }
 
 export default function FilesPage({ token }: FilesPageProps) {
-  const { enqueueSnackbar } = useSnackbar();
-  const [allItems, setAllItems] = useState<FileItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [currentFolderId, setCurrentFolderId] = useState("");
-  const [folderStack, setFolderStack] = useState<FolderBreadcrumb[]>([]);
-  const [uploadOpen, setUploadOpen] = useState(false);
-  const [folderOpen, setFolderOpen] = useState(false);
+  const [allItems,    setAllItems]    = useState<FileItem[]>([]);
+  const [isLoading,   setIsLoading]   = useState(true);
+  const [folderPath,  setFolderPath]  = useState<Breadcrumb[]>(() => {
+    try {
+      const stored = localStorage.getItem('keybox:folderPath');
+      if (stored) {
+        const parsed = JSON.parse(stored) as Breadcrumb[];
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch { /* ignore */ }
+    return [{ id: '', name: 'Files' }];
+  });
+  const [uploadOpen,   setUploadOpen]   = useState(false);
+  const [folderOpen,   setFolderOpen]   = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<FileItem | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(0);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const dropInputRef = useRef<HTMLInputElement>(null);
+  const [copiedId,     setCopiedId]     = useState<string | null>(null);
+  const [isDragging,   setIsDragging]   = useState(0);
 
-  const visibleItems = allItems.filter((f) => f.parentId === currentFolderId);
+  const deleteDialogRef = useMduiDialog(Boolean(deleteTarget), () => setDeleteTarget(null));
+
+  const currentFolderId = folderPath[folderPath.length - 1]?.id ?? '';
+  const hasParent = currentFolderId !== '';
+  const visibleItems = allItems.filter(f => f.parentId === currentFolderId);
+
+  useEffect(() => { localStorage.setItem('keybox:folderPath', JSON.stringify(folderPath)); }, [folderPath]);
 
   const fetchFiles = useCallback(async () => {
     if (!token) return;
     setIsLoading(true);
     try {
-      const res = await fetch("/.netlify/functions/files", {
+      const res = await fetch('/.netlify/functions/files', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
-        const data = (await res.json()) as FileItem[];
-        setAllItems(data);
-      }
-    } catch {
-      // ignore
-    } finally {
-      setIsLoading(false);
-    }
+      if (res.ok) setAllItems(await res.json() as FileItem[]);
+    } catch { /* ignore */ }
+    finally { setIsLoading(false); }
   }, [token]);
 
-  useEffect(() => {
-    fetchFiles();
-  }, [fetchFiles]);
+  useEffect(() => { fetchFiles(); }, [fetchFiles]);
 
   const enterFolder = useCallback((id: string, name: string) => {
-    setFolderStack((prev) => [...prev, { id: currentFolderId, name: "" }].concat({ id, name }));
-    setCurrentFolderId(id);
-  }, [currentFolderId]);
+    setFolderPath(prev => [...prev, { id, name }]);
+  }, []);
 
   const navigateBreadcrumb = useCallback((index: number) => {
-    const target = folderStack[index];
-    if (!target) {
-      setCurrentFolderId("");
-      setFolderStack([]);
-    } else {
-      setCurrentFolderId(target.id);
-      setFolderStack(folderStack.slice(0, index));
-    }
-  }, [folderStack]);
+    setFolderPath(prev => prev.slice(0, index + 1));
+  }, []);
 
   const goBack = useCallback(() => {
-    if (folderStack.length === 0) return;
-    const parent = folderStack[folderStack.length - 2];
-    if (!parent) {
-      setCurrentFolderId("");
-      setFolderStack([]);
-    } else {
-      setCurrentFolderId(parent.id);
-      setFolderStack(folderStack.slice(0, -1));
-    }
-  }, [folderStack]);
+    setFolderPath(prev => (prev.length > 1 ? prev.slice(0, -1) : prev));
+  }, []);
 
   const handleCopyUrl = useCallback(async (id: string) => {
-    const url = fileUrl(id);
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(fileUrl(id));
       setCopiedId(id);
-      enqueueSnackbar("File URL copied", { variant: "info" });
+      snackbar({ message: 'File URL copied', placement: 'bottom', autoCloseDelay: 2000 });
       setTimeout(() => setCopiedId(null), 1500);
     } catch {
-      enqueueSnackbar("Failed to copy", { variant: "error" });
+      snackbar({ message: 'Failed to copy', placement: 'bottom', autoCloseDelay: 2500 });
     }
-  }, [enqueueSnackbar]);
+  }, []);
 
   const handleDelete = useCallback(async () => {
     if (!token || !deleteTarget) return;
-    const res = await fetch("/.netlify/functions/files", {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+    const res = await fetch('/.netlify/functions/files', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ id: deleteTarget.id }),
     });
     if (res.ok) {
-      enqueueSnackbar("Deleted", { variant: "success" });
+      snackbar({ message: 'Deleted', placement: 'bottom', autoCloseDelay: 2000 });
       fetchFiles();
     } else {
-      enqueueSnackbar("Failed to delete", { variant: "error" });
+      snackbar({ message: 'Failed to delete', placement: 'bottom', autoCloseDelay: 3000 });
     }
     setDeleteTarget(null);
-  }, [token, deleteTarget, enqueueSnackbar, fetchFiles]);
+  }, [token, deleteTarget, fetchFiles]);
 
   const handleCreateFolder = useCallback(async (name: string) => {
     if (!token) return;
-    const res = await fetch("/.netlify/functions/files?folder=1", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+    const res = await fetch('/.netlify/functions/files?folder=1', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ name, parentId: currentFolderId }),
     });
     if (res.ok) {
-      enqueueSnackbar("Folder created", { variant: "success" });
+      snackbar({ message: 'Folder created', placement: 'bottom', autoCloseDelay: 2000 });
       fetchFiles();
     } else {
-      const text = await res.text();
-      enqueueSnackbar(text || "Failed to create folder", { variant: "error" });
+      snackbar({ message: (await res.text()) || 'Failed to create folder', placement: 'bottom', autoCloseDelay: 3000 });
     }
-  }, [token, currentFolderId, enqueueSnackbar, fetchFiles]);
+  }, [token, currentFolderId, fetchFiles]);
 
   const uploadFile = useCallback(async (file: File) => {
     if (!token) return;
-    const buffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-    let binary = "";
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]!);
-    }
-    const base64 = btoa(binary);
-    const res = await fetch("/.netlify/functions/files", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+    const base64 = await fileToBase64(file);
+    const res = await fetch('/.netlify/functions/files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         name: file.name,
         content: base64,
-        mimeType: file.type || "application/octet-stream",
+        mimeType: file.type || 'application/octet-stream',
         parentId: currentFolderId,
       }),
     });
-    if (!res.ok) throw new Error("Upload failed");
+    if (!res.ok) throw new Error('Upload failed');
   }, [token, currentFolderId]);
 
-  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !token) return;
     try {
       await uploadFile(file);
-      enqueueSnackbar("File uploaded", { variant: "success" });
+      snackbar({ message: 'File uploaded', placement: 'bottom', autoCloseDelay: 2000 });
       fetchFiles();
     } catch {
-      enqueueSnackbar("Upload failed", { variant: "error" });
+      snackbar({ message: 'Upload failed', placement: 'bottom', autoCloseDelay: 3000 });
     }
-    e.target.value = "";
-  }, [token, uploadFile, enqueueSnackbar, fetchFiles]);
+    e.target.value = '';
+  }, [token, uploadFile, fetchFiles]);
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(0);
     const files = Array.from(e.dataTransfer.files);
-    if (files.length === 0) return;
-
-    let success = 0;
-    let fail = 0;
-    for (const file of files) {
-      try {
-        await uploadFile(file);
-        success++;
-      } catch {
-        fail++;
-      }
+    if (!files.length) return;
+    let ok = 0; let fail = 0;
+    for (const f of files) {
+      try { await uploadFile(f); ok++; }
+      catch { fail++; }
     }
     fetchFiles();
-    if (fail === 0) {
-      enqueueSnackbar(`${success} file${success !== 1 ? "s" : ""} uploaded`, { variant: "success" });
-    } else {
-      enqueueSnackbar(`${success} uploaded, ${fail} failed`, { variant: "error" });
-    }
-  }, [uploadFile, fetchFiles, enqueueSnackbar]);
+    snackbar({
+      message: fail === 0
+        ? `${ok} file${ok !== 1 ? 's' : ''} uploaded`
+        : `${ok} uploaded, ${fail} failed`,
+      placement: 'bottom',
+      autoCloseDelay: 3000,
+    });
+  }, [uploadFile, fetchFiles]);
 
-  const totalSize = visibleItems.reduce((acc, f) => acc + f.size, 0);
-  const fileCount = visibleItems.filter((f) => !f.isFolder).length;
-  const folderCount = visibleItems.filter((f) => f.isFolder).length;
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const breadcrumbs: FolderBreadcrumb[] = [
-    { id: "", name: "Files" },
-    ...folderStack,
-  ];
-
-  const hasParent = currentFolderId !== "";
+  const totalSize   = visibleItems.reduce((acc, f) => acc + f.size, 0);
+  const fileCount   = visibleItems.filter(f => !f.isFolder).length;
+  const folderCount = visibleItems.filter(f =>  f.isFolder).length;
 
   return (
-    <Box
-      sx={{ position: "relative", minHeight: "100%" }}
-      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
-      onDragEnter={(e) => { e.preventDefault(); setIsDragging((n) => n + 1); }}
-      onDragLeave={(e) => { e.preventDefault(); setIsDragging((n) => n - 1); }}
+    <div
+      style={{ position: 'relative', minHeight: '100%' }}
+      onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
+      onDragEnter={e => { e.preventDefault(); setIsDragging(n => n + 1); }}
+      onDragLeave={e => { e.preventDefault(); setIsDragging(n => n - 1); }}
       onDrop={handleDrop}
     >
       {isDragging > 0 && (
-        <Stack
-          alignItems="center"
-          justifyContent="center"
-          sx={{
-            position: "absolute", inset: 0, zIndex: 9999,
-            bgcolor: "rgba(17,19,24,0.85)",
-            border: "2px dashed",
-            borderColor: "primary.main",
-            borderRadius: 2, m: 1,
-          }}
-        >
-          <CloudUploadIcon sx={{ fontSize: 64, color: "primary.main", mb: 2 }} />
-          <Typography variant="h5" sx={{ color: "primary.main" }}>Drop files here</Typography>
-        </Stack>
+        <div className="drop-overlay">
+          <mdui-icon name="cloud_upload" style={{ fontSize: 64, color: 'var(--mdui-color-primary)' }} />
+          <p className="mdui-typescale-headline-small" style={{ margin: 0, color: 'var(--mdui-color-primary)' }}>
+            Drop files here
+          </p>
+        </div>
       )}
 
-      <Stack spacing={3} sx={{ p: 4, maxWidth: 800 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-          <Stack>
-            <Breadcrumbs
-              sx={{ "& .MuiBreadcrumbs-separator": { color: "outline.main" } }}
-            >
-              {breadcrumbs.map((crumb, i) => (
-                <Link
-                  key={crumb.id || "root"}
-                  underline={i < breadcrumbs.length - 1 ? "hover" : "none"}
-                  onClick={() => navigateBreadcrumb(i)}
-                  sx={{
-                    color: i === breadcrumbs.length - 1 ? "text.primary" : "primary.main",
-                    cursor: i < breadcrumbs.length - 1 ? "pointer" : "default",
-                    fontSize: "22px",
-                    fontWeight: 400,
-                  }}
-                >
-                  {crumb.name || "Files"}
-                </Link>
-              ))}
-            </Breadcrumbs>
-          </Stack>
-          <Stack direction="row" spacing={1}>
-            <Tooltip title="New folder">
-              <Button
-                variant="outlined"
-                startIcon={<CreateNewFolderIcon />}
-                onClick={() => setFolderOpen(true)}
-                sx={{ textTransform: "none" }}
-                size="small"
+      <div className="page">
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+          <mdui-breadcrumb>
+            {folderPath.map((crumb, i) => (
+              <mdui-breadcrumb-item
+                key={crumb.id || 'root'}
+                onClick={() => navigateBreadcrumb(i)}
+                style={{
+                  cursor: i < folderPath.length - 1 ? 'pointer' : 'default',
+                  color: i === folderPath.length - 1
+                    ? 'var(--mdui-color-on-surface)'
+                    : 'var(--mdui-color-primary)',
+                  fontSize: 22,
+                }}
               >
-                Folder
-              </Button>
-            </Tooltip>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => setUploadOpen(true)}
-              sx={{ textTransform: "none" }}
-              size="small"
+                {crumb.name}
+              </mdui-breadcrumb-item>
+            ))}
+          </mdui-breadcrumb>
+
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <mdui-button
+              variant="outlined"
+              icon="create_new_folder"
+              onClick={() => setFolderOpen(true)}
             >
+              Folder
+            </mdui-button>
+            <mdui-button variant="tonal" icon="upload" onClick={() => setUploadOpen(true)}>
               Upload
-            </Button>
-          </Stack>
-        </Stack>
+            </mdui-button>
+          </div>
+        </div>
 
         {visibleItems.length > 0 && (
-          <Stack direction="row" alignItems="center" spacing={1}>
+          <div className="meta-row" style={{ marginBottom: 16 }}>
             {hasParent && (
-              <IconButton size="small" onClick={goBack} sx={{ color: "text.secondary" }}>
-                <ArrowBackIcon fontSize="small" />
-              </IconButton>
+              <mdui-button-icon icon="arrow_back" onClick={goBack} />
             )}
-            <Typography variant="caption" sx={{ color: "text.secondary" }}>
+            <span
+              className="mdui-typescale-body-small"
+              style={{ color: 'var(--mdui-color-on-surface-variant)' }}
+            >
               {[
-                folderCount > 0 && `${folderCount} folder${folderCount > 1 ? "s" : ""}`,
-                fileCount > 0 && `${fileCount} file${fileCount > 1 ? "s" : ""}`,
-              ].filter(Boolean).join(" · ")}
+                folderCount > 0 && `${folderCount} folder${folderCount > 1 ? 's' : ''}`,
+                fileCount   > 0 && `${fileCount} file${fileCount > 1 ? 's' : ''}`,
+              ].filter(Boolean).join(' · ')}
               {visibleItems.length > 0 && ` · ${formatSize(totalSize)} total`}
-            </Typography>
-          </Stack>
+            </span>
+          </div>
         )}
 
         {isLoading ? (
-          <Stack spacing={1}>
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} variant="rectangular" height={52} sx={{ borderRadius: 1 }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <mdui-skeleton key={i} style={{ height: 52, borderRadius: 'var(--mdui-shape-corner-small)', display: 'block' }} />
             ))}
-          </Stack>
+          </div>
         ) : visibleItems.length === 0 && !hasParent ? (
-          <Stack alignItems="center" justifyContent="center" sx={{ gap: 2, py: 8 }}>
-            <CloudUploadIcon sx={{ fontSize: 64, color: "outline.main" }} />
-            <Typography variant="h5" sx={{ color: "text.primary" }}>
-              No files yet
-            </Typography>
-            <Typography variant="body2" sx={{ color: "text.secondary", textAlign: "center" }}>
-              Upload a file, fetch from a URL, or drop files anywhere on this page.
-            </Typography>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => setUploadOpen(true)}
-              sx={{ textTransform: "none" }}
-            >
+          <div className="empty-state">
+            <mdui-icon name="cloud_upload" style={{ fontSize: 64, color: 'var(--mdui-color-outline)' }} />
+            <p className="mdui-typescale-headline-small" style={{ margin: 0 }}>No files yet</p>
+            <p className="mdui-typescale-body-medium" style={{ margin: 0, color: 'var(--mdui-color-on-surface-variant)' }}>
+              Upload a file or drop files anywhere on this page.
+            </p>
+            <mdui-button variant="tonal" icon="upload" onClick={() => setUploadOpen(true)}>
               Upload your first file
-            </Button>
-          </Stack>
+            </mdui-button>
+          </div>
         ) : visibleItems.length === 0 && hasParent ? (
-          <Typography variant="body2" sx={{ color: "text.secondary", py: 4, textAlign: "center" }}>
+          <p className="mdui-typescale-body-medium" style={{ color: 'var(--mdui-color-on-surface-variant)', textAlign: 'center', padding: '32px 0' }}>
             This folder is empty
-          </Typography>
+          </p>
         ) : (
-          <Stack spacing={0.5}>
-            {visibleItems.map((file) => (
-              <Stack
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {visibleItems.map(file => (
+              <div
                 key={file.id}
-                direction="row"
-                alignItems="center"
-                sx={{
-                  p: 1.5,
-                  borderRadius: 1,
-                  bgcolor: "surfaceContainer.main",
-                  "&:hover": { bgcolor: "surfaceContainerHigh.main" },
-                  gap: 1.5,
-                  cursor: file.isFolder ? "pointer" : "default",
-                }}
+                className={`file-row${file.isFolder ? ' file-row--folder' : ''}`}
                 onClick={() => file.isFolder && enterFolder(file.id, file.name)}
               >
-                <Stack sx={{ color: file.isFolder ? "primary.main" : "text.secondary", fontSize: 20 }}>
-                  {fileIcon(file.mimeType, file.isFolder)}
-                </Stack>
+                <mdui-icon
+                  name={fileIconName(file.mimeType, file.isFolder)}
+                  style={{
+                    fontSize: 20,
+                    color: file.isFolder ? 'var(--mdui-color-primary)' : 'var(--mdui-color-on-surface-variant)',
+                    flexShrink: 0,
+                  }}
+                />
 
-                <Stack sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" noWrap sx={{ color: "text.primary" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p className="mdui-typescale-body-medium" style={{ margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {file.name}
-                  </Typography>
+                  </p>
                   {!file.isFolder && (
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                    <div className="file-meta">
+                      <span className="mdui-typescale-body-small" style={{ color: 'var(--mdui-color-on-surface-variant)' }}>
                         {formatSize(file.size)}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: "outline.main" }}>·</Typography>
-                      <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                      </span>
+                      <span style={{ color: 'var(--mdui-color-outline-variant)' }}>·</span>
+                      <span className="mdui-typescale-body-small" style={{ color: 'var(--mdui-color-on-surface-variant)' }}>
                         {relativeTime(file.createdAt)}
-                      </Typography>
-                    </Stack>
+                      </span>
+                    </div>
                   )}
-                </Stack>
+                </div>
 
                 {!file.isFolder && (
-                  <Tooltip title="Copy raw URL">
-                    <IconButton
-                      size="small"
-                      onClick={(e) => { e.stopPropagation(); handleCopyUrl(file.id); }}
-                      sx={{ color: "text.secondary" }}
-                    >
-                      {copiedId === file.id ? (
-                        <CheckIcon fontSize="small" sx={{ color: "success.main" }} />
-                      ) : (
-                        <ContentCopyIcon fontSize="small" />
-                      )}
-                    </IconButton>
-                  </Tooltip>
+                  <mdui-tooltip content="Copy raw URL">
+                    <mdui-button-icon
+                      icon={copiedId === file.id ? 'check' : 'content_copy'}
+                      onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleCopyUrl(file.id); }}
+                      style={copiedId === file.id ? { color: 'var(--mdui-color-primary)' } : undefined}
+                    />
+                  </mdui-tooltip>
                 )}
 
-                <Tooltip title="Delete">
-                  <IconButton
-                    size="small"
-                    onClick={(e) => { e.stopPropagation(); setDeleteTarget(file); }}
-                    sx={{ color: "text.secondary" }}
-                  >
-                    <DeleteOutlineIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </Stack>
+                <mdui-tooltip content="Delete">
+                  <mdui-button-icon
+                    icon="delete_outline"
+                    onClick={(e: React.MouseEvent) => { e.stopPropagation(); setDeleteTarget(file); }}
+                    style={{ color: 'var(--mdui-color-on-surface-variant)' }}
+                  />
+                </mdui-tooltip>
+              </div>
             ))}
-          </Stack>
+          </div>
         )}
+      </div>
 
-        <UploadDialog
-          open={uploadOpen}
-          token={token}
-          currentFolderId={currentFolderId}
-          onClose={() => setUploadOpen(false)}
-          onUploaded={() => { setUploadOpen(false); fetchFiles(); }}
-          enqueueSnackbar={enqueueSnackbar}
-        />
+      <UploadDialog
+        open={uploadOpen}
+        token={token}
+        currentFolderId={currentFolderId}
+        onClose={() => setUploadOpen(false)}
+        onUploaded={() => { setUploadOpen(false); fetchFiles(); }}
+      />
 
-        <CreateFolderDialog
-          open={folderOpen}
-          onClose={() => setFolderOpen(false)}
-          onCreate={handleCreateFolder}
-        />
+      <CreateFolderDialog
+        open={folderOpen}
+        onClose={() => setFolderOpen(false)}
+        onCreate={handleCreateFolder}
+      />
 
-        <Dialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
-          <DialogTitle>
-            Delete {deleteTarget?.isFolder ? "folder" : "file"} &ldquo;{deleteTarget?.name}&rdquo;?
-          </DialogTitle>
-          <DialogContent>
-            <Typography variant="body2" sx={{ color: "text.secondary" }}>
-              {deleteTarget?.isFolder
-                ? "This will permanently remove the folder and all its contents."
-                : "This will permanently remove the file and its raw endpoint."}
-            </Typography>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setDeleteTarget(null)} variant="text">Cancel</Button>
-            <Button onClick={handleDelete} variant="contained" color="error">Delete</Button>
-          </DialogActions>
-        </Dialog>
+      <mdui-dialog
+        ref={deleteDialogRef}
+        headline={`Delete ${deleteTarget?.isFolder ? 'folder' : 'file'} "${deleteTarget?.name}"?`}
+        icon="delete_forever"
+        close-on-overlay-click
+        close-on-esc
+      >
+        <p className="mdui-typescale-body-medium" style={{ margin: 0, color: 'var(--mdui-color-on-surface-variant)' }}>
+          {deleteTarget?.isFolder
+            ? 'This will permanently remove the folder and all its contents.'
+            : 'This will permanently remove the file and its raw endpoint.'}
+        </p>
+        <mdui-button slot="action" variant="text" onClick={() => setDeleteTarget(null)}>
+          Cancel
+        </mdui-button>
+        <mdui-button
+          slot="action"
+          variant="tonal"
+          onClick={handleDelete}
+          style={{ color: 'var(--mdui-color-error)' }}
+        >
+          Delete
+        </mdui-button>
+      </mdui-dialog>
 
-        <input ref={fileInputRef} type="file" hidden onChange={handleFileUpload} />
-        <input ref={dropInputRef} type="file" hidden onChange={handleFileUpload} />
-      </Stack>
-    </Box>
+      <input ref={fileInputRef} type="file" hidden onChange={handleFileChange} />
+    </div>
   );
 }
+
+/* ─── Upload Dialog ──────────────────────────────────────────────────────── */
 
 interface UploadDialogProps {
   open: boolean;
@@ -500,157 +385,118 @@ interface UploadDialogProps {
   currentFolderId: string;
   onClose: () => void;
   onUploaded: () => void;
-  enqueueSnackbar: (msg: string, opts: { variant: "success" | "error" | "info" }) => void;
 }
 
-function UploadDialog({ open, token, currentFolderId, onClose, onUploaded, enqueueSnackbar }: UploadDialogProps) {
-  const [mode, setMode] = useState<"file" | "url">("file");
-  const [url, setUrl] = useState("");
-  const [fileName, setFileName] = useState("");
+function UploadDialog({ open, token, currentFolderId, onClose, onUploaded }: UploadDialogProps) {
+  const [mode,        setMode]        = useState<'file' | 'url'>('file');
+  const [url,         setUrl]         = useState('');
+  const [fileName,    setFileName]    = useState('');
   const [isUploading, setIsUploading] = useState(false);
+
+  const dialogRef  = useMduiDialog(open, onClose);
+  const urlRef     = useMduiInput(url, setUrl);
+  const nameRef    = useMduiInput(fileName, setFileName);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUpload = useCallback(async () => {
     if (!token) return;
+    if (mode === 'file') { fileInputRef.current?.click(); return; }
     setIsUploading(true);
-
-    if (mode === "url") {
-      const name = fileName.trim() || `from-url-${Date.now()}`;
-      const params = new URLSearchParams({ name, url, parentId: currentFolderId });
-      const res = await fetch(`/.netlify/functions/files?${params}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        enqueueSnackbar("File uploaded from URL", { variant: "success" });
-        onUploaded();
-      } else {
-        const text = await res.text();
-        enqueueSnackbar(text || "Upload failed", { variant: "error" });
-      }
+    const name = fileName.trim() || `from-url-${Date.now()}`;
+    const params = new URLSearchParams({ name, url, parentId: currentFolderId });
+    const res = await fetch(`/.netlify/functions/files?${params}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      snackbar({ message: 'File uploaded from URL', placement: 'bottom', autoCloseDelay: 2500 });
+      onUploaded();
     } else {
-      fileInputRef.current?.click();
+      snackbar({ message: (await res.text()) || 'Upload failed', placement: 'bottom', autoCloseDelay: 3000 });
     }
-
     setIsUploading(false);
-  }, [token, mode, url, fileName, currentFolderId, enqueueSnackbar, onUploaded]);
+  }, [token, mode, url, fileName, currentFolderId, onUploaded]);
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !token) return;
     setIsUploading(true);
-    const buffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-    let binary = "";
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]!);
-    }
-    const base64 = btoa(binary);
-    const res = await fetch("/.netlify/functions/files", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        name: file.name,
-        content: base64,
-        mimeType: file.type || "application/octet-stream",
-        parentId: currentFolderId,
-      }),
-    });
-    if (res.ok) {
-      enqueueSnackbar("File uploaded", { variant: "success" });
-      onUploaded();
-    } else {
-      enqueueSnackbar("Upload failed", { variant: "error" });
+    try {
+      const base64 = await fileToBase64(file);
+      const res = await fetch('/.netlify/functions/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          name: file.name,
+          content: base64,
+          mimeType: file.type || 'application/octet-stream',
+          parentId: currentFolderId,
+        }),
+      });
+      if (res.ok) {
+        snackbar({ message: 'File uploaded', placement: 'bottom', autoCloseDelay: 2000 });
+        onUploaded();
+      } else {
+        snackbar({ message: 'Upload failed', placement: 'bottom', autoCloseDelay: 3000 });
+      }
+    } catch {
+      snackbar({ message: 'Upload failed', placement: 'bottom', autoCloseDelay: 3000 });
     }
     setIsUploading(false);
-    e.target.value = "";
-  }, [token, currentFolderId, enqueueSnackbar, onUploaded]);
+    e.target.value = '';
+  }, [token, currentFolderId, onUploaded]);
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>Upload File</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <Stack direction="row" spacing={1}>
-            <Button
-              variant={mode === "file" ? "contained" : "outlined"}
-              size="small"
-              onClick={() => setMode("file")}
-              startIcon={<CloudUploadIcon />}
-              sx={{ textTransform: "none" }}
-            >
-              From disk
-            </Button>
-            <Button
-              variant={mode === "url" ? "contained" : "outlined"}
-              size="small"
-              onClick={() => setMode("url")}
-              startIcon={<InsertLinkIcon />}
-              sx={{ textTransform: "none" }}
-            >
-              From URL
-            </Button>
-          </Stack>
+    <mdui-dialog ref={dialogRef} headline="Upload File" close-on-overlay-click close-on-esc>
+      <div className="field-group">
+        <div className="mode-toggle">
+          <mdui-button
+            variant={mode === 'file' ? 'tonal' : 'outlined'}
+            icon="upload_file"
+            onClick={() => setMode('file')}
+          >
+            From disk
+          </mdui-button>
+          <mdui-button
+            variant={mode === 'url' ? 'tonal' : 'outlined'}
+            icon="insert_link"
+            onClick={() => setMode('url')}
+          >
+            From URL
+          </mdui-button>
+        </div>
 
-          {mode === "url" ? (
-            <>
-              <TextField
-                label="File URL"
-                variant="outlined"
-                fullWidth
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://example.com/file.pdf"
-              />
-              <TextField
-                label="File name (optional)"
-                variant="outlined"
-                fullWidth
-                value={fileName}
-                onChange={(e) => setFileName(e.target.value)}
-                placeholder="my-file.pdf"
-              />
-            </>
-          ) : (
-            <Stack
-              alignItems="center"
-              justifyContent="center"
-              sx={{
-                border: "1px dashed",
-                borderColor: "outline.main",
-                borderRadius: 2,
-                p: 4,
-                cursor: "pointer",
-                "&:hover": { bgcolor: "surfaceContainer.main" },
-              }}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <CloudUploadIcon sx={{ fontSize: 40, color: "outline.main", mb: 1 }} />
-              <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                Click to select a file
-              </Typography>
-            </Stack>
-          )}
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} variant="text">Cancel</Button>
-        <Button
-          onClick={handleUpload}
-          variant="contained"
-          disabled={isUploading || (mode === "url" && !url.trim())}
-        >
-          {isUploading ? "Uploading..." : "Upload"}
-        </Button>
-      </DialogActions>
+        {mode === 'url' ? (
+          <>
+            <mdui-text-field ref={urlRef} variant="outlined" label="File URL" placeholder="https://example.com/file.pdf" />
+            <mdui-text-field ref={nameRef} variant="outlined" label="File name (optional)" placeholder="my-file.pdf" />
+          </>
+        ) : (
+          <div className="upload-dropzone" onClick={() => fileInputRef.current?.click()}>
+            <mdui-icon name="cloud_upload" style={{ fontSize: 40, color: 'var(--mdui-color-outline)' }} />
+            <p className="mdui-typescale-body-medium" style={{ margin: 0, color: 'var(--mdui-color-on-surface-variant)' }}>
+              Click to select a file
+            </p>
+          </div>
+        )}
+      </div>
+
+      <mdui-button slot="action" variant="text" onClick={onClose}>Cancel</mdui-button>
+      <mdui-button
+        slot="action"
+        variant="tonal"
+        onClick={handleUpload}
+        disabled={isUploading || (mode === 'url' && !url.trim())}
+      >
+        {isUploading ? 'Uploading…' : 'Upload'}
+      </mdui-button>
 
       <input ref={fileInputRef} type="file" hidden onChange={handleFileChange} />
-    </Dialog>
+    </mdui-dialog>
   );
 }
+
+/* ─── Create Folder Dialog ───────────────────────────────────────────────── */
 
 interface CreateFolderDialogProps {
   open: boolean;
@@ -659,34 +505,30 @@ interface CreateFolderDialogProps {
 }
 
 function CreateFolderDialog({ open, onClose, onCreate }: CreateFolderDialogProps) {
-  const [name, setName] = useState("");
+  const [name, setName] = useState('');
+  const dialogRef = useMduiDialog(open, onClose);
+  const nameRef   = useMduiInput(name, setName);
 
-  const handleCreate = useCallback(() => {
+  const handle = useCallback(() => {
     if (!name.trim()) return;
     onCreate(name.trim());
-    setName("");
+    setName('');
     onClose();
   }, [name, onCreate, onClose]);
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>New Folder</DialogTitle>
-      <DialogContent>
-        <TextField
-          label="Folder name"
+    <mdui-dialog ref={dialogRef} headline="New Folder" close-on-overlay-click close-on-esc>
+      <div style={{ marginTop: 8 }}>
+        <mdui-text-field
+          ref={nameRef}
           variant="outlined"
-          fullWidth
-          autoFocus
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); }}
-          sx={{ mt: 1 }}
+          label="Folder name"
+          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') handle(); }}
+          style={{ width: '100%' }}
         />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} variant="text">Cancel</Button>
-        <Button onClick={handleCreate} variant="contained" disabled={!name.trim()}>Create</Button>
-      </DialogActions>
-    </Dialog>
+      </div>
+      <mdui-button slot="action" variant="text" onClick={onClose}>Cancel</mdui-button>
+      <mdui-button slot="action" variant="tonal" onClick={handle}>Create</mdui-button>
+    </mdui-dialog>
   );
 }

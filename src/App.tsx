@@ -1,118 +1,105 @@
-import { useState, useCallback, useMemo } from "react";
-import {
-  ThemeProvider,
-  CssBaseline,
-  Box,
-  useMediaQuery,
-  CircularProgress,
-  Stack,
-  Button,
-  Typography,
-} from "@mui/material";
-import LockOpenIcon from "@mui/icons-material/LockOpen";
-import theme from "./theme/theme";
-import NavRail from "./components/NavRail";
-import type { Page } from "./components/NavRail";
-import BottomNav from "./components/BottomNav";
-import SnackbarProvider from "./components/SnackbarProvider";
-import Keybox from "./pages/Keybox";
-import ClipboardsPage from "./pages/Clipboards";
-import FilesPage from "./pages/Files";
-import useAuth from "./hooks/useAuth";
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { setTheme, setColorScheme } from 'mdui';
+import { useMduiNav } from './hooks/useMdui';
+import NavRail from './components/NavRail';
+import Keybox from './pages/Keybox';
+import ClipboardsPage from './pages/Clipboards';
+import FilesPage from './pages/Files';
+import useAuth from './hooks/useAuth';
+
+export type Page = 'keybox' | 'clipboards' | 'files';
+
+function getInitialPage(): Page {
+  const stored = localStorage.getItem('keybox:page');
+  if (stored === 'keybox' || stored === 'clipboards' || stored === 'files') return stored;
+  return 'keybox';
+}
 
 export default function App() {
-  const isMobile = useMediaQuery("(max-width: 599px)");
   const { user, token, isLoading, signOut, openLogin } = useAuth();
-  const [page, setPage] = useState<Page>("keybox");
+  const [page, setPage] = useState<Page>(getInitialPage);
+
+  useEffect(() => {
+    setTheme('dark');
+    setColorScheme('#1B6EF3');
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('keybox:page', page);
+  }, [page]);
+
+  const handleNavigate = useCallback((p: string) => setPage(p as Page), []);
+
+  const railRef = useMduiNav(page, handleNavigate);
+  const barRef  = useMduiNav(page, handleNavigate);
 
   const userInitials = useMemo(
-    () => (user?.email ? user.email[0]?.toUpperCase() ?? "?" : "?"),
-    [user]
+    () => (user?.email ? (user.email[0]?.toUpperCase() ?? '?') : '?'),
+    [user],
   );
-
-  const handleNavigate = useCallback((p: Page) => setPage(p), []);
 
   if (isLoading) {
     return (
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <Stack
-          alignItems="center"
-          justifyContent="center"
-          sx={{ height: "100vh", bgcolor: "background.default" }}
-        >
-          <CircularProgress />
-        </Stack>
-      </ThemeProvider>
+      <div className="auth-screen">
+        <mdui-circular-progress />
+      </div>
     );
   }
 
   if (!user) {
     return (
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <Stack
-          alignItems="center"
-          justifyContent="center"
-          sx={{ height: "100vh", bgcolor: "background.default", gap: 2, px: 3 }}
-        >
-          <LockOpenIcon sx={{ fontSize: 48, color: "outline.main" }} />
-          <Typography variant="h5" sx={{ color: "text.primary" }}>
-            Sign in to Keybox
-          </Typography>
-          <Typography variant="body2" sx={{ color: "text.secondary", textAlign: "center" }}>
-            Authenticate with your Netlify Identity account to continue.
-          </Typography>
-          <Button
-            variant="contained"
-            size="large"
-            onClick={openLogin}
-            sx={{ textTransform: "none", mt: 1 }}
-          >
-            Sign In
-          </Button>
-        </Stack>
-      </ThemeProvider>
+      <div className="auth-screen">
+        <mdui-icon name="lock_open" style={{ fontSize: 48, color: 'var(--mdui-color-outline)' }} />
+        <p className="mdui-typescale-headline-small" style={{ margin: 0 }}>
+          Sign in to Keybox
+        </p>
+        <p className="mdui-typescale-body-medium" style={{ margin: 0, color: 'var(--mdui-color-on-surface-variant)' }}>
+          Authenticate with your Netlify Identity account to continue.
+        </p>
+        <mdui-button variant="filled" onClick={openLogin}>Sign In</mdui-button>
+      </div>
     );
   }
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <SnackbarProvider>
-        <Box
-          sx={{
-            display: "flex",
-            height: "100vh",
-            bgcolor: "background.default",
-            overflow: "hidden",
-          }}
-        >
-          {isMobile ? (
-            <BottomNav activePage={page} onNavigate={handleNavigate} />
-          ) : (
-            <NavRail
-              activePage={page}
-              onNavigate={handleNavigate}
-              userInitials={userInitials}
-              onSignOut={signOut}
-            />
-          )}
+    <mdui-layout>
+      <NavRail
+        navRef={railRef}
+        userInitials={userInitials}
+        onSignOut={signOut}
+      />
 
-          <Box
-            component="main"
-            sx={{
-              flex: 1,
-              overflow: "auto",
-              pb: isMobile ? 7 : 0,
-            }}
-          >
-            {page === "keybox" && <Keybox token={token} />}
-            {page === "clipboards" && <ClipboardsPage token={token} />}
-            {page === "files" && <FilesPage token={token} />}
-          </Box>
-        </Box>
-      </SnackbarProvider>
-    </ThemeProvider>
+      <mdui-layout-main>
+        <div className="mobile-pb" style={{ flex: 1, overflow: 'auto' }}>
+          {page === 'keybox'      && <Keybox token={token} />}
+          {page === 'clipboards'  && <ClipboardsPage token={token} />}
+          {page === 'files'       && <FilesPage token={token} />}
+        </div>
+      </mdui-layout-main>
+
+      <mdui-navigation-bar ref={barRef} label-visibility="selected">
+        <mdui-navigation-bar-item
+          icon="vpn_key--outlined"
+          active-icon="vpn_key"
+          value="keybox"
+        >
+          Keybox
+        </mdui-navigation-bar-item>
+        <mdui-navigation-bar-item
+          icon="content_paste--outlined"
+          active-icon="content_paste"
+          value="clipboards"
+        >
+          Boards
+        </mdui-navigation-bar-item>
+        <mdui-navigation-bar-item
+          icon="folder--outlined"
+          active-icon="folder"
+          value="files"
+        >
+          Files
+        </mdui-navigation-bar-item>
+      </mdui-navigation-bar>
+    </mdui-layout>
   );
 }

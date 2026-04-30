@@ -15,7 +15,7 @@ interface UseClipboardsReturn {
   selected: Clipboard | null;
   isLoading: boolean;
   isSaving: boolean;
-  fetchAll: (token: string) => Promise<void>;
+  fetchAll: (token: string) => Promise<Clipboard[]>;
   select: (id: string | null) => void;
   create: (token: string, name: string, slug?: string, useBase64?: boolean) => Promise<string | null>;
   update: (token: string, id: string, data: { name?: string; content?: string; slug?: string; useBase64?: boolean }) => Promise<boolean>;
@@ -29,7 +29,7 @@ export default function useClipboards(): UseClipboardsReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const fetchAll = useCallback(async (token: string) => {
+  const fetchAll = useCallback(async (token: string): Promise<Clipboard[]> => {
     setIsLoading(true);
     try {
       const res = await fetch("/.netlify/functions/clipboards", {
@@ -38,9 +38,11 @@ export default function useClipboards(): UseClipboardsReturn {
       if (res.ok) {
         const data: Clipboard[] = await res.json();
         setClipboards(data);
+        return data;
       }
+      return [];
     } catch {
-      // ignore
+      return [];
     } finally {
       setIsLoading(false);
     }
@@ -68,7 +70,9 @@ export default function useClipboards(): UseClipboardsReturn {
         });
         if (res.ok) {
           const { id } = await res.json() as { id: string };
-          await fetchAll(token);
+          const data = await fetchAll(token);
+          const created = data.find((c) => c.id === id);
+          if (created) setSelected(created);
           return id;
         }
         return null;
@@ -94,7 +98,9 @@ export default function useClipboards(): UseClipboardsReturn {
           body: JSON.stringify({ id, ...data }),
         });
         if (res.ok) {
-          await fetchAll(token);
+          const data = await fetchAll(token);
+          const updated = data.find((c) => c.id === id);
+          if (updated) setSelected(updated);
           return true;
         }
         return false;
