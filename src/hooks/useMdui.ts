@@ -79,7 +79,10 @@ export function useMduiNav(
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const handler = () => onChange(el.value ?? '');
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      onChange(detail?.value ?? el.value ?? '');
+    };
     el.addEventListener('change', handler);
     return () => el.removeEventListener('change', handler);
   }, [onChange]);
@@ -93,6 +96,6 @@ export function useMduiProps(props: Record<string, unknown>): Ref {
     const el = ref.current;
     if (!el) return;
     for (const [k, v] of Object.entries(props)) el[k] = v;
-  });
+  }, [props]);
   return ref;
 }

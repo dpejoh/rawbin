@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { snackbar } from 'mdui';
 
 interface RawUrlRowProps {
@@ -7,6 +7,7 @@ interface RawUrlRowProps {
 
 export default function RawUrlRow({ url }: RawUrlRowProps) {
   const [copied, setCopied] = useState(false);
+  const btnRef = useRef<any>(null);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -19,13 +20,20 @@ export default function RawUrlRow({ url }: RawUrlRowProps) {
     }
   }, [url]);
 
+  useEffect(() => {
+    const el = btnRef.current;
+    if (!el) return;
+    el.addEventListener('click', handleCopy);
+    return () => el.removeEventListener('click', handleCopy);
+  }, [handleCopy]);
+
   return (
     <div className="raw-url-strip">
       <span className="raw-url-text">{url}</span>
       <mdui-tooltip content="Copy raw URL">
         <mdui-button-icon
+          ref={btnRef}
           icon={copied ? 'check' : 'content_copy'}
-          onClick={handleCopy}
           style={copied ? { color: 'var(--mdui-color-primary)' } : undefined}
         />
       </mdui-tooltip>
