@@ -6,4 +6,16 @@ export default defineConfig({
   build: {
     outDir: "dist",
   },
+  server: {
+    proxy: {
+      "/.netlify/functions": {
+        target: "https://yuribin.netlify.app",
+        changeOrigin: true,
+      },
+      "^/(key|clips|file)(/.*)?$": {
+        target: "https://yuribin.netlify.app",
+        changeOrigin: true,
+      },
+    },
+  },
 });
