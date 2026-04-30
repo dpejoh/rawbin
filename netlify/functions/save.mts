@@ -1,7 +1,28 @@
 import { getStore } from "@netlify/blobs";
 
-export default async (req: Request, context: { clientContext?: { user?: { email?: string; id?: string } } }) => {
-  const user = context.clientContext?.user;
+const SITE_URL = process.env.URL ?? `https://${process.env.SITE_NAME}.netlify.app`;
+
+async function verifyToken(token: string): Promise<{ email: string; id: string } | null> {
+  try {
+    const res = await fetch(`${SITE_URL}/.netlify/identity/user`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { email?: string; id: string; sub?: string };
+    return { email: data.email ?? "", id: data.id ?? data.sub ?? "" };
+  } catch {
+    return null;
+  }
+}
+
+export default async (req: Request) => {
+  const auth = req.headers.get("Authorization") ?? "";
+  const token = auth.replace("Bearer ", "");
+  if (!token) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  const user = await verifyToken(token);
   if (!user) {
     return new Response("Unauthorized", { status: 401 });
   }
