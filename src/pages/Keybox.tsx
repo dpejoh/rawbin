@@ -87,11 +87,10 @@ export default function Keybox({ token }: KeyboxProps) {
           try {
             const historyRes = await fetch('/.netlify/functions/history');
             if (historyRes.ok) {
-              const entries = await historyRes.json() as Array<{ version: string }>;
-              const nums = entries.map(e => parseInt(e.version, 10)).filter(n => !isNaN(n));
-              const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
-              setVersion(String(next));
-              setSavedVersion(String(next));
+              const data = await historyRes.json() as { latest?: string };
+              const next = data.latest ? String(parseInt(data.latest, 10) + 1) : '1';
+              setVersion(next);
+              setSavedVersion(next);
             }
           } catch { setVersion('1'); setSavedVersion('1'); }
         }

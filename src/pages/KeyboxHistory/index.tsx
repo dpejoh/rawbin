@@ -26,8 +26,9 @@ export default function KeyboxHistory({ token }: KeyboxHistoryProps) {
     try {
       const res = await fetch('/.netlify/functions/history');
       if (res.ok) {
-        const data = await res.json() as HistoryEntry[];
-        setEntries(data.sort((a, b) => {
+        const data = await res.json() as { entries: HistoryEntry[]; latest?: string };
+        const list = Array.isArray(data) ? data : data.entries;
+        setEntries(list.sort((a, b) => {
           const na = parseInt(a.version, 10);
           const nb = parseInt(b.version, 10);
           if (!isNaN(na) && !isNaN(nb)) return nb - na;

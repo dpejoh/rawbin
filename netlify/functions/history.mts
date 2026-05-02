@@ -82,8 +82,24 @@ export default async (req: Request) => {
       });
     }
 
+    const serialQuery = url.searchParams.get("serial");
     const index = await getHistoryIndex();
-    return new Response(JSON.stringify(index), {
+
+    if (serialQuery) {
+      const entry = index.find(e => e.serial === serialQuery);
+      if (!entry) {
+        return new Response("Not found", { status: 404 });
+      }
+      return new Response(JSON.stringify(entry), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const nums = index.map(e => parseInt(e.version, 10)).filter(n => !isNaN(n));
+    const latest = nums.length > 0 ? String(Math.max(...nums)) : "";
+
+    return new Response(JSON.stringify({ entries: index, latest }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
