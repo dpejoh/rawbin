@@ -1,4 +1,5 @@
 import { getStore } from "@netlify/blobs";
+import { X509Certificate } from "node:crypto";
 
 const SITE_URL = process.env.URL ?? `https://${process.env.SITE_NAME}.netlify.app`;
 
@@ -15,27 +16,27 @@ async function verifyToken(token: string): Promise<{ email: string; id: string }
   }
 }
 
-function decodeCertSerial(content: string): string | null {
+function extractPem(content: string): string | null {
   const certMatch = content.match(/<Certificate\b[^>]*>([\s\S]*?)<\/Certificate>/);
   if (!certMatch) return null;
-
   const pemRaw = certMatch[1];
   if (!pemRaw) return null;
   let pem = pemRaw.trim();
-  pem = pem.replace(/-----BEGIN CERTIFICATE-----/g, "");
-  pem = pem.replace(/-----END CERTIFICATE-----/g, "");
-  pem = pem.replace(/\s/g, "");
+  pem = pem.replace(/<!--[\s\S]*?-->/g, "");
+  pem = pem.trim();
+  if (!pem.startsWith("-----BEGIN ")) {
+    pem = "-----BEGIN CERTIFICATE-----\n" + pem + "\n-----END CERTIFICATE-----";
+  }
+  return pem;
+}
 
+function decodeCertSerial(content: string): string | null {
+  const pem = extractPem(content);
   if (!pem) return null;
 
   try {
-    const buf = Buffer.from(pem, "base64");
-    const hex = buf.toString("hex");
-    const idx = hex.indexOf("020a");
-    if (idx === -1) return null;
-    const serialHex = hex.slice(idx + 4, idx + 24);
-    if (serialHex.length < 2) return null;
-    return BigInt("0x" + serialHex).toString();
+    const cert = new X509Certificate(pem);
+    return BigInt("0x" + cert.serialNumber).toString();
   } catch {
     return null;
   }
