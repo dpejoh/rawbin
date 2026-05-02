@@ -38,10 +38,25 @@ export default function Keybox({ token }: KeyboxProps) {
   const [version,      setVersion]      = useState('');
   const [savedVersion, setSavedVersion] = useState('');
   const [versionEditable, setVersionEditable] = useState(false);
-  const revealTimeout  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const revealTimeout    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const versionFieldRef  = useRef<any>(null);
+  const versionEditRef   = useRef<any>(null);
 
   const switchRef   = useMduiSwitch(useBase64, setUseBase64);
   const pasteRef = useRef<any>(null);
+
+  useEffect(() => {
+    const el = versionFieldRef.current;
+    if (el) el.disabled = !versionEditable;
+  }, [versionEditable]);
+
+  useEffect(() => {
+    const el = versionEditRef.current;
+    if (!el) return;
+    const handler = () => setVersionEditable(true);
+    el.addEventListener('click', handler);
+    return () => el.removeEventListener('click', handler);
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -229,18 +244,18 @@ export default function Keybox({ token }: KeyboxProps) {
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <mdui-text-field
+                ref={versionFieldRef}
                 type="number"
                 value={version}
-                disabled={!versionEditable}
                 style={{ width: 120 }}
                 onInput={(e: any) => setVersion(e.target.value)}
               >
                 {!versionEditable && (
                   <mdui-button-icon
+                    ref={versionEditRef}
                     slot="trailing-icon"
                     icon="edit"
                     style={{ cursor: 'pointer' }}
-                    onClick={() => setVersionEditable(true)}
                   />
                 )}
               </mdui-text-field>
