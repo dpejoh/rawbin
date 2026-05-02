@@ -36,7 +36,7 @@ function decodeCertSerial(content: string): string | null {
 
   try {
     const cert = new X509Certificate(pem);
-    return BigInt("0x" + cert.serialNumber).toString();
+    return cert.serialNumber.toLowerCase().replace(/^0+/, "") || "0";
   } catch {
     return null;
   }
