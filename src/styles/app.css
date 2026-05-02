@@ -304,3 +304,84 @@ mdui-layout-main {
   line-height: 16px;
   text-transform: uppercase;
 }
+
+.upload-dropzone--active {
+  border-color: var(--mdui-color-primary);
+  background: color-mix(in srgb, var(--mdui-color-primary-container) 30%, transparent);
+}
+
+.history-entry {
+  background: var(--mdui-color-surface-container);
+  border-radius: var(--mdui-shape-corner-medium);
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 150ms;
+}
+
+.history-entry:hover {
+  background: var(--mdui-color-surface-container-high);
+}
+
+.history-entry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.history-entry-version {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  min-width: 60px;
+}
+
+.history-entry-version-label {
+  font-size: 13px;
+  color: var(--mdui-color-on-surface-variant);
+}
+
+.history-entry-version-num {
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--mdui-color-on-surface);
+  line-height: 1;
+}
+
+.history-entry-serial {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--mdui-color-on-surface-variant);
+  font-family: 'Geist Mono', monospace;
+}
+
+.history-entry-time {
+  font-size: 11px;
+  color: var(--mdui-color-on-surface-variant);
+  opacity: 0.7;
+}
+
+.history-entry-details {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--mdui-color-outline-variant);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-entry-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.history-entry-detail-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mdui-color-outline);
+  min-width: 56px;
+  flex-shrink: 0;
+}

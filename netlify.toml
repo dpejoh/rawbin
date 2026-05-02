@@ -4,8 +4,18 @@
   functions = "netlify/functions"
 
 [[redirects]]
+  from = "/key/history"
+  to = "/.netlify/functions/history"
+  status = 200
+
+[[redirects]]
   from = "/key"
   to = "/.netlify/functions/raw"
+  status = 200
+
+[[redirects]]
+  from = "/key/*"
+  to = "/.netlify/functions/raw/:splat"
   status = 200
 
 [[redirects]]

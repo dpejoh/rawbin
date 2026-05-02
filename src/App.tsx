@@ -6,13 +6,14 @@ import CommandPalette from './components/CommandPalette';
 import Keybox from './pages/Keybox';
 import ClipboardsPage from './pages/Clipboards';
 import FilesPage from './pages/Files';
+import KeyboxHistory from './pages/KeyboxHistory';
 import useAuth from './hooks/useAuth';
 
-export type Page = 'keybox' | 'clipboards' | 'files';
+export type Page = 'keybox' | 'clipboards' | 'files' | 'history';
 
 function getInitialPage(): Page {
   const stored = localStorage.getItem('keybox:page');
-  if (stored === 'keybox' || stored === 'clipboards' || stored === 'files') return stored;
+  if (stored === 'keybox' || stored === 'clipboards' || stored === 'files' || stored === 'history') return stored;
   return 'keybox';
 }
 
@@ -76,6 +77,7 @@ export default function App() {
           {page === 'keybox'      && <Keybox token={token} />}
           {page === 'clipboards'  && <ClipboardsPage token={token} />}
           {page === 'files'       && <FilesPage token={token} />}
+          {page === 'history'     && <KeyboxHistory token={token} />}
         </div>
       </mdui-layout-main>
 
@@ -103,6 +105,14 @@ export default function App() {
           onClick={() => handleNavigate('files')}
         >
           Files
+        </mdui-navigation-bar-item>
+        <mdui-navigation-bar-item
+          icon="history--outlined"
+          active-icon="history"
+          value="history"
+          onClick={() => handleNavigate('history')}
+        >
+          History
         </mdui-navigation-bar-item>
       </mdui-navigation-bar>
 

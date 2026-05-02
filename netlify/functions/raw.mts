@@ -4,9 +4,18 @@ const BLOCKED_AGENTS = ["googlebot", "bingbot", "baiduspider", "crawler", "spide
 const RATE_LIMIT = 30;
 const RATE_WINDOW_MS = 60_000;
 
+const SITE_URL = process.env.URL ?? `https://${process.env.SITE_NAME}.netlify.app`;
+
 export default async (req: Request) => {
   const url = new URL(req.url);
+  const path = url.pathname;
   const isMeta = url.searchParams.has("meta");
+
+  const segments = path.split("/").filter(Boolean);
+  const lastSegment = segments.length >= 2 ? segments[segments.length - 1] : null;
+  const version = lastSegment && lastSegment !== "key" && !lastSegment.includes(".")
+    ? lastSegment
+    : null;
 
   const ua = (req.headers.get("user-agent") ?? "").toLowerCase();
   if (BLOCKED_AGENTS.some((bot) => ua.includes(bot))) {
@@ -37,7 +46,21 @@ export default async (req: Request) => {
 
     await rateStore.set(rateKey, JSON.stringify(record));
   } catch {
-    // rate limiting failure is non-critical
+  }
+
+  if (version) {
+    try {
+      const historyRes = await fetch(`${SITE_URL}/.netlify/functions/history?v=${encodeURIComponent(version)}`);
+      if (historyRes.ok) {
+        const content = await historyRes.text();
+        return new Response(content, {
+          status: 200,
+          headers: { "Content-Type": "text/plain" },
+        });
+      }
+    } catch {
+    }
+    return new Response("Not found", { status: 404 });
   }
 
   const store = getStore("keybox");
@@ -45,7 +68,7 @@ export default async (req: Request) => {
   if (isMeta) {
     const meta = await store.get("_meta");
     if (!meta) {
-      return new Response(JSON.stringify({ useBase64: true }), {
+      return new Response(JSON.stringify({ useBase64: true, version: "" }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });

@@ -57,6 +57,15 @@ export default function NavRail({ navRef, userInitials, onSignOut, onNavigate, c
         )}
       </mdui-navigation-rail-item>
 
+      <mdui-navigation-rail-item
+        icon="history--outlined"
+        active-icon="history"
+        value="history"
+        onClick={() => onNavigate('history')}
+      >
+        History
+      </mdui-navigation-rail-item>
+
       <div slot="bottom" className="nav-footer">
         <mdui-dropdown placement="right-end">
           <mdui-avatar

@@ -47,13 +47,28 @@ export default async (req: Request) => {
     return new Response("Invalid body", { status: 400 });
   }
 
-  const { content, useBase64 } = body as { content: string; useBase64?: boolean };
+  const { content, useBase64, version } = body as { content: string; useBase64?: boolean; version?: string };
   const shouldEncode = useBase64 !== false;
   const stored = shouldEncode ? Buffer.from(content).toString("base64") : content;
 
   const store = getStore("keybox");
   await store.set("content", stored);
-  await store.set("_meta", JSON.stringify({ useBase64: shouldEncode }));
+  await store.set("_meta", JSON.stringify({ useBase64: shouldEncode, version: version ?? "" }));
+
+  if (version) {
+    try {
+      const historyUrl = `${SITE_URL}/.netlify/functions/history/save`;
+      await fetch(historyUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ content, version }),
+      });
+    } catch {
+    }
+  }
 
   return new Response("Saved", { status: 200 });
 };

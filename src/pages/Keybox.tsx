@@ -35,6 +35,9 @@ export default function Keybox({ token }: KeyboxProps) {
   const [masked,       setMasked]       = useState(true);
   const [revealed,     setRevealed]     = useState(false);
   const [editing,      setEditing]      = useState(false);
+  const [version,      setVersion]      = useState('');
+  const [savedVersion, setSavedVersion] = useState('');
+  const [versionEditable, setVersionEditable] = useState(false);
   const revealTimeout  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const switchRef   = useMduiSwitch(useBase64, setUseBase64);
@@ -49,18 +52,36 @@ export default function Keybox({ token }: KeyboxProps) {
         ]);
         if (contentRes.ok) {
           const text = await contentRes.text();
-          let meta = { useBase64: true };
+          let meta: { useBase64: boolean; version?: string } = { useBase64: true };
           try {
-            if (metaRes.ok) meta = JSON.parse(await metaRes.text()) as { useBase64: boolean };
+            if (metaRes.ok) meta = JSON.parse(await metaRes.text()) as { useBase64: boolean; version?: string };
           } catch { /* ignore */ }
           const decoded = meta.useBase64 ? atob(text) : text;
           setContent(decoded);
           setSavedContent(decoded);
           setUseBase64(meta.useBase64);
           setSavedBase64(meta.useBase64);
+          if (meta.version) {
+            setVersion(meta.version);
+            setSavedVersion(meta.version);
+          }
         }
       } catch { /* no content yet */ }
-      finally { setIsLoading(false); }
+      finally {
+        if (!savedVersion) {
+          try {
+            const historyRes = await fetch('/.netlify/functions/history');
+            if (historyRes.ok) {
+              const entries = await historyRes.json() as Array<{ version: string }>;
+              const nums = entries.map(e => parseInt(e.version, 10)).filter(n => !isNaN(n));
+              const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+              setVersion(String(next));
+              setSavedVersion(String(next));
+            }
+          } catch { setVersion('1'); setSavedVersion('1'); }
+        }
+        setIsLoading(false);
+      }
     }
     load();
   }, []);
@@ -75,11 +96,12 @@ export default function Keybox({ token }: KeyboxProps) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ content, useBase64 }),
+        body: JSON.stringify({ content, useBase64, version }),
       });
       if (res.ok) {
         setSavedContent(content);
         setSavedBase64(useBase64);
+        setSavedVersion(version);
         snackbar({ message: 'Keybox saved', placement: 'bottom', autoCloseDelay: 2500 });
       } else {
         snackbar({ message: 'Failed to save. Try again.', placement: 'bottom', autoCloseDelay: 3000 });
@@ -89,7 +111,7 @@ export default function Keybox({ token }: KeyboxProps) {
     } finally {
       setIsSaving(false);
     }
-  }, [token, content, useBase64]);
+  }, [token, content, useBase64, version]);
 
   const handlePaste = useCallback(async () => {
     try {
@@ -140,13 +162,13 @@ export default function Keybox({ token }: KeyboxProps) {
   }, [savedContent]);
 
   const hasUnsaved = useMemo(
-    () => content !== savedContent || useBase64 !== savedBase64,
-    [content, savedContent, useBase64, savedBase64],
+    () => content !== savedContent || useBase64 !== savedBase64 || version !== savedVersion,
+    [content, savedContent, useBase64, savedBase64, version, savedVersion],
   );
 
   const charCount = useMemo(() => content.length.toLocaleString(), [content]);
-
   const showPreview = !editing && masked && content.length > 0;
+  const versionedUrl = version ? `${RAW_URL}/${version}` : null;
 
   return (
     <div className="page">
@@ -180,9 +202,59 @@ export default function Keybox({ token }: KeyboxProps) {
           className="mdui-typescale-label-small"
           style={{ margin: '0 0 6px', color: 'var(--mdui-color-outline)', textTransform: 'uppercase', letterSpacing: '0.08em' }}
         >
-          Raw URL
+          Latest URL
         </p>
         <RawUrlRow url={RAW_URL} />
+        {versionedUrl && (
+          <>
+            <p
+              className="mdui-typescale-label-small"
+              style={{ margin: '12px 0 6px', color: 'var(--mdui-color-outline)', textTransform: 'uppercase', letterSpacing: '0.08em' }}
+            >
+              Versioned URL
+            </p>
+            <RawUrlRow url={versionedUrl} />
+          </>
+        )}
+      </mdui-card>
+
+      <mdui-card variant="filled" style={{ padding: 16, marginBottom: 16, display: 'block' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <p
+              className="mdui-typescale-label-small"
+              style={{ margin: '0 0 4px', color: 'var(--mdui-color-outline)', textTransform: 'uppercase', letterSpacing: '0.08em' }}
+            >
+              Keybox Version
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <mdui-text-field
+                type="number"
+                value={version}
+                disabled={!versionEditable}
+                style={{ width: 120 }}
+                onInput={(e: any) => setVersion(e.target.value)}
+              >
+                {!versionEditable && (
+                  <mdui-button-icon
+                    slot="trailing-icon"
+                    icon="edit"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setVersionEditable(true)}
+                  />
+                )}
+              </mdui-text-field>
+              {!versionEditable && (
+                <span
+                  className="mdui-typescale-body-small"
+                  style={{ color: 'var(--mdui-color-on-surface-variant)' }}
+                >
+                  Auto-calculated
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
       </mdui-card>
 
       {isLoading ? (
