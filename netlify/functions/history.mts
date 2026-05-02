@@ -165,5 +165,33 @@ export default async (req: Request) => {
     return new Response(JSON.stringify({ imported: results.length, results }), { status: 200 });
   }
 
+  if (method === "DELETE") {
+    let body: unknown;
+    try {
+      body = (await req.json()) as unknown;
+    } catch {
+      return new Response("Invalid JSON", { status: 400 });
+    }
+
+    const { version } = body as { version?: string };
+    if (!version) {
+      return new Response("Missing version", { status: 400 });
+    }
+
+    const index = await getHistoryIndex();
+    const idx = index.findIndex(e => e.version === version);
+    if (idx === -1) {
+      return new Response("Not found", { status: 404 });
+    }
+
+    index.splice(idx, 1);
+    await saveHistoryIndex(index);
+
+    const store = getHistoryStore();
+    await store.delete(`content:${version}`);
+
+    return new Response("Deleted", { status: 200 });
+  }
+
   return new Response("Method Not Allowed", { status: 405 });
 };

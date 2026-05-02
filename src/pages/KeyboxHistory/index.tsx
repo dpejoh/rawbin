@@ -279,6 +279,39 @@ export default function KeyboxHistory({ token }: KeyboxHistoryProps) {
                   <div style={{ marginTop: 8 }}>
                     <RawUrlRow url={`${window.location.origin}/key/${entry.version}`} />
                   </div>
+                  <div style={{ marginTop: 12 }}>
+                    <mdui-button
+                      variant="outlined"
+                      icon="delete"
+                      color="error"
+                      style={{ '--mdui-color-primary': 'var(--mdui-color-error)' } as any}
+                      onClick={async (e: any) => {
+                        e.stopPropagation();
+                        if (!token) return;
+                        try {
+                          const res = await fetch('/.netlify/functions/history', {
+                            method: 'DELETE',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              Authorization: `Bearer ${token}`,
+                            },
+                            body: JSON.stringify({ version: entry.version }),
+                          });
+                          if (res.ok) {
+                            snackbar({ message: `v${entry.version} deleted`, placement: 'bottom', autoCloseDelay: 2500 });
+                            if (selectedEntry?.version === entry.version) setSelectedEntry(null);
+                            await fetchHistory();
+                          } else {
+                            snackbar({ message: 'Delete failed', placement: 'bottom', autoCloseDelay: 3000 });
+                          }
+                        } catch {
+                          snackbar({ message: 'Delete failed', placement: 'bottom', autoCloseDelay: 3000 });
+                        }
+                      }}
+                    >
+                      Delete
+                    </mdui-button>
+                  </div>
                 </div>
               )}
             </div>
