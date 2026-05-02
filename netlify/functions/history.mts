@@ -16,7 +16,7 @@ async function verifyToken(token: string): Promise<{ email: string; id: string }
 }
 
 function decodeCertSerial(content: string): string | null {
-  const certMatch = content.match(/<Certificate>([\s\S]*?)<\/Certificate>/);
+  const certMatch = content.match(/<Certificate\b[^>]*>([\s\S]*?)<\/Certificate>/);
   if (!certMatch) return null;
 
   const pemRaw = certMatch[1];

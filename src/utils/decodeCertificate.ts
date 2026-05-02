@@ -3,7 +3,7 @@ export interface DecodedCert {
 }
 
 export function decodeCertificate(xmlContent: string): DecodedCert | null {
-  const certMatch = xmlContent.match(/<Certificate>([\s\S]*?)<\/Certificate>/);
+  const certMatch = xmlContent.match(/<Certificate\b[^>]*>([\s\S]*?)<\/Certificate>/);
   if (!certMatch) return null;
 
   const pemRaw = certMatch[1];
@@ -33,7 +33,7 @@ export function decodeCertificate(xmlContent: string): DecodedCert | null {
 }
 
 export function decodeCertificateServer(content: string): { serial: string } | null {
-  const certMatch = content.match(/<Certificate>([\s\S]*?)<\/Certificate>/);
+  const certMatch = content.match(/<Certificate\b[^>]*>([\s\S]*?)<\/Certificate>/);
   if (!certMatch) return null;
 
   const pemRaw = certMatch[1];
