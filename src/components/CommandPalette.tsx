@@ -1,5 +1,16 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useMduiDialog, useMduiInput } from '../hooks/useMdui';
+import {
+  Dialog,
+  TextField,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Typography,
+} from '@mui/material';
+import KeyIcon from '@mui/icons-material/Key';
+import DescriptionIcon from '@mui/icons-material/Description';
+import FolderIcon from '@mui/icons-material/Folder';
 
 interface PaletteItem {
   id: string;
@@ -30,9 +41,6 @@ export default function CommandPalette({ token, onNavigate }: CommandPaletteProp
   const [items, setItems] = useState<PaletteItem[]>([]);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const fetchingRef = useRef(false);
-
-  const dialogRef = useMduiDialog(open, () => { setOpen(false); setQuery(''); });
-  const searchRef = useMduiInput(query, setQuery);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -135,51 +143,72 @@ export default function CommandPalette({ token, onNavigate }: CommandPaletteProp
     }
   }, [filtered, selectedIdx, handleSelect]);
 
+  function iconForType(type: PaletteItem['type']) {
+    switch (type) {
+      case 'keybox': return <KeyIcon />;
+      case 'clipboard': return <DescriptionIcon />;
+      case 'file': return <FolderIcon />;
+    }
+  }
+
   return (
-    <mdui-dialog
-      ref={dialogRef}
-      close-on-overlay-click
-      close-on-esc
-      style={{ width: 480, maxWidth: '90vw' }}
+    <Dialog
+      open={open}
+      onClose={() => { setOpen(false); setQuery(''); }}
+      maxWidth="sm"
+      fullWidth
+      PaperProps={{ sx: { borderRadius: 2 } }}
     >
-      <div style={{ padding: 0 }}>
-        <mdui-text-field
-          ref={searchRef}
+      <div style={{ padding: '16px 16px 0' }}>
+        <TextField
           variant="filled"
+          fullWidth
           placeholder="Search clipboards, files, pages…"
-          style={{ width: '100%' }}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
+          autoFocus
+          sx={{ '& .MuiInputBase-input': { fontFamily: '"Geist Mono", monospace' } }}
         />
       </div>
       {filtered.length > 0 && (
-        <mdui-list style={{ maxHeight: 320, overflowY: 'auto', marginTop: 8 }}>
+        <List sx={{ maxHeight: 320, overflowY: 'auto', pt: 1 }} dense>
           {filtered.map((item, i) => (
-            <mdui-list-item
+            <ListItemButton
               key={item.id}
-              icon={item.type === 'keybox' ? 'vpn_key' : item.type === 'clipboard' ? 'description' : 'folder'}
-              rounded
-              active={i === selectedIdx}
+              selected={i === selectedIdx}
               onClick={() => handleSelect(item)}
-              style={
-                i === selectedIdx
-                  ? { background: 'var(--mdui-color-primary-container)', color: 'var(--mdui-color-on-primary-container)' }
-                  : undefined
-              }
+              sx={{
+                borderRadius: 1,
+                mx: 1,
+                '&.Mui-selected': {
+                  bgcolor: 'primary.main',
+                  color: '#0842A0',
+                  '& .MuiListItemIcon-root': { color: '#0842A0' },
+                },
+              }}
             >
-              {item.label}
-              <span slot="description">{item.description}</span>
-            </mdui-list-item>
+              <ListItemIcon sx={{ minWidth: 36 }}>
+                {iconForType(item.type)}
+              </ListItemIcon>
+              <ListItemText
+                primary={item.label}
+                secondary={item.description}
+                primaryTypographyProps={{ variant: 'subtitle1', noWrap: true }}
+                secondaryTypographyProps={{ variant: 'caption' }}
+              />
+            </ListItemButton>
           ))}
-        </mdui-list>
+        </List>
       )}
       {query.trim() && filtered.length === 0 && (
-        <p
-          className="mdui-typescale-body-medium"
-          style={{ textAlign: 'center', padding: 24, color: 'var(--mdui-color-on-surface-variant)', margin: 0 }}
+        <Typography
+          variant="body2"
+          sx={{ textAlign: 'center', py: 3, color: 'text.secondary' }}
         >
           No results for "{query}"
-        </p>
+        </Typography>
       )}
-    </mdui-dialog>
+    </Dialog>
   );
 }

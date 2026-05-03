@@ -1,8 +1,35 @@
-import { useMemo } from 'react';
-import { relativeTime } from '../../utils/time';
-import { detectContentType } from '../../utils/detectType';
-import type { Clipboard } from '../../hooks/useClipboards';
-import type { ContentType } from '../../utils/detectType';
+import {
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  IconButton,
+  Menu,
+  MenuItem,
+  ListItemIcon as MenuItemIcon,
+  Divider,
+  Skeleton,
+} from "@mui/material";
+import DescriptionIcon from "@mui/icons-material/Description";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import DriveFileRenameOutlineIcon from "@mui/icons-material/DriveFileRenameOutline";
+import LinkIcon from "@mui/icons-material/Link";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import { useCallback, useState } from "react";
+import type { Clipboard } from "../../hooks/useClipboards";
+
+function relativeTime(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
+}
 
 interface ClipboardListProps {
   clipboards: Clipboard[];
@@ -14,28 +41,6 @@ interface ClipboardListProps {
   onDelete: (id: string) => void;
 }
 
-const typeColorMap: Record<string, string> = {
-  json:  'var(--mdui-color-tertiary)',
-  xml:   'var(--mdui-color-secondary)',
-  pem:   'var(--mdui-color-primary)',
-  yaml:  'var(--mdui-color-tertiary)',
-  toml:  'var(--mdui-color-secondary)',
-  text:  'var(--mdui-color-on-surface-variant)',
-  empty: 'var(--mdui-color-outline)',
-  base64:'var(--mdui-color-on-surface-variant)',
-};
-
-const typeBgMap: Record<string, string> = {
-  json:  'var(--mdui-color-tertiary-container)',
-  xml:   'var(--mdui-color-secondary-container)',
-  pem:   'var(--mdui-color-primary-container)',
-  yaml:  'var(--mdui-color-tertiary-container)',
-  toml:  'var(--mdui-color-secondary-container)',
-  text:  'var(--mdui-color-surface-container-high)',
-  empty: 'var(--mdui-color-surface-container)',
-  base64:'var(--mdui-color-surface-container-high)',
-};
-
 export default function ClipboardList({
   clipboards,
   selectedId,
@@ -45,90 +50,110 @@ export default function ClipboardList({
   onCopyUrl,
   onDelete,
 }: ClipboardListProps) {
-  const typeInfoMap = useMemo(() => {
-    const map: Record<string, { type: ContentType; label: string; color: string }> = {};
-    for (const cb of clipboards) {
-      const info = detectContentType(cb.content ?? '');
-      map[cb.id] = info;
-    }
-    return map;
-  }, [clipboards]);
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [menuClipboardId, setMenuClipboardId] = useState<string | null>(null);
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent<HTMLElement>, id: string) => {
+      e.stopPropagation();
+      setMenuAnchor(e.currentTarget);
+      setMenuClipboardId(id);
+    },
+    []
+  );
+
+  const handleMenuAction = useCallback(
+    (action: (id: string) => void) => {
+      if (menuClipboardId) action(menuClipboardId);
+      setMenuAnchor(null);
+      setMenuClipboardId(null);
+    },
+    [menuClipboardId]
+  );
 
   if (isLoading) {
     return (
-      <div className="clipboard-panel" style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <List sx={{ width: 320, minWidth: 320, bgcolor: "surfaceContainer.main", height: "100%", overflow: "auto" }}>
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="skeleton" style={{ height: 64 }} />
+          <Skeleton key={i} variant="rectangular" height={64} sx={{ m: 1, borderRadius: 1 }} />
         ))}
-      </div>
+      </List>
     );
   }
 
   return (
-    <div className="clipboard-panel">
-      <mdui-list>
-        {clipboards.map((cb) => {
-          const isActive = cb.id === selectedId;
-          const typeInfo = typeInfoMap[cb.id];
-          return (
-            <mdui-list-item
-              key={cb.id}
-              icon="description"
-              rounded
-              active={isActive}
-              onClick={() => onSelect(cb.id)}
+    <>
+      <List
+        sx={{
+          width: 320,
+          minWidth: 320,
+          bgcolor: "surfaceContainer.main",
+          height: "100%",
+          overflow: "auto",
+          p: 0,
+        }}
+      >
+        {clipboards.map((cb) => (
+          <ListItemButton
+            key={cb.id}
+            selected={cb.id === selectedId}
+            onClick={() => onSelect(cb.id)}
+            sx={{
+              "&.Mui-selected": {
+                bgcolor: "primary.main",
+                color: "#0842A0",
+                "& .MuiListItemIcon-root": { color: "#0842A0" },
+                "& .MuiListItemText-secondary": { color: "#0842A0" },
+              },
+              "&:hover": { bgcolor: "surfaceContainerHigh.main" },
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 36 }}>
+              <DescriptionIcon sx={{ fontSize: 20 }} />
+            </ListItemIcon>
+            <ListItemText
+              primary={cb.name}
+              primaryTypographyProps={{
+                variant: "subtitle1",
+                noWrap: true,
+                sx: { color: "inherit" },
+              }}
+              secondary={`${relativeTime(cb.updatedAt)} · ${cb.content.length.toLocaleString()} chars`}
+              secondaryTypographyProps={{
+                variant: "caption",
+                sx: { color: "text.secondary" },
+              }}
+            />
+            <IconButton
+              size="small"
+              onClick={(e) => handleContextMenu(e, cb.id)}
+              sx={{ color: "text.secondary" }}
             >
-              {cb.name}
-              <span slot="description" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                {relativeTime(cb.updatedAt)} · {cb.content.length.toLocaleString()} chars
-                {typeInfo && typeInfo.type !== 'text' && typeInfo.type !== 'empty' && (
-                  <span
-                    className="type-badge"
-                    style={{
-                      color: typeColorMap[typeInfo.type] ?? 'var(--mdui-color-on-surface-variant)',
-                      backgroundColor: typeBgMap[typeInfo.type] ?? 'var(--mdui-color-surface-container-high)',
-                    }}
-                  >
-                    {typeInfo.label}
-                  </span>
-                )}
-              </span>
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
+          </ListItemButton>
+        ))}
+      </List>
 
-              <div slot="end-icon" onClick={(e) => e.stopPropagation()}>
-                <mdui-dropdown trigger="click" placement="bottom-end">
-                  <mdui-button-icon
-                    slot="trigger"
-                    icon="more_vert"
-                    style={{ color: 'var(--mdui-color-on-surface-variant)' }}
-                  />
-                  <mdui-menu>
-                    <mdui-menu-item
-                      icon="drive_file_rename_outline"
-                      onClick={(e) => { e.stopPropagation(); onRename(cb.id); }}
-                    >
-                      Rename
-                    </mdui-menu-item>
-                    <mdui-menu-item
-                      icon="link"
-                      onClick={(e) => { e.stopPropagation(); onCopyUrl(cb.id); }}
-                    >
-                      Copy raw URL
-                    </mdui-menu-item>
-                    <mdui-divider />
-                    <mdui-menu-item
-                      icon="delete_outline"
-                      onClick={(e) => { e.stopPropagation(); onDelete(cb.id); }}
-                      style={{ color: 'var(--mdui-color-error)' }}
-                    >
-                      Delete
-                    </mdui-menu-item>
-                  </mdui-menu>
-                </mdui-dropdown>
-              </div>
-            </mdui-list-item>
-          );
-        })}
-      </mdui-list>
-    </div>
+      <Menu
+        anchorEl={menuAnchor}
+        open={Boolean(menuAnchor)}
+        onClose={() => setMenuAnchor(null)}
+      >
+        <MenuItem onClick={() => handleMenuAction(onRename)}>
+          <MenuItemIcon><DriveFileRenameOutlineIcon fontSize="small" /></MenuItemIcon>
+          Rename
+        </MenuItem>
+        <MenuItem onClick={() => handleMenuAction(onCopyUrl)}>
+          <MenuItemIcon><LinkIcon fontSize="small" /></MenuItemIcon>
+          Copy raw URL
+        </MenuItem>
+        <Divider />
+        <MenuItem onClick={() => handleMenuAction(onDelete)} sx={{ color: "error.main" }}>
+          <MenuItemIcon><DeleteOutlineIcon fontSize="small" sx={{ color: "error.main" }} /></MenuItemIcon>
+          Delete
+        </MenuItem>
+      </Menu>
+    </>
   );
 }

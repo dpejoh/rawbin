@@ -1,4 +1,6 @@
-import { useMduiProps } from '../hooks/useMdui';
+import { Stack } from "@mui/material";
+import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
+import { LoadingButton } from "@mui/lab";
 
 interface SaveButtonProps {
   loading: boolean;
@@ -7,12 +9,23 @@ interface SaveButtonProps {
 }
 
 export default function SaveButton({ loading, hasUnsaved, onSave }: SaveButtonProps) {
-  const btnRef = useMduiProps({ loading, disabled: !hasUnsaved });
-
   return (
-    <div className="save-actions">
-      {hasUnsaved && <span className="unsaved-dot" />}
-      <mdui-button ref={btnRef} variant="tonal" onClick={onSave}>Save</mdui-button>
-    </div>
+    <Stack direction="row" alignItems="center" spacing={1}>
+      {hasUnsaved && (
+        <FiberManualRecordIcon
+          sx={{ fontSize: 8, color: "primary.main" }}
+        />
+      )}
+      <LoadingButton
+        variant="contained"
+        size="large"
+        loading={loading}
+        disabled={!hasUnsaved}
+        onClick={onSave}
+        sx={{ borderRadius: 2, textTransform: "none" }}
+      >
+        Save
+      </LoadingButton>
+    </Stack>
   );
 }

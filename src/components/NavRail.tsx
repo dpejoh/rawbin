@@ -1,85 +1,138 @@
-import type { RefObject } from 'react';
+import {
+  Stack,
+  IconButton,
+  Avatar,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Typography,
+} from "@mui/material";
+import KeyIcon from "@mui/icons-material/Key";
+import ContentPasteIcon from "@mui/icons-material/ContentPaste";
+import FolderIcon from "@mui/icons-material/Folder";
+import LogoutIcon from "@mui/icons-material/Logout";
+import { useCallback, useMemo, useState } from "react";
+
+export type Page = "keybox" | "clipboards" | "files";
 
 interface NavRailProps {
-  navRef: RefObject<any>;
+  activePage: Page;
+  onNavigate: (page: Page) => void;
   userInitials: string;
   onSignOut: () => void;
-  onNavigate: (page: string) => void;
-  clipboardCount?: number;
-  fileCount?: number;
 }
 
-export default function NavRail({ navRef, userInitials, onSignOut, onNavigate, clipboardCount, fileCount }: NavRailProps) {
+export default function NavRail({
+  activePage,
+  onNavigate,
+  userInitials,
+  onSignOut,
+}: NavRailProps) {
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+
+  const handleAvatarClick = useCallback(
+    (e: React.MouseEvent<HTMLElement>) => setAnchorEl(e.currentTarget),
+    []
+  );
+  const handleMenuClose = useCallback(() => setAnchorEl(null), []);
+
+  const navItems = useMemo(
+    () => [
+      { id: "keybox" as const, icon: <KeyIcon />, label: "Keybox" },
+      { id: "clipboards" as const, icon: <ContentPasteIcon />, label: "Boards" },
+      { id: "files" as const, icon: <FolderIcon />, label: "Files" },
+    ],
+    []
+  );
+
   return (
-    <mdui-navigation-rail ref={navRef} label-visibility="selected">
-      <div slot="header" className="nav-header">
-        <mdui-icon
-          name="key"
-          style={{
-            fontSize: 22,
-            color: 'var(--mdui-color-primary)',
-            display: 'block',
-          }}
+    <Stack
+      sx={{
+        width: 80,
+        minWidth: 80,
+        height: "100vh",
+        bgcolor: "surfaceContainer.main",
+        alignItems: "center",
+        py: 2,
+        justifyContent: "space-between",
+      }}
+    >
+      <Stack alignItems="center" spacing={3}>
+        <KeyIcon
+          sx={{ fontSize: 28, color: "primary.main", mb: 1 }}
         />
-        <span className="nav-wordmark">keybox</span>
-      </div>
+        <Stack spacing={0.5} alignItems="center">
+          {navItems.map((item) => {
+            const isActive = activePage === item.id;
+            return (
+              <IconButton
+                key={item.id}
+                onClick={() => onNavigate(item.id)}
+                sx={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 3,
+                  bgcolor: isActive ? "primary.main" : "transparent",
+                  color: isActive ? "#0842A0" : "text.secondary",
+                  "&:hover": {
+                    bgcolor: isActive ? "primary.main" : "action.hover",
+                  },
+                  flexDirection: "column",
+                  gap: 0.5,
+                }}
+              >
+                {item.icon}
+                <Typography
+                  sx={{
+                    fontSize: "11px",
+                    fontWeight: 500,
+                    lineHeight: 1,
+                    color: isActive ? "#0842A0" : "text.secondary",
+                  }}
+                >
+                  {item.label}
+                </Typography>
+              </IconButton>
+            );
+          })}
+        </Stack>
+      </Stack>
 
-      <mdui-navigation-rail-item
-        icon="vpn_key--outlined"
-        active-icon="vpn_key"
-        value="keybox"
-        onClick={() => onNavigate('keybox')}
+      <Avatar
+        onClick={handleAvatarClick}
+        sx={{
+          width: 36,
+          height: 36,
+          cursor: "pointer",
+          bgcolor: "primary.main",
+          color: "#0842A0",
+          fontSize: "14px",
+          fontWeight: 500,
+        }}
       >
-        Keybox
-      </mdui-navigation-rail-item>
+        {userInitials}
+      </Avatar>
 
-      <mdui-navigation-rail-item
-        icon="content_paste--outlined"
-        active-icon="content_paste"
-        value="clipboards"
-        onClick={() => onNavigate('clipboards')}
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleMenuClose}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+        transformOrigin={{ vertical: "bottom", horizontal: "right" }}
       >
-        Boards
-        {clipboardCount !== undefined && clipboardCount > 0 && (
-          <mdui-badge slot="badge">{clipboardCount}</mdui-badge>
-        )}
-      </mdui-navigation-rail-item>
-
-      <mdui-navigation-rail-item
-        icon="folder--outlined"
-        active-icon="folder"
-        value="files"
-        onClick={() => onNavigate('files')}
-      >
-        Files
-        {fileCount !== undefined && fileCount > 0 && (
-          <mdui-badge slot="badge">{fileCount}</mdui-badge>
-        )}
-      </mdui-navigation-rail-item>
-
-      <mdui-navigation-rail-item
-        icon="history--outlined"
-        active-icon="history"
-        value="history"
-        onClick={() => onNavigate('history')}
-      >
-        History
-      </mdui-navigation-rail-item>
-
-      <div slot="bottom" className="nav-footer">
-        <mdui-dropdown placement="right-end">
-          <mdui-avatar
-            slot="trigger"
-            style={{ cursor: 'pointer', fontSize: '14px' }}
-          >
-            {userInitials}
-          </mdui-avatar>
-          <mdui-menu>
-            <mdui-menu-item value="signout" icon="logout" onClick={onSignOut}>Sign out</mdui-menu-item>
-          </mdui-menu>
-        </mdui-dropdown>
-        <span className="nav-status-dot" />
-      </div>
-    </mdui-navigation-rail>
+        <MenuItem
+          onClick={() => {
+            handleMenuClose();
+            onSignOut();
+          }}
+        >
+          <ListItemIcon>
+            <LogoutIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Sign out</ListItemText>
+        </MenuItem>
+      </Menu>
+    </Stack>
   );
 }
