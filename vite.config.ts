@@ -12,7 +12,15 @@ export default defineConfig({
         target: "https://yuribin.netlify.app",
         changeOrigin: true,
       },
-      "^/(key|clips|file)(/.*)?$": {
+      "/key": {
+        target: "https://yuribin.netlify.app",
+        changeOrigin: true,
+      },
+      "/clips": {
+        target: "https://yuribin.netlify.app",
+        changeOrigin: true,
+      },
+      "/file": {
         target: "https://yuribin.netlify.app",
         changeOrigin: true,
       },
