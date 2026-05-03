@@ -9,19 +9,19 @@ export default defineConfig({
   server: {
     proxy: {
       "/.netlify/functions": {
-        target: "https://yuribin.netlify.app",
+        target: "https://rawbin.netlify.app",
         changeOrigin: true,
       },
       "/key": {
-        target: "https://yuribin.netlify.app",
+        target: "https://rawbin.netlify.app",
         changeOrigin: true,
       },
       "/clips": {
-        target: "https://yuribin.netlify.app",
+        target: "https://rawbin.netlify.app",
         changeOrigin: true,
       },
       "/file": {
-        target: "https://yuribin.netlify.app",
+        target: "https://rawbin.netlify.app",
         changeOrigin: true,
       },
     },
