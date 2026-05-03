@@ -4,6 +4,8 @@ import {
   Button,
   IconButton,
   Tooltip,
+  Checkbox,
+  Chip,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -16,6 +18,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import FolderIcon from '@mui/icons-material/Folder';
 import DescriptionIcon from '@mui/icons-material/Description';
 import ImageIcon from '@mui/icons-material/Image';
@@ -78,6 +81,9 @@ export default function FilesPage({ token }: FilesPageProps) {
   const [deleteTarget, setDeleteTarget] = useState<FileItem | null>(null);
   const [copiedId,     setCopiedId]     = useState<string | null>(null);
   const [isDragging,   setIsDragging]   = useState(0);
+  const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set());
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
 
   const currentFolderId = folderPath[folderPath.length - 1]?.id ?? '';
   const hasParent = currentFolderId !== '';
@@ -283,20 +289,77 @@ export default function FilesPage({ token }: FilesPageProps) {
           </div>
         </div>
 
-        {visibleItems.length > 0 && (
+          {visibleItems.length > 0 && (
           <div className="meta-row" style={{ marginBottom: 16 }}>
             {hasParent && (
               <IconButton size="small" onClick={goBack} sx={{ color: 'text.secondary' }}>
                 <ArrowBackIcon fontSize="small" />
               </IconButton>
             )}
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', flex: 1 }}>
               {[
                 folderCount > 0 && `${folderCount} folder${folderCount > 1 ? 's' : ''}`,
                 fileCount   > 0 && `${fileCount} file${fileCount > 1 ? 's' : ''}`,
               ].filter(Boolean).join(' · ')}
               {visibleItems.length > 0 && ` · ${formatSize(totalSize)} total`}
             </Typography>
+            <Chip
+              label={selectMode ? `${selectedIds.size} selected` : 'Select'}
+              size="small"
+              variant={selectMode ? 'filled' : 'outlined'}
+              color={selectMode ? 'primary' : 'default'}
+              onClick={() => {
+                if (selectMode) {
+                  setSelectMode(false);
+                  setSelectedIds(new Set());
+                } else {
+                  setSelectMode(true);
+                }
+              }}
+              sx={{ cursor: 'pointer', mr: 1 }}
+            />
+            {selectMode && (
+              <Button
+                variant="text"
+                size="small"
+                onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}
+                sx={{ textTransform: 'none', mr: 1, minWidth: 'auto', fontSize: 12, height: 24, lineHeight: '16px' }}
+              >
+                Cancel
+              </Button>
+            )}
+            {selectMode && selectedIds.size > 0 && (
+              <Button
+                variant="contained"
+                color="error"
+                size="small"
+                startIcon={<DeleteSweepIcon />}
+                onClick={async () => {
+                  if (!token || selectedIds.size === 0) return;
+                  setIsBatchDeleting(true);
+                  let ok = 0; let fail = 0;
+                  for (const id of selectedIds) {
+                    try {
+                      const res = await fetch('/.netlify/functions/files', {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({ id }),
+                      });
+                      if (res.ok) ok++; else fail++;
+                    } catch { fail++; }
+                  }
+                  enqueueSnackbar(`Deleted ${ok} item${ok !== 1 ? 's' : ''}${fail > 0 ? ` (${fail} failed)` : ''}`, { variant: fail === 0 ? 'success' : 'error' });
+                  setSelectedIds(new Set());
+                  setSelectMode(false);
+                  setIsBatchDeleting(false);
+                  await fetchFiles();
+                }}
+                disabled={isBatchDeleting}
+                sx={{ textTransform: 'none', height: 24 }}
+              >
+                {isBatchDeleting ? 'Deleting...' : `Delete (${selectedIds.size})`}
+              </Button>
+            )}
           </div>
         )}
 
@@ -323,24 +386,40 @@ export default function FilesPage({ token }: FilesPageProps) {
           </Typography>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {visibleItems.map(file => (
-              <div
-                key={file.id}
-                className={`file-row${file.isFolder ? ' file-row--folder' : ''}`}
-                onClick={() => file.isFolder && enterFolder(file.id, file.name)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: 12,
-                  borderRadius: 8,
-                  background: 'var(--mdui-color-surface-container, #1E2128)',
-                  cursor: file.isFolder ? 'pointer' : 'default',
-                }}
-              >
-                <span style={{ color: file.isFolder ? 'primary.main' : 'text.secondary', display: 'flex' }}>
-                  {fileIcon(file.mimeType, file.isFolder)}
-                </span>
+              {visibleItems.map(file => (
+                <div
+                  key={file.id}
+                  className={`file-row${file.isFolder ? ' file-row--folder' : ''}`}
+                  onClick={() => file.isFolder && enterFolder(file.id, file.name)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: 12,
+                    borderRadius: 8,
+                    background: selectedIds.has(file.id) ? 'rgba(168,199,250,0.12)' : 'var(--mdui-color-surface-container, #1E2128)',
+                    cursor: file.isFolder ? 'pointer' : 'default',
+                  }}
+                >
+                  <div style={{ width: 36, height: 24, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => e.stopPropagation()}>
+                    {selectMode && (
+                      <Checkbox
+                        checked={selectedIds.has(file.id)}
+                        onChange={() => {
+                          setSelectedIds(prev => {
+                            const next = new Set(prev);
+                            if (next.has(file.id)) next.delete(file.id); else next.add(file.id);
+                            return next;
+                          });
+                        }}
+                        size="small"
+                        sx={{ p: 0.5 }}
+                      />
+                    )}
+                  </div>
+                  <span style={{ color: file.isFolder ? 'primary.main' : 'text.secondary', display: 'flex' }}>
+                    {fileIcon(file.mimeType, file.isFolder)}
+                  </span>
 
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="body2" noWrap sx={{ color: 'text.primary' }}>

@@ -6,16 +6,39 @@ const RATE_WINDOW_MS = 60_000;
 
 const SITE_URL = process.env.URL ?? `https://${process.env.SITE_NAME}.netlify.app`;
 
+interface HistoryEntry {
+  source: string;
+  version: string;
+  serial: string;
+  revoked: boolean;
+  last_checked: string;
+  timestamp: string;
+}
+
+interface HistoryResponse {
+  entries: HistoryEntry[];
+  latest: Record<string, string>;
+  working: { source: string; version: string } | null;
+}
+
+async function fetchHistory(): Promise<HistoryResponse | null> {
+  try {
+    const res = await fetch(`${SITE_URL}/.netlify/functions/catalog`);
+    if (!res.ok) return null;
+    return await res.json() as HistoryResponse;
+  } catch {
+    return null;
+  }
+}
+
 export default async (req: Request) => {
   const url = new URL(req.url);
   const path = url.pathname;
   const isMeta = url.searchParams.has("meta");
 
   const segments = path.split("/").filter(Boolean);
-  const lastSegment = segments.length >= 2 ? segments[segments.length - 1] : null;
-  const version = lastSegment && lastSegment !== "key" && !lastSegment.includes(".")
-    ? lastSegment
-    : null;
+  const provider = segments.length >= 1 && segments[0] !== "key" ? segments[0] : null;
+  const ver = segments.length >= 2 ? segments[1] : null;
 
   const ua = (req.headers.get("user-agent") ?? "").toLowerCase();
   if (BLOCKED_AGENTS.some((bot) => ua.includes(bot))) {
@@ -48,38 +71,44 @@ export default async (req: Request) => {
   } catch {
   }
 
-  if (version) {
-    try {
-      const historyRes = await fetch(`${SITE_URL}/.netlify/functions/history?v=${encodeURIComponent(version)}`);
-      if (historyRes.ok) {
-        const content = await historyRes.text();
-        return new Response(content, {
-          status: 200,
-          headers: { "Content-Type": "text/plain" },
-        });
-      }
-    } catch {
-    }
+  const history = await fetchHistory();
+  if (!history) {
     return new Response("Not found", { status: 404 });
   }
 
-  const store = getStore("keybox");
+  let contentKey: string | null = null;
 
-  if (isMeta) {
-    const meta = await store.get("_meta");
-    if (!meta) {
-      return new Response(JSON.stringify({ useBase64: true, version: "" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+  if (!provider && !ver) {
+    // /key → working content
+    if (history.working) {
+      contentKey = `content:${history.working.source}:${history.working.version}`;
     }
-    return new Response(meta, {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+  } else if (provider && !ver) {
+    // /key/{source} → latest non-revoked from that source
+    const sourceEntries = history.entries.filter(e => e.source === provider && !e.revoked);
+    let bestVer = 0;
+    let bestVerStr = "";
+    for (const e of sourceEntries) {
+      const v = parseInt(e.version, 10);
+      if (!isNaN(v) && v > bestVer) {
+        bestVer = v;
+        bestVerStr = e.version;
+      }
+    }
+    if (bestVerStr) {
+      contentKey = `content:${provider}:${bestVerStr}`;
+    }
+  } else if (provider && ver) {
+    // /key/{source}/{version} → specific version
+    contentKey = `content:${provider}:${ver}`;
   }
 
-  const value = await store.get("content");
+  if (!contentKey) {
+    return new Response("Not found", { status: 404 });
+  }
+
+  const store = getStore("keybox-history");
+  const value = await store.get(contentKey);
 
   if (!value) {
     return new Response("Not found", { status: 404 });

@@ -105,6 +105,19 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
     [token, remove, enqueueSnackbar]
   );
 
+  const handleBatchDelete = useCallback(
+    async (ids: string[]) => {
+      if (!token) return;
+      let ok = 0; let fail = 0;
+      for (const id of ids) {
+        const res = await remove(token, id);
+        if (res) ok++; else fail++;
+      }
+      enqueueSnackbar(`Deleted ${ok} clipboard${ok !== 1 ? 's' : ''}${fail > 0 ? ` (${fail} failed)` : ''}`, { variant: fail === 0 ? 'success' : 'error' });
+    },
+    [token, remove, enqueueSnackbar]
+  );
+
   const handleRename = useCallback(
     (id: string) => {
       if (isMobile) {
@@ -214,6 +227,7 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
               const cb = clipboards.find((c) => c.id === id);
               if (cb) setDeleteTarget({ id, name: cb.name });
             }}
+            onBatchDelete={handleBatchDelete}
           />
           {selectedClipboardWithContent && !isMobile && (
             <ClipboardEditor

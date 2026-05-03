@@ -47,13 +47,13 @@ export default async (req: Request) => {
     return new Response("Invalid body", { status: 400 });
   }
 
-  const { content, useBase64, version } = body as { content: string; useBase64?: boolean; version?: string };
+  const { content, useBase64, version, source } = body as { content: string; useBase64?: boolean; version?: string; source?: string };
   const shouldEncode = useBase64 !== false;
   const stored = shouldEncode ? Buffer.from(content).toString("base64") : content;
 
   const store = getStore("keybox");
   await store.set("content", stored);
-  await store.set("_meta", JSON.stringify({ useBase64: shouldEncode, version: version ?? "" }));
+  await store.set("_meta", JSON.stringify({ useBase64: shouldEncode, version: version ?? "", source: source ?? "" }));
 
   if (version) {
     try {
@@ -64,7 +64,7 @@ export default async (req: Request) => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ content, version }),
+        body: JSON.stringify({ content, version, source: source || "yuri" }),
       });
     } catch {
     }

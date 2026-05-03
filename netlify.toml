@@ -4,8 +4,8 @@
   functions = "netlify/functions"
 
 [[redirects]]
-  from = "/key/history"
-  to = "/.netlify/functions/history"
+from = "/key/catalog"
+to = "/.netlify/functions/catalog"
   status = 200
 
 [[redirects]]
