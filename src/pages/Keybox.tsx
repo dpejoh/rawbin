@@ -6,13 +6,13 @@ import {
   IconButton,
   Switch,
   TextField,
+  Box,
 } from '@mui/material';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import EditIcon from '@mui/icons-material/Edit';
-import LockIcon from '@mui/icons-material/Lock';
 import { useSnackbar } from 'notistack';
 import RawUrlRow from '../components/RawUrlRow';
 import SaveButton from '../components/SaveButton';
@@ -247,13 +247,14 @@ export default function Keybox({ token }: KeyboxProps) {
         </Paper>
       ) : showPreview ? (
         <Paper elevation={0} sx={{ p: 2, bgcolor: 'surfaceContainer.main', borderRadius: 2, mb: 2 }}>
-          <pre
-            style={{
+          <Box
+            component="pre"
+            sx={{
               fontFamily: "'Geist Mono', monospace",
               fontSize: '13px',
               color: revealed ? 'text.primary' : 'outline.main',
               lineHeight: 1.6,
-              margin: 0,
+              m: 0,
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-all',
               minHeight: 80,
@@ -261,7 +262,7 @@ export default function Keybox({ token }: KeyboxProps) {
             }}
           >
             {revealed ? content : maskContent(content)}
-          </pre>
+          </Box>
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <Button
               variant="contained"
