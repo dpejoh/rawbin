@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Stack, Typography, Button, useMediaQuery, Box } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import ContentPasteIcon from "@mui/icons-material/ContentPaste";
@@ -8,14 +8,10 @@ import ClipboardEditor from "./ClipboardEditor";
 import CreateDialog from "./CreateDialog";
 import DeleteDialog from "./DeleteDialog";
 import useClipboards from "../../hooks/useClipboards";
+import { clipboardUrl } from "../../utils/clipboardUrl";
 
 interface ClipboardsPageProps {
   token: string | null;
-}
-
-function clipboardUrl(id: string, slug?: string): string {
-  const path = slug ? `/clips/${slug}` : `/clips/${id}`;
-  return `${window.location.origin}${path}`;
 }
 
 export default function ClipboardsPage({ token }: ClipboardsPageProps) {
@@ -118,16 +114,6 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
     [token, remove, enqueueSnackbar]
   );
 
-  const handleRename = useCallback(
-    (id: string) => {
-      if (isMobile) {
-        select(id);
-        setMobileEditorOpen(true);
-      }
-    },
-    [isMobile, select]
-  );
-
   const handleCopyUrl = useCallback(
     async (id: string) => {
       const cb = clipboards.find((c) => c.id === id);
@@ -142,15 +128,7 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
     [clipboards, enqueueSnackbar]
   );
 
-  const selectedClipboardWithContent = useMemo(() => {
-    if (!selected) return null;
-    return {
-      ...selected,
-      content: selected.content ?? "",
-    };
-  }, [selected]);
-
-  if (isMobile && mobileEditorOpen && selectedClipboardWithContent) {
+  if (isMobile && mobileEditorOpen && selected) {
     return (
       <Box sx={{ height: "100%", overflow: "auto", pb: 7 }}>
         <Button
@@ -160,7 +138,7 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
           &larr; Back
         </Button>
         <ClipboardEditor
-          clipboard={selectedClipboardWithContent}
+          clipboard={selected}
           token={token}
           onUpdate={handleUpdate}
         />
@@ -221,7 +199,6 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
             selectedId={selected?.id ?? null}
             isLoading={isLoading}
             onSelect={handleSelect}
-            onRename={handleRename}
             onCopyUrl={handleCopyUrl}
             onDelete={(id) => {
               const cb = clipboards.find((c) => c.id === id);
@@ -229,9 +206,9 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
             }}
             onBatchDelete={handleBatchDelete}
           />
-          {selectedClipboardWithContent && !isMobile && (
+          {selected && !isMobile && (
             <ClipboardEditor
-              clipboard={selectedClipboardWithContent}
+              clipboard={selected}
               token={token}
               onUpdate={handleUpdate}
             />

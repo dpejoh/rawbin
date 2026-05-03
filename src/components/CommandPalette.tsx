@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
+  Box,
   Dialog,
   TextField,
   List,
@@ -11,18 +12,19 @@ import {
 import KeyIcon from '@mui/icons-material/Key';
 import DescriptionIcon from '@mui/icons-material/Description';
 import FolderIcon from '@mui/icons-material/Folder';
+import type { Page } from '../App';
 
 interface PaletteItem {
   id: string;
   label: string;
   description: string;
   type: 'keybox' | 'clipboard' | 'file';
-  page: string;
+  page: Page;
 }
 
 interface CommandPaletteProps {
   token: string | null;
-  onNavigate: (page: string) => void;
+  onNavigate: (page: Page) => void;
 }
 
 function fuzzyMatch(text: string, query: string): boolean {
@@ -35,12 +37,19 @@ function fuzzyMatch(text: string, query: string): boolean {
   return qi === q.length;
 }
 
+function TypeIcon({ type }: { type: PaletteItem['type'] }) {
+  switch (type) {
+    case 'keybox': return <KeyIcon />;
+    case 'clipboard': return <DescriptionIcon />;
+    case 'file': return <FolderIcon />;
+  }
+}
+
 export default function CommandPalette({ token, onNavigate }: CommandPaletteProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [items, setItems] = useState<PaletteItem[]>([]);
   const [selectedIdx, setSelectedIdx] = useState(0);
-  const fetchingRef = useRef(false);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -61,23 +70,28 @@ export default function CommandPalette({ token, onNavigate }: CommandPaletteProp
     if (!open) return;
     setQuery('');
     setSelectedIdx(0);
-    if (!token || fetchingRef.current) return;
-    fetchingRef.current = true;
+    if (!token) return;
+
+    const abortController = new AbortController();
+
     async function load() {
-      const result: PaletteItem[] = [];
-      result.push({
-        id: 'keybox-page',
-        label: 'Keybox',
-        description: 'Your private key store',
-        type: 'keybox',
-        page: 'keybox',
-      });
+      const result: PaletteItem[] = [
+        {
+          id: 'keybox-page',
+          label: 'Keybox',
+          description: 'Your private key store',
+          type: 'keybox',
+          page: 'keybox',
+        },
+      ];
       try {
         const [clipRes, fileRes] = await Promise.all([
           fetch('/.netlify/functions/clipboards', {
+            signal: abortController.signal,
             headers: { Authorization: `Bearer ${token}` },
           }),
           fetch('/.netlify/functions/files', {
+            signal: abortController.signal,
             headers: { Authorization: `Bearer ${token}` },
           }),
         ]);
@@ -106,10 +120,12 @@ export default function CommandPalette({ token, onNavigate }: CommandPaletteProp
           }
         }
       } catch { /* silent */ }
-      setItems(result);
-      fetchingRef.current = false;
+      if (!abortController.signal.aborted) {
+        setItems(result);
+      }
     }
     load();
+    return () => abortController.abort();
   }, [open, token]);
 
   const filtered = useMemo(() => {
@@ -143,14 +159,6 @@ export default function CommandPalette({ token, onNavigate }: CommandPaletteProp
     }
   }, [filtered, selectedIdx, handleSelect]);
 
-  function iconForType(type: PaletteItem['type']) {
-    switch (type) {
-      case 'keybox': return <KeyIcon />;
-      case 'clipboard': return <DescriptionIcon />;
-      case 'file': return <FolderIcon />;
-    }
-  }
-
   return (
     <Dialog
       open={open}
@@ -159,7 +167,7 @@ export default function CommandPalette({ token, onNavigate }: CommandPaletteProp
       fullWidth
       PaperProps={{ sx: { borderRadius: 2 } }}
     >
-      <div style={{ padding: '16px 16px 0' }}>
+      <Box sx={{ px: 2, pt: 2 }}>
         <TextField
           variant="filled"
           fullWidth
@@ -170,7 +178,7 @@ export default function CommandPalette({ token, onNavigate }: CommandPaletteProp
           autoFocus
           sx={{ '& .MuiInputBase-input': { fontFamily: '"Geist Mono", monospace' } }}
         />
-      </div>
+      </Box>
       {filtered.length > 0 && (
         <List sx={{ maxHeight: 320, overflowY: 'auto', pt: 1 }} dense>
           {filtered.map((item, i) => (
@@ -189,7 +197,7 @@ export default function CommandPalette({ token, onNavigate }: CommandPaletteProp
               }}
             >
               <ListItemIcon sx={{ minWidth: 36 }}>
-                {iconForType(item.type)}
+                <TypeIcon type={item.type} />
               </ListItemIcon>
               <ListItemText
                 primary={item.label}

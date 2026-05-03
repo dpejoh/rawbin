@@ -6,11 +6,11 @@ import {
   Tooltip,
   Checkbox,
   Chip,
+  Box,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
@@ -24,11 +24,11 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import ImageIcon from '@mui/icons-material/Image';
 import ArchiveIcon from '@mui/icons-material/Archive';
 import DataObjectIcon from '@mui/icons-material/DataObject';
-import UploadFileIcon from '@mui/icons-material/UploadFile';
-import InsertLinkIcon from '@mui/icons-material/InsertLink';
 import { useSnackbar } from 'notistack';
 import { relativeTime, formatSize } from '../../utils/time';
 import { fileToBase64 } from '../../utils/upload';
+import UploadDialog from './UploadDialog';
+import CreateFolderDialog from './CreateFolderDialog';
 
 interface FileItem {
   id: string;
@@ -231,43 +231,43 @@ export default function FilesPage({ token }: FilesPageProps) {
   const folderCount = visibleItems.filter(f =>  f.isFolder).length;
 
   return (
-    <div
-      style={{ position: 'relative', minHeight: '100%' }}
+    <Box
+      sx={{ position: 'relative', minHeight: '100%' }}
       onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
       onDragEnter={e => { e.preventDefault(); setIsDragging(n => n + 1); }}
       onDragLeave={e => { e.preventDefault(); setIsDragging(n => n - 1); }}
       onDrop={handleDrop}
     >
       {isDragging > 0 && (
-        <div className="drop-overlay">
+        <Box className="drop-overlay">
           <CloudUploadIcon sx={{ fontSize: 64, color: 'primary.main' }} />
           <Typography variant="h5" sx={{ color: 'primary.main' }}>Drop files here</Typography>
-        </div>
+        </Box>
       )}
 
-      <div className="page">
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+      <Box className="page">
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
             {folderPath.map((crumb, i) => (
               <span key={crumb.id || 'root'}>
-                {i > 0 && <span style={{ color: 'var(--mdui-color-outline, #8E9099)', margin: '0 4px', fontSize: 22 }}>/</span>}
-                <span
+                {i > 0 && <Typography component="span" sx={{ color: 'outline.main', mx: 0.5, fontSize: 22 }}>/</Typography>}
+                <Typography
+                  component="span"
                   onClick={() => navigateBreadcrumb(i)}
-                  style={{
+                  sx={{
                     cursor: i < folderPath.length - 1 ? 'pointer' : 'default',
                     color: i === folderPath.length - 1 ? 'text.primary' : 'primary.main',
                     fontSize: 22,
                     fontWeight: 400,
-                    fontFamily: "'Geist Mono', monospace",
                   }}
                 >
                   {crumb.name}
-                </span>
+                </Typography>
               </span>
             ))}
-          </div>
+          </Box>
 
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
             <Button
               variant="outlined"
               size="small"
@@ -286,11 +286,11 @@ export default function FilesPage({ token }: FilesPageProps) {
             >
               Upload
             </Button>
-          </div>
-        </div>
+          </Box>
+        </Box>
 
-          {visibleItems.length > 0 && (
-          <div className="meta-row" style={{ marginBottom: 16 }}>
+        {visibleItems.length > 0 && (
+          <Box className="meta-row" sx={{ mb: 2 }}>
             {hasParent && (
               <IconButton size="small" onClick={goBack} sx={{ color: 'text.secondary' }}>
                 <ArrowBackIcon fontSize="small" />
@@ -360,17 +360,17 @@ export default function FilesPage({ token }: FilesPageProps) {
                 {isBatchDeleting ? 'Deleting...' : `Delete (${selectedIds.size})`}
               </Button>
             )}
-          </div>
+          </Box>
         )}
 
         {isLoading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="skeleton" style={{ height: 52 }} />
+              <Box key={i} className="skeleton" sx={{ height: 52 }} />
             ))}
-          </div>
+          </Box>
         ) : visibleItems.length === 0 && !hasParent ? (
-          <div className="empty-state">
+          <Box className="empty-state">
             <CloudUploadIcon sx={{ fontSize: 64, color: 'outline.main' }} />
             <Typography variant="h5" sx={{ color: 'text.primary' }}>No files yet</Typography>
             <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center' }}>
@@ -379,54 +379,62 @@ export default function FilesPage({ token }: FilesPageProps) {
             <Button variant="contained" startIcon={<CloudUploadIcon />} onClick={() => setUploadOpen(true)} sx={{ textTransform: 'none' }}>
               Upload your first file
             </Button>
-          </div>
+          </Box>
         ) : visibleItems.length === 0 && hasParent ? (
           <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', py: 4 }}>
             This folder is empty
           </Typography>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {visibleItems.map(file => (
-                <div
-                  key={file.id}
-                  className={`file-row${file.isFolder ? ' file-row--folder' : ''}`}
-                  onClick={() => file.isFolder && enterFolder(file.id, file.name)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: 12,
-                    borderRadius: 8,
-                    background: selectedIds.has(file.id) ? 'rgba(168,199,250,0.12)' : 'var(--mdui-color-surface-container, #1E2128)',
-                    cursor: file.isFolder ? 'pointer' : 'default',
-                  }}
-                >
-                  <div style={{ width: 36, height: 24, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => e.stopPropagation()}>
-                    {selectMode && (
-                      <Checkbox
-                        checked={selectedIds.has(file.id)}
-                        onChange={() => {
-                          setSelectedIds(prev => {
-                            const next = new Set(prev);
-                            if (next.has(file.id)) next.delete(file.id); else next.add(file.id);
-                            return next;
-                          });
-                        }}
-                        size="small"
-                        sx={{ p: 0.5 }}
-                      />
-                    )}
-                  </div>
-                  <span style={{ color: file.isFolder ? 'primary.main' : 'text.secondary', display: 'flex' }}>
-                    {fileIcon(file.mimeType, file.isFolder)}
-                  </span>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+            {visibleItems.map(file => (
+              <Box
+                key={file.id}
+                className={`file-row${file.isFolder ? ' file-row--folder' : ''}`}
+                onClick={() => file.isFolder && enterFolder(file.id, file.name)}
+                sx={{
+                  gap: 1,
+                  borderRadius: '8px',
+                  bgcolor: selectedIds.has(file.id)
+                    ? 'rgba(168,199,250,0.12)'
+                    : file.isFolder
+                      ? 'surfaceContainerHigh.main'
+                      : 'surfaceContainer.main',
+                  cursor: file.isFolder ? 'pointer' : 'default',
+                  '&:hover': {
+                    bgcolor: selectedIds.has(file.id)
+                      ? 'rgba(168,199,250,0.12)'
+                      : file.isFolder
+                        ? 'rgba(168,199,250,0.08)'
+                        : 'surfaceContainerHigh.main',
+                  },
+                }}
+              >
+                <Box sx={{ width: 36, height: 24, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => e.stopPropagation()}>
+                  {selectMode && (
+                    <Checkbox
+                      checked={selectedIds.has(file.id)}
+                      onChange={() => {
+                        setSelectedIds(prev => {
+                          const next = new Set(prev);
+                          if (next.has(file.id)) next.delete(file.id); else next.add(file.id);
+                          return next;
+                        });
+                      }}
+                      size="small"
+                      sx={{ p: 0.5 }}
+                    />
+                  )}
+                </Box>
+                <Box component="span" sx={{ color: file.isFolder ? 'primary.main' : 'text.secondary', display: 'flex' }}>
+                  {fileIcon(file.mimeType, file.isFolder)}
+                </Box>
 
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="body2" noWrap sx={{ color: 'text.primary' }}>
                     {file.name}
                   </Typography>
                   {!file.isFolder && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                         {formatSize(file.size)}
                       </Typography>
@@ -434,9 +442,9 @@ export default function FilesPage({ token }: FilesPageProps) {
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                         {relativeTime(file.createdAt)}
                       </Typography>
-                    </div>
+                    </Box>
                   )}
-                </div>
+                </Box>
 
                 {!file.isFolder && (
                   <Tooltip title="Copy raw URL">
@@ -459,11 +467,11 @@ export default function FilesPage({ token }: FilesPageProps) {
                     <DeleteOutlineIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
-              </div>
+              </Box>
             ))}
-          </div>
+          </Box>
         )}
-      </div>
+      </Box>
 
       <UploadDialog
         open={uploadOpen}
@@ -495,163 +503,6 @@ export default function FilesPage({ token }: FilesPageProps) {
       </Dialog>
 
       <input ref={fileInputRef} type="file" hidden onChange={handleFileChange} />
-    </div>
-  );
-}
-
-/* ─── Upload Dialog ──────────────────────────────────────────────────────── */
-
-interface UploadDialogProps {
-  open: boolean;
-  token: string | null;
-  currentFolderId: string;
-  onClose: () => void;
-  onUploaded: () => void;
-}
-
-function UploadDialog({ open, token, currentFolderId, onClose, onUploaded }: UploadDialogProps) {
-  const { enqueueSnackbar } = useSnackbar();
-  const [mode,        setMode]        = useState<'file' | 'url'>('file');
-  const [url,         setUrl]         = useState('');
-  const [fileName,    setFileName]    = useState('');
-  const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleUpload = useCallback(async () => {
-    if (!token) return;
-    if (mode === 'file') { fileInputRef.current?.click(); return; }
-    setIsUploading(true);
-    const name = fileName.trim() || `from-url-${Date.now()}`;
-    const params = new URLSearchParams({ name, url, parentId: currentFolderId });
-    const res = await fetch(`/.netlify/functions/files?${params}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.ok) {
-      enqueueSnackbar('File uploaded from URL', { variant: 'success' });
-      onUploaded();
-    } else {
-      enqueueSnackbar((await res.text()) || 'Upload failed', { variant: 'error' });
-    }
-    setIsUploading(false);
-  }, [token, mode, url, fileName, currentFolderId, onUploaded, enqueueSnackbar]);
-
-  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !token) return;
-    setIsUploading(true);
-    try {
-      const base64 = await fileToBase64(file);
-      const res = await fetch('/.netlify/functions/files', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          name: file.name,
-          content: base64,
-          mimeType: file.type || 'application/octet-stream',
-          parentId: currentFolderId,
-        }),
-      });
-      if (res.ok) {
-        enqueueSnackbar('File uploaded', { variant: 'success' });
-        onUploaded();
-      } else {
-        enqueueSnackbar('Upload failed', { variant: 'error' });
-      }
-    } catch {
-      enqueueSnackbar('Upload failed', { variant: 'error' });
-    }
-    setIsUploading(false);
-    e.target.value = '';
-  }, [token, currentFolderId, onUploaded, enqueueSnackbar]);
-
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>Upload File</DialogTitle>
-      <DialogContent>
-        <div className="field-group">
-          <div className="mode-toggle">
-            <Button
-              variant={mode === 'file' ? 'contained' : 'outlined'}
-              size="small"
-              startIcon={<UploadFileIcon />}
-              onClick={() => setMode('file')}
-              sx={{ textTransform: 'none' }}
-            >
-              From disk
-            </Button>
-            <Button
-              variant={mode === 'url' ? 'contained' : 'outlined'}
-              size="small"
-              startIcon={<InsertLinkIcon />}
-              onClick={() => setMode('url')}
-              sx={{ textTransform: 'none' }}
-            >
-              From URL
-            </Button>
-          </div>
-
-          {mode === 'url' ? (
-            <>
-              <TextField label="File URL" variant="outlined" fullWidth value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/file.pdf" sx={{ mt: 2 }} />
-              <TextField label="File name (optional)" variant="outlined" fullWidth value={fileName} onChange={(e) => setFileName(e.target.value)} placeholder="my-file.pdf" />
-            </>
-          ) : (
-            <div className="upload-dropzone" onClick={() => fileInputRef.current?.click()} style={{ marginTop: 16 }}>
-              <CloudUploadIcon sx={{ fontSize: 40, color: 'outline.main' }} />
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>Click to select a file</Typography>
-            </div>
-          )}
-        </div>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} variant="text">Cancel</Button>
-        <Button onClick={handleUpload} variant="contained" disabled={isUploading || (mode === 'url' && !url.trim())}>
-          {isUploading ? 'Uploading\u2026' : 'Upload'}
-        </Button>
-      </DialogActions>
-      <input ref={fileInputRef} type="file" hidden onChange={handleFileChange} />
-    </Dialog>
-  );
-}
-
-/* ─── Create Folder Dialog ───────────────────────────────────────────────── */
-
-interface CreateFolderDialogProps {
-  open: boolean;
-  onClose: () => void;
-  onCreate: (name: string) => void;
-}
-
-function CreateFolderDialog({ open, onClose, onCreate }: CreateFolderDialogProps) {
-  const [name, setName] = useState('');
-
-  const handle = useCallback(() => {
-    if (!name.trim()) return;
-    onCreate(name.trim());
-    setName('');
-    onClose();
-  }, [name, onCreate, onClose]);
-
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>New Folder</DialogTitle>
-      <DialogContent>
-        <TextField
-          label="Folder name"
-          variant="outlined"
-          fullWidth
-          autoFocus
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') handle(); }}
-          sx={{ mt: 1 }}
-        />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} variant="text">Cancel</Button>
-        <Button onClick={handle} variant="contained" disabled={!name.trim()}>Create</Button>
-      </DialogActions>
-    </Dialog>
+    </Box>
   );
 }

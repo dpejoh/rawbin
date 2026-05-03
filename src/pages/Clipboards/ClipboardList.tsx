@@ -1,5 +1,7 @@
 import { useMemo, useState, useCallback } from 'react';
 import {
+  Box,
+  Stack,
   Typography,
   IconButton,
   Checkbox,
@@ -12,7 +14,6 @@ import {
 } from '@mui/material';
 import DescriptionIcon from '@mui/icons-material/Description';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutline';
 import LinkIcon from '@mui/icons-material/Link';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
@@ -25,7 +26,6 @@ interface ClipboardListProps {
   selectedId: string | null;
   isLoading: boolean;
   onSelect: (id: string) => void;
-  onRename: (id: string) => void;
   onCopyUrl: (id: string) => void;
   onDelete: (id: string) => void;
   onBatchDelete?: (ids: string[]) => void;
@@ -47,7 +47,6 @@ export default function ClipboardList({
   selectedId,
   isLoading,
   onSelect,
-  onRename,
   onCopyUrl,
   onDelete,
   onBatchDelete,
@@ -95,17 +94,17 @@ export default function ClipboardList({
 
   if (isLoading) {
     return (
-      <div className="clipboard-panel" style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <Stack sx={{ width: 320, minWidth: 320, bgcolor: 'surfaceContainer.main', height: '100%', overflowY: 'auto', flexShrink: 0, p: 1, gap: 1 }}>
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="skeleton" style={{ height: 64 }} />
+          <Box key={i} className="skeleton" sx={{ height: 64 }} />
         ))}
-      </div>
+      </Stack>
     );
   }
 
   return (
-    <div className="clipboard-panel">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--mdui-color-outline-variant, #44474F)' }}>
+    <Box sx={{ width: 320, minWidth: 320, bgcolor: 'surfaceContainer.main', height: '100%', overflowY: 'auto', flexShrink: 0 }}>
+      <Stack direction="row" alignItems="center" sx={{ gap: 1, px: 1.5, py: 1, borderBottom: 1, borderColor: 'outlineVariant.main' }}>
         <Chip
           label={selectMode ? `${selectedIds.size} selected` : 'Select'}
           size="small"
@@ -159,37 +158,36 @@ export default function ClipboardList({
             Delete ({selectedIds.size})
           </Button>
         )}
-      </div>
+      </Stack>
       {clipboards.map((cb) => {
         const isActive = cb.id === selectedId;
         const isSelected = selectedIds.has(cb.id);
         const typeInfo = typeInfoMap[cb.id];
         return (
-          <div
+          <Box
             key={cb.id}
             onClick={() => { if (!isSelected) onSelect(cb.id); }}
-            style={{
+            sx={{
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
-              padding: '8px 12px',
+              gap: 0.75,
+              px: 1.5,
+              py: 1,
               cursor: 'pointer',
-              background: isActive
-                ? 'var(--mdui-color-primary-container, #1A3C6E)'
+              bgcolor: isActive
+                ? '#1A3C6E'
                 : isSelected
                   ? 'rgba(168,199,250,0.12)'
                   : 'transparent',
-              borderBottom: '1px solid var(--mdui-color-outline-variant, #44474F)',
+              borderBottom: 1,
+              borderColor: 'outlineVariant.main',
               transition: 'background 150ms',
-            }}
-            onMouseEnter={(e) => {
-              if (!isActive && !isSelected) e.currentTarget.style.background = 'var(--mdui-color-surface-container-high, #282C34)';
-            }}
-            onMouseLeave={(e) => {
-              if (!isActive && !isSelected) e.currentTarget.style.background = 'transparent';
+              '&:hover': {
+                bgcolor: 'surfaceContainerHigh.main',
+              },
             }}
           >
-            <div style={{ width: 36, height: 24, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <Box sx={{ width: 36, height: 24, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => e.stopPropagation()}>
               {selectMode && (
                 <Checkbox
                   checked={isSelected}
@@ -198,13 +196,13 @@ export default function ClipboardList({
                   sx={{ p: 0.5 }}
                 />
               )}
-            </div>
+            </Box>
             <DescriptionIcon sx={{ fontSize: 20, color: 'text.secondary', flexShrink: 0 }} />
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography variant="subtitle2" noWrap sx={{ color: isActive ? '#fff' : 'text.primary' }}>
                 {cb.name}
               </Typography>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
                 <Typography variant="caption" sx={{ color: isActive ? 'rgba(255,255,255,0.7)' : 'text.secondary' }}>
                   {relativeTime(cb.updatedAt)} · {cb.content.length.toLocaleString()} chars
                 </Typography>
@@ -214,20 +212,16 @@ export default function ClipboardList({
                     sx={{ height: 18, fontSize: 10 }}
                   />
                 )}
-              </div>
-            </div>
+              </Box>
+            </Box>
             <IconButton size="small" onClick={(e) => handleMenuOpen(e, cb.id)} sx={{ color: 'text.secondary' }}>
               <MoreVertIcon fontSize="small" />
             </IconButton>
-          </div>
+          </Box>
         );
       })}
 
       <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
-        <MenuItem onClick={() => handleMenuAction(onRename)}>
-          <MenuItemIcon><DriveFileRenameOutlineIcon fontSize="small" /></MenuItemIcon>
-          Rename
-        </MenuItem>
         <MenuItem onClick={() => handleMenuAction(onCopyUrl)}>
           <MenuItemIcon><LinkIcon fontSize="small" /></MenuItemIcon>
           Copy raw URL
@@ -238,6 +232,6 @@ export default function ClipboardList({
           Delete
         </MenuItem>
       </Menu>
-    </div>
+    </Box>
   );
 }

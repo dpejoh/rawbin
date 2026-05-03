@@ -55,20 +55,5 @@ export default async (req: Request) => {
   await store.set("content", stored);
   await store.set("_meta", JSON.stringify({ useBase64: shouldEncode, version: version ?? "", source: source ?? "" }));
 
-  if (version) {
-    try {
-      const historyUrl = `${SITE_URL}/.netlify/functions/history/save`;
-      await fetch(historyUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ content, version, source: source || "yuri" }),
-      });
-    } catch {
-    }
-  }
-
   return new Response("Saved", { status: 200 });
 };

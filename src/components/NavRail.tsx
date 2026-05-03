@@ -1,6 +1,7 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState } from 'react';
 import {
   Stack,
+  Box,
   IconButton,
   Avatar,
   Menu,
@@ -8,7 +9,6 @@ import {
   ListItemIcon,
   ListItemText,
   Typography,
-  Badge,
 } from '@mui/material';
 import KeyIcon from '@mui/icons-material/Key';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
@@ -22,11 +22,9 @@ interface NavRailProps {
   onNavigate: (page: Page) => void;
   userInitials: string;
   onSignOut: () => void;
-  clipboardCount?: number;
-  fileCount?: number;
 }
 
-const navItems: { id: Page; icon: React.ReactNode; label: string; count?: number }[] = [
+const navItems: { id: Page; icon: React.ReactNode; label: string }[] = [
   { id: 'keybox', icon: <KeyIcon />, label: 'Keybox' },
   { id: 'clipboards', icon: <ContentPasteIcon />, label: 'Boards' },
   { id: 'files', icon: <FolderIcon />, label: 'Files' },
@@ -38,15 +36,8 @@ export default function NavRail({
   onNavigate,
   userInitials,
   onSignOut,
-  clipboardCount,
-  fileCount,
 }: NavRailProps) {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
-
-  const items = useMemo(() => navItems.map(item => ({
-    ...item,
-    count: item.id === 'clipboards' ? clipboardCount : item.id === 'files' ? fileCount : undefined,
-  })), [clipboardCount, fileCount]);
 
   return (
     <Stack
@@ -68,9 +59,9 @@ export default function NavRail({
       </Stack>
 
       <Stack spacing={0.5} alignItems="center">
-        {items.map((item) => {
+        {navItems.map((item) => {
           const isActive = activePage === item.id;
-          const btn = (
+          return (
             <IconButton
               key={item.id}
               onClick={() => onNavigate(item.id)}
@@ -91,14 +82,6 @@ export default function NavRail({
               </Typography>
             </IconButton>
           );
-          if (item.count !== undefined && item.count > 0) {
-            return (
-              <Badge key={item.id} badgeContent={item.count} color="primary" sx={{ '& .MuiBadge-badge': { fontSize: 10, minWidth: 16, height: 16 } }}>
-                {btn}
-              </Badge>
-            );
-          }
-          return btn;
         })}
       </Stack>
 
@@ -117,7 +100,7 @@ export default function NavRail({
         >
           {userInitials}
         </Avatar>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--mdui-color-primary, #6DD58C)', display: 'inline-block' }} />
+        <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'success.main', display: 'inline-block' }} />
       </Stack>
 
       <Menu

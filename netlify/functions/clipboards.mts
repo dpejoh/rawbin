@@ -106,14 +106,12 @@ export default async (req: Request) => {
   switch (method) {
     case "GET": {
       const index = await getIndex();
-      const contentMap: Record<string, string | null> = {};
-      for (const item of index) {
-        contentMap[item.id] = await getContent(item.id);
-      }
-      const result = index.map((item) => ({
-        ...item,
-        content: contentMap[item.id] ?? "",
-      }));
+      const result = await Promise.all(
+        index.map(async (item) => {
+          const content = await getContent(item.id);
+          return { ...item, content: content ?? "" };
+        }),
+      );
       return new Response(JSON.stringify(result), {
         status: 200,
         headers: { "Content-Type": "application/json" },

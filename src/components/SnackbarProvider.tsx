@@ -1,5 +1,3 @@
-"use client";
-
 import { SnackbarProvider as NotistackProvider } from "notistack";
 import { type ReactNode } from "react";
 

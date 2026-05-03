@@ -15,26 +15,10 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useSnackbar } from "notistack";
 import RawUrlRow from "../../components/RawUrlRow";
 import SaveButton from "../../components/SaveButton";
+import { maskContent } from "../../utils/mask";
+import { clipboardUrl } from "../../utils/clipboardUrl";
+import { decodeContent } from "../../utils/decodeContent";
 import type { Clipboard } from "../../hooks/useClipboards";
-
-function clipboardUrl(id: string, slug?: string): string {
-  const path = slug ? `/clips/${slug}` : `/clips/${id}`;
-  return `${window.location.origin}${path}`;
-}
-
-function decodeContent(raw: string, useBase64: boolean): string {
-  if (!useBase64) return raw;
-  try { return atob(raw); } catch { return raw; }
-}
-
-function maskContent(text: string): string {
-  if (!text) return '';
-  if (text.length <= 16) return '\u2022'.repeat(text.length);
-  const first = text.slice(0, 8);
-  const last = text.slice(-8);
-  const dots = '\u2022'.repeat(Math.min(text.length - 16, 64));
-  return first + dots + '\n' + '\u2022'.repeat(Math.min(text.length, 32)) + '\n' + last;
-}
 
 interface ClipboardEditorProps {
   clipboard: Clipboard;
@@ -49,14 +33,9 @@ export default function ClipboardEditor({
 }: ClipboardEditorProps) {
   const { enqueueSnackbar } = useSnackbar();
 
-  const initialDecoded = useMemo(
-    () => decodeContent(clipboard.content ?? "", clipboard.useBase64 !== false),
-    [clipboard.content, clipboard.useBase64]
-  );
-
-  const [content, setContent] = useState(initialDecoded);
+  const [content, setContent] = useState(() => decodeContent(clipboard.content ?? "", clipboard.useBase64 !== false));
   const [useBase64, setUseBase64] = useState(clipboard.useBase64 !== false);
-  const [savedContent, setSavedContent] = useState(initialDecoded);
+  const [savedContent, setSavedContent] = useState(() => decodeContent(clipboard.content ?? "", clipboard.useBase64 !== false));
   const [savedBase64, setSavedBase64] = useState(clipboard.useBase64 !== false);
   const [name, setName] = useState(clipboard.name);
   const [savedName, setSavedName] = useState(clipboard.name);
@@ -164,15 +143,15 @@ export default function ClipboardEditor({
     [content, savedContent, useBase64, savedBase64]
   );
 
-  const charCount = useMemo(() => content.length.toLocaleString(), [content]);
+  const charCount = content.length.toLocaleString();
   const showPreview = !editing && masked && content.length > 0;
   const rawUrl = clipboardUrl(clipboard.id, savedSlug || undefined);
   const canonicalUrl = clipboardUrl(clipboard.id);
 
   return (
     <Box sx={{ flex: 1, p: 4, overflow: "auto", maxWidth: 800 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+        <Box>
           {isEditingName ? (
             <TextField
               variant="standard"
@@ -211,14 +190,14 @@ export default function ClipboardEditor({
           <Typography variant="body2" color="text.secondary">
             Board clipboard
           </Typography>
-        </div>
+        </Box>
         {content.length > 0 && (
           <Button variant="text" startIcon={masked ? <VisibilityOffIcon /> : <VisibilityIcon />}
             onClick={() => { setMasked(!masked); setEditing(false); setRevealed(false); }}>
             {masked ? 'Show' : 'Hide'}
           </Button>
         )}
-      </div>
+      </Box>
 
       <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.08 }}>
@@ -278,21 +257,19 @@ export default function ClipboardEditor({
 
       {showPreview ? (
         <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
-          <pre
-            style={{
-              fontFamily: '"Geist Mono", monospace',
-              fontSize: 13,
-              color: revealed ? undefined : 'text.secondary',
-              lineHeight: 1.6,
-              margin: 0,
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-all',
-              minHeight: 80,
-              userSelect: revealed ? 'text' : 'none',
-            }}
-          >
+          <Box component="pre" sx={{
+            fontFamily: '"Geist Mono", monospace',
+            fontSize: 13,
+            color: revealed ? 'text.primary' : 'text.secondary',
+            lineHeight: 1.6,
+            m: 0,
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-all',
+            minHeight: 80,
+            userSelect: revealed ? 'text' : 'none',
+          }}>
             {revealed ? content : maskContent(content)}
-          </pre>
+          </Box>
           <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
             <Button variant="contained" startIcon={<VisibilityIcon />}
               onMouseDown={handleRevealStart} onMouseUp={handleRevealEnd}

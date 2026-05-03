@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useEffect, Suspense, lazy } from 'react';
 import {
   ThemeProvider,
   CssBaseline,
@@ -15,11 +15,12 @@ import NavRail from './components/NavRail';
 import BottomNav from './components/BottomNav';
 import SnackbarProvider from './components/SnackbarProvider';
 import CommandPalette from './components/CommandPalette';
-import Keybox from './pages/Keybox';
-import ClipboardsPage from './pages/Clipboards';
-import FilesPage from './pages/Files';
-import KeyboxHistory from './pages/KeyboxHistory';
 import useAuth from './hooks/useAuth';
+
+const Keybox = lazy(() => import('./pages/Keybox'));
+const ClipboardsPage = lazy(() => import('./pages/Clipboards'));
+const FilesPage = lazy(() => import('./pages/Files'));
+const KeyboxHistory = lazy(() => import('./pages/KeyboxHistory'));
 
 export type Page = 'keybox' | 'clipboards' | 'files' | 'history';
 
@@ -38,12 +39,9 @@ export default function App() {
     localStorage.setItem('keybox:page', page);
   }, [page]);
 
-  const handleNavigate = useCallback((p: string) => setPage(p as Page), []);
+  const handleNavigate = useCallback((p: Page) => setPage(p), []);
 
-  const userInitials = useMemo(
-    () => (user?.email ? (user.email[0]?.toUpperCase() ?? '?') : '?'),
-    [user],
-  );
+  const userInitials = user?.email ? (user.email[0]?.toUpperCase() ?? '?') : '?';
 
   if (isLoading) {
     return (
@@ -86,10 +84,12 @@ export default function App() {
           )}
 
           <Box component="main" sx={{ flex: 1, overflow: 'auto', pb: isMobile ? 7 : 0 }}>
-            {page === 'keybox' && <Keybox token={token} />}
-            {page === 'clipboards' && <ClipboardsPage token={token} />}
-            {page === 'files' && <FilesPage token={token} />}
-            {page === 'history' && <KeyboxHistory token={token} />}
+            <Suspense fallback={<Stack alignItems="center" justifyContent="center" sx={{ p: 8 }}><CircularProgress /></Stack>}>
+              {page === 'keybox' && <Keybox token={token} />}
+              {page === 'clipboards' && <ClipboardsPage token={token} />}
+              {page === 'files' && <FilesPage token={token} />}
+              {page === 'history' && <KeyboxHistory token={token} />}
+            </Suspense>
           </Box>
         </Box>
 

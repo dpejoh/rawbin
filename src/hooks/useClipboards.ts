@@ -20,7 +20,6 @@ interface UseClipboardsReturn {
   create: (token: string, name: string, slug?: string, useBase64?: boolean) => Promise<string | null>;
   update: (token: string, id: string, data: { name?: string; content?: string; slug?: string; useBase64?: boolean }) => Promise<boolean>;
   remove: (token: string, id: string) => Promise<boolean>;
-  fetchRawContent: (id: string) => Promise<string>;
 }
 
 export default function useClipboards(): UseClipboardsReturn {
@@ -140,12 +139,6 @@ export default function useClipboards(): UseClipboardsReturn {
     [fetchAll]
   );
 
-  const fetchRawContent = useCallback(async (id: string): Promise<string> => {
-    const res = await fetch(`/.netlify/functions/clipboards/${id}`);
-    if (!res.ok) return "";
-    return res.text();
-  }, []);
-
   return {
     clipboards,
     selected,
@@ -156,6 +149,5 @@ export default function useClipboards(): UseClipboardsReturn {
     create,
     update,
     remove,
-    fetchRawContent,
   };
 }

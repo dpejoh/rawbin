@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Typography, Button, TextField, Switch, Select, MenuItem, Card, Box, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { Typography, Button, TextField, Switch, Select, MenuItem, Card, Box, Dialog, DialogTitle, DialogContent, DialogActions, Stack } from '@mui/material';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import EditIcon from '@mui/icons-material/Edit';
@@ -8,21 +8,13 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useSnackbar } from 'notistack';
 import RawUrlRow from '../components/RawUrlRow';
 import SaveButton from '../components/SaveButton';
+import { maskContent } from '../utils/mask';
 
 interface KeyboxProps {
   token: string | null;
 }
 
 const RAW_URL = `${window.location.origin}/key`;
-
-function maskContent(text: string): string {
-  if (!text) return '';
-  if (text.length <= 16) return '\u2022'.repeat(text.length);
-  const first = text.slice(0, 8);
-  const last = text.slice(-8);
-  const dots = '\u2022'.repeat(Math.min(text.length - 16, 64));
-  return first + dots + '\n' + '\u2022'.repeat(Math.min(text.length, 32)) + '\n' + last;
-}
 
 export default function Keybox({ token }: KeyboxProps) {
   const { enqueueSnackbar } = useSnackbar();
@@ -54,12 +46,8 @@ export default function Keybox({ token }: KeyboxProps) {
           fetch('/.netlify/functions/catalog'),
         ]);
 
-        if (historyRes.ok) {
-          const historyData = await historyRes.json() as { entries: Array<{ source: string }>; latest: Record<string, string> };
-          const uniqueSources = [...new Set((historyData.entries ?? []).map(e => e.source))].sort();
-          if (uniqueSources.length > 0) setSources(uniqueSources);
-          if (historyData.latest) setLatestPerSource(historyData.latest);
-        }
+        let existingVersion: string | undefined;
+        let existingSource: string | undefined;
 
         if (contentRes.ok) {
           const text = await contentRes.text();
@@ -67,6 +55,8 @@ export default function Keybox({ token }: KeyboxProps) {
           try {
             if (metaRes.ok) meta = JSON.parse(await metaRes.text()) as { useBase64: boolean; version?: string; source?: string };
           } catch { /* ignore */ }
+          existingVersion = meta.version;
+          existingSource = meta.source;
           const decoded = meta.useBase64 ? atob(text) : text;
           setContent(decoded);
           setSavedContent(decoded);
@@ -75,6 +65,20 @@ export default function Keybox({ token }: KeyboxProps) {
           if (meta.source) { setSource(meta.source); setSavedSource(meta.source); }
           if (meta.version) { setVersion(meta.version); setSavedVersion(meta.version); }
         }
+
+        if (historyRes.ok) {
+          const historyData = await historyRes.json() as { entries: Array<{ source: string }>; latest: Record<string, string> };
+          const uniqueSources = [...new Set((historyData.entries ?? []).map(e => e.source))].sort();
+          if (uniqueSources.length > 0) setSources(uniqueSources);
+          if (historyData.latest) {
+            setLatestPerSource(historyData.latest);
+            if (!existingVersion && historyData.latest[existingSource ?? 'yuri']) {
+              const autoV = String(parseInt(historyData.latest[existingSource ?? 'yuri']!, 10) + 1);
+              setVersion(autoV);
+              setSavedVersion(autoV);
+            }
+          }
+        }
       } catch { /* ignore */ }
       finally {
         setIsLoading(false);
@@ -82,18 +86,6 @@ export default function Keybox({ token }: KeyboxProps) {
     }
     load();
   }, []);
-
-  const autoVersion = useMemo(() => {
-    const latest = latestPerSource[source];
-    return latest ? String(parseInt(latest, 10) + 1) : '';
-  }, [source, latestPerSource]);
-
-  useEffect(() => {
-    if (!version && autoVersion) {
-      setVersion(autoVersion);
-      setSavedVersion(autoVersion);
-    }
-  }, [autoVersion]);
 
   const handleSave = useCallback(async () => {
     if (!token) return;
@@ -119,6 +111,11 @@ export default function Keybox({ token }: KeyboxProps) {
       setIsSaving(false);
     }
   }, [token, content, useBase64, version, source, enqueueSnackbar]);
+
+  const nextVersion = (s: string) => {
+    const latest = latestPerSource[s];
+    return latest ? String(parseInt(latest, 10) + 1) : '';
+  };
 
   const handlePaste = useCallback(async () => {
     try {
@@ -158,7 +155,8 @@ export default function Keybox({ token }: KeyboxProps) {
     [content, savedContent, useBase64, savedBase64, version, savedVersion, source, savedSource],
   );
 
-  const charCount = useMemo(() => content.length.toLocaleString(), [content]);
+  const charCount = content.length.toLocaleString();
+  const isMasked = masked && !revealed;
   const showPreview = !editing && masked && content.length > 0;
   const providerUrl = source ? `${RAW_URL}/${source}` : null;
   const versionedUrl = source && version ? `${RAW_URL}/${source}/${version}` : null;
@@ -197,32 +195,34 @@ export default function Keybox({ token }: KeyboxProps) {
       </Card>
 
       <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-          <Box sx={{ flex: 1, minWidth: 160 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.08 }}>
+        <Stack direction="row" spacing={3} flexWrap="wrap">
+          <Stack direction="row" alignItems="center" spacing={1.5}>
+            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.08, minWidth: 48 }}>
               Provider
             </Typography>
             <Select value={source} onChange={(e) => {
               if (e.target.value === '__add__') {
                 setAddDialogOpen(true);
               } else {
-                setSource(e.target.value);
+                const s = e.target.value;
+                setSource(s);
+                if (!version) setVersion(nextVersion(s));
               }
-            }} size="small" sx={{ mt: 0.5, width: 160 }}>
+            }} size="small" sx={{ width: 160 }}>
               {sources.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
               <MenuItem value="__add__" sx={{ borderTop: 1, borderColor: 'divider', mt: 0.5, pt: 1, color: 'primary.main', fontWeight: 500 }}>
                 ✚ Add a provider
               </MenuItem>
             </Select>
-          </Box>
-          <Box sx={{ flex: 1, minWidth: 120 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.08 }}>
+          </Stack>
+          <Stack direction="row" alignItems="center" spacing={1.5}>
+            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.08, minWidth: 40 }}>
               Version
             </Typography>
-            <TextField type="number" value={version} size="small" sx={{ mt: 0.5, width: 120 }}
+            <TextField type="number" value={version} size="small" sx={{ width: 120 }}
               onChange={(e) => setVersion(e.target.value)} />
-          </Box>
-        </Box>
+          </Stack>
+        </Stack>
       </Card>
 
       {isLoading ? (
@@ -233,19 +233,19 @@ export default function Keybox({ token }: KeyboxProps) {
         </Card>
       ) : showPreview ? (
         <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
-          <pre style={{
+          <Box component="pre" sx={{
             fontFamily: '"Geist Mono", monospace',
             fontSize: 13,
-            color: revealed ? undefined : 'text.secondary',
+            color: revealed ? 'text.primary' : 'text.secondary',
             lineHeight: 1.6,
-            margin: 0,
+            m: 0,
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-all',
             minHeight: 80,
             userSelect: revealed ? 'text' : 'none',
           }}>
-            {revealed ? content : maskContent(content)}
-          </pre>
+            {isMasked ? maskContent(content) : content}
+          </Box>
           <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
             <Button variant="contained" startIcon={<VisibilityIcon />}
               onMouseDown={handleRevealStart} onMouseUp={handleRevealEnd}
@@ -258,14 +258,19 @@ export default function Keybox({ token }: KeyboxProps) {
         </Card>
       ) : (
         <Card variant="outlined" className="hide-scrollbar" sx={{ p: 2, mb: 2, maxHeight: 400, overflow: 'auto' }}>
-          <textarea
+          <TextField
+            variant="standard"
+            multiline
+            fullWidth
+            minRows={12}
+            placeholder="Paste your keybox here…"
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className="keybox-textarea"
-            rows={12}
-            placeholder="Paste your keybox here…" 
-            style={{ width: '100%', boxSizing: 'border-box', fontFamily: '"Geist Mono", monospace', fontSize: 16, lineHeight: 1.5,
-              color: 'inherit', background: 'transparent', border: 'none', outline: 'none', resize: 'vertical', padding: 0 }} />
+            inputProps={{ spellCheck: false }}
+            sx={{
+              "& .MuiInputBase-root": { fontFamily: '"Geist Mono", monospace', fontSize: "16px" },
+            }}
+          />
         </Card>
       )}
 
@@ -275,10 +280,10 @@ export default function Keybox({ token }: KeyboxProps) {
           {editing && <Button variant="text" onClick={handleCancelEdit}>Cancel</Button>}
           <Button variant="outlined" startIcon={<ContentCopyIcon />} onClick={handleCopy}>Copy</Button>
           <Button variant="contained" startIcon={<ContentPasteIcon />} onClick={handlePaste}>Paste</Button>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Stack direction="row" alignItems="center" spacing={0.25} component="label">
             <Switch checked={useBase64} onChange={(e) => setUseBase64(e.target.checked)} size="small" />
             <Typography variant="body2" color="text.secondary">Base64</Typography>
-          </label>
+          </Stack>
           <SaveButton loading={isSaving} hasUnsaved={hasUnsaved} onSave={handleSave} />
         </Box>
       </Box>

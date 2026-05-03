@@ -3,120 +3,10 @@ body {
   font-family: 'Geist Mono', monospace;
 }
 
-:root {
-  --mdui-typescale-display-large-font-family:   'Geist Mono', monospace;
-  --mdui-typescale-display-medium-font-family:  'Geist Mono', monospace;
-  --mdui-typescale-display-small-font-family:   'Geist Mono', monospace;
-  --mdui-typescale-headline-large-font-family:  'Geist Mono', monospace;
-  --mdui-typescale-headline-medium-font-family: 'Geist Mono', monospace;
-  --mdui-typescale-headline-small-font-family:  'Geist Mono', monospace;
-  --mdui-typescale-title-large-font-family:     'Geist Mono', monospace;
-  --mdui-typescale-title-medium-font-family:    'Geist Mono', monospace;
-  --mdui-typescale-title-small-font-family:     'Geist Mono', monospace;
-  --mdui-typescale-label-large-font-family:     'Geist Mono', monospace;
-  --mdui-typescale-label-medium-font-family:    'Geist Mono', monospace;
-  --mdui-typescale-label-small-font-family:     'Geist Mono', monospace;
-  --mdui-typescale-body-large-font-family:      'Geist Mono', monospace;
-  --mdui-typescale-body-medium-font-family:     'Geist Mono', monospace;
-  --mdui-typescale-body-small-font-family:      'Geist Mono', monospace;
-}
-
-mdui-layout {
-  height: 100vh;
-}
-
-mdui-layout-main {
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-}
-
-@media (max-width: 599px) {
-  mdui-navigation-rail { display: none; }
-  .desktop-only { display: none !important; }
-}
-
-@media (min-width: 600px) {
-  mdui-navigation-bar { display: none; }
-  .desktop-only { display: none !important; }
-  .mobile-pb { padding-bottom: 0 !important; }
-}
-
-
-
-.mobile-pb {
-  padding-bottom: 80px;
-}
-
-.auth-screen {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
-  gap: 16px;
-  padding: 24px;
-  box-sizing: border-box;
-  background: var(--mdui-color-surface);
-  text-align: center;
-}
-
-.nav-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px 20px;
-}
-
-.nav-wordmark {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--mdui-color-on-surface);
-  letter-spacing: 0.02em;
-}
-
-.nav-group-label {
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--mdui-color-on-surface-variant);
-  padding: 4px 16px 4px;
-  opacity: 0.5;
-}
-
-.nav-footer {
-  padding: 12px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  border-top: 1px solid var(--mdui-color-outline-variant);
-  position: relative;
-}
-
-.nav-status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--mdui-color-primary);
-  position: absolute;
-  bottom: 14px;
-  left: calc(50% + 10px);
-  opacity: 0.8;
-}
-
 .page {
   padding: 32px;
   max-width: 800px;
   box-sizing: border-box;
-}
-
-.page-fill {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  overflow: hidden;
 }
 
 .meta-row {
@@ -126,96 +16,26 @@ mdui-layout-main {
   flex-wrap: wrap;
 }
 
-.raw-url-strip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--mdui-color-surface-container);
-  border-radius: var(--mdui-shape-corner-extra-small);
-  padding: 8px 12px;
-  border: 0.5px solid var(--mdui-color-outline-variant);
-}
-
-.url-status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--mdui-color-primary);
-  flex-shrink: 0;
-  opacity: 0.7;
-}
-
-.raw-url-text {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: 'Geist Mono', monospace;
-  font-size: 13px;
-  color: var(--mdui-color-on-surface);
-}
-
-.unsaved-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--mdui-color-primary);
-  display: inline-block;
-  flex-shrink: 0;
-}
-
-.save-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.save-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.clipboard-panel {
-  width: 320px;
-  min-width: 320px;
-  background: var(--mdui-color-surface-container);
-  height: 100%;
-  overflow-y: auto;
-  flex-shrink: 0;
-}
-
 .file-row {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px;
-  border-radius: var(--mdui-shape-corner-small);
-  background: var(--mdui-color-surface-container);
+  border-radius: 8px;
   transition: background 150ms;
-}
-
-.file-row:hover {
-  background: var(--mdui-color-surface-container-high);
 }
 
 .file-row--folder {
   cursor: pointer;
 }
 
-.file-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .drop-overlay {
   position: absolute;
   inset: 0;
   z-index: 999;
-  background: color-mix(in srgb, var(--mdui-color-surface) 85%, transparent);
-  border: 2px dashed var(--mdui-color-primary);
-  border-radius: var(--mdui-shape-corner-medium);
+  background: color-mix(in srgb, #111318 85%, transparent);
+  border: 2px dashed var(--mdui-color-primary, #A8C7FA);
+  border-radius: 12px;
   margin: 8px;
   display: flex;
   flex-direction: column;
@@ -225,8 +45,8 @@ mdui-layout-main {
 }
 
 .upload-dropzone {
-  border: 1px dashed var(--mdui-color-outline);
-  border-radius: var(--mdui-shape-corner-medium);
+  border: 1px dashed var(--mdui-color-outline, #8E9099);
+  border-radius: 12px;
   padding: 32px;
   display: flex;
   flex-direction: column;
@@ -237,7 +57,7 @@ mdui-layout-main {
 }
 
 .upload-dropzone:hover {
-  background: var(--mdui-color-surface-container);
+  background: var(--mdui-color-surface-container, #1E2128);
 }
 
 .empty-state {
@@ -270,120 +90,9 @@ mdui-layout-main {
 }
 
 .skeleton {
-  background: var(--mdui-color-surface-container-high);
-  border-radius: var(--mdui-shape-corner-extra-small);
+  background: var(--mdui-color-surface-container-high, #282C34);
+  border-radius: 4px;
   animation: shimmer 1.5s ease-in-out infinite;
-}
-
-.keybox-textarea {
-  width: 100%;
-  box-sizing: border-box;
-  font-family: 'Geist Mono', monospace;
-  font-size: var(--mdui-typescale-body-large-font-size, 16px);
-  line-height: 1.5;
-  color: var(--mdui-color-on-surface);
-  background: transparent;
-  border: none;
-  outline: none;
-  resize: vertical;
-  padding: 0;
-}
-
-.keybox-textarea::placeholder {
-  color: var(--mdui-color-on-surface-variant);
-  opacity: 0.6;
-}
-
-.type-badge {
-  display: inline-block;
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  border-radius: 3px;
-  padding: 0 5px;
-  line-height: 16px;
-  text-transform: uppercase;
-}
-
-.upload-dropzone--active {
-  border-color: var(--mdui-color-primary);
-  background: color-mix(in srgb, var(--mdui-color-primary-container) 30%, transparent);
-}
-
-.history-entry {
-  background: var(--mdui-color-surface-container);
-  border-radius: var(--mdui-shape-corner-medium);
-  padding: 12px 16px;
-  cursor: pointer;
-  transition: background 150ms;
-}
-
-.history-entry:hover {
-  background: var(--mdui-color-surface-container-high);
-}
-
-.history-entry-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.history-entry-version {
-  display: flex;
-  align-items: baseline;
-  gap: 2px;
-  min-width: 60px;
-}
-
-.history-entry-version-label {
-  font-size: 13px;
-  color: var(--mdui-color-on-surface-variant);
-}
-
-.history-entry-version-num {
-  font-size: 22px;
-  font-weight: 500;
-  color: var(--mdui-color-on-surface);
-  line-height: 1;
-}
-
-.history-entry-serial {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--mdui-color-on-surface-variant);
-  font-family: 'Geist Mono', monospace;
-}
-
-.history-entry-time {
-  font-size: 11px;
-  color: var(--mdui-color-on-surface-variant);
-  opacity: 0.7;
-}
-
-.history-entry-details {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--mdui-color-outline-variant);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.history-entry-detail-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.history-entry-detail-label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--mdui-color-outline);
-  min-width: 56px;
-  flex-shrink: 0;
 }
 
 .hide-scrollbar {

@@ -1,4 +1,4 @@
-import { Stack } from "@mui/material";
+import { Box } from "@mui/material";
 import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
 import { LoadingButton } from "@mui/lab";
 
@@ -10,7 +10,7 @@ interface SaveButtonProps {
 
 export default function SaveButton({ loading, hasUnsaved, onSave }: SaveButtonProps) {
   return (
-    <Stack direction="row" alignItems="center" spacing={1}>
+    <Box sx={{ display: "inline-flex", alignItems: "center", gap: 1 }}>
       {hasUnsaved && (
         <FiberManualRecordIcon
           sx={{ fontSize: 8, color: "primary.main" }}
@@ -26,6 +26,6 @@ export default function SaveButton({ loading, hasUnsaved, onSave }: SaveButtonPr
       >
         Save
       </LoadingButton>
-    </Stack>
+    </Box>
   );
 }
