@@ -2,7 +2,8 @@ import { BottomNavigation, BottomNavigationAction, Paper } from "@mui/material";
 import KeyIcon from "@mui/icons-material/Key";
 import ContentPasteIcon from "@mui/icons-material/ContentPaste";
 import FolderIcon from "@mui/icons-material/Folder";
-import type { Page } from "./NavRail";
+import HistoryIcon from "@mui/icons-material/History";
+import type { Page } from "../App";
 
 interface BottomNavProps {
   activePage: Page;
@@ -24,28 +25,25 @@ export default function BottomNav({ activePage, onNavigate }: BottomNavProps) {
           value="keybox"
           label="Keybox"
           icon={<KeyIcon />}
-          sx={{
-            color: "text.secondary",
-            "&.Mui-selected": { color: "primary.main" },
-          }}
+          sx={{ color: "text.secondary", "&.Mui-selected": { color: "primary.main" } }}
         />
         <BottomNavigationAction
           value="clipboards"
           label="Boards"
           icon={<ContentPasteIcon />}
-          sx={{
-            color: "text.secondary",
-            "&.Mui-selected": { color: "primary.main" },
-          }}
+          sx={{ color: "text.secondary", "&.Mui-selected": { color: "primary.main" } }}
         />
         <BottomNavigationAction
           value="files"
           label="Files"
           icon={<FolderIcon />}
-          sx={{
-            color: "text.secondary",
-            "&.Mui-selected": { color: "primary.main" },
-          }}
+          sx={{ color: "text.secondary", "&.Mui-selected": { color: "primary.main" } }}
+        />
+        <BottomNavigationAction
+          value="history"
+          label="History"
+          icon={<HistoryIcon />}
+          sx={{ color: "text.secondary", "&.Mui-selected": { color: "primary.main" } }}
         />
       </BottomNavigation>
     </Paper>

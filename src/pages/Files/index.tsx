@@ -1,35 +1,31 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  Stack,
   Typography,
   Button,
   IconButton,
-  Skeleton,
+  Tooltip,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   TextField,
-  Tooltip,
-  Breadcrumbs,
-  Link,
-  Box,
-} from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import CloudUploadIcon from "@mui/icons-material/CloudUpload";
-import InsertLinkIcon from "@mui/icons-material/InsertLink";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import CheckIcon from "@mui/icons-material/Check";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import FolderIcon from "@mui/icons-material/Folder";
-import FolderOpenIcon from "@mui/icons-material/FolderOpen";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import CreateNewFolderIcon from "@mui/icons-material/CreateNewFolder";
-import DescriptionIcon from "@mui/icons-material/Description";
-import ImageIcon from "@mui/icons-material/Image";
-import ArchiveIcon from "@mui/icons-material/Archive";
-import DataObjectIcon from "@mui/icons-material/DataObject";
-import { useSnackbar } from "notistack";
+} from '@mui/material';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CheckIcon from '@mui/icons-material/Check';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import FolderIcon from '@mui/icons-material/Folder';
+import DescriptionIcon from '@mui/icons-material/Description';
+import ImageIcon from '@mui/icons-material/Image';
+import ArchiveIcon from '@mui/icons-material/Archive';
+import DataObjectIcon from '@mui/icons-material/DataObject';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
+import InsertLinkIcon from '@mui/icons-material/InsertLink';
+import { useSnackbar } from 'notistack';
+import { relativeTime, formatSize } from '../../utils/time';
+import { fileToBase64 } from '../../utils/upload';
 
 interface FileItem {
   id: string;
@@ -42,34 +38,16 @@ interface FileItem {
   updatedAt: string;
 }
 
-interface FolderBreadcrumb {
+interface Breadcrumb {
   id: string;
   name: string;
 }
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function relativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return `${Math.floor(days / 30)}mo ago`;
-}
-
 function fileIcon(mimeType: string, isFolder?: boolean) {
   if (isFolder) return <FolderIcon />;
-  if (mimeType.startsWith("image/")) return <ImageIcon />;
-  if (mimeType.includes("zip") || mimeType.includes("tar") || mimeType.includes("rar") || mimeType.includes("7z")) return <ArchiveIcon />;
-  if (mimeType.includes("json") || mimeType.includes("xml") || mimeType.includes("yaml")) return <DataObjectIcon />;
+  if (mimeType.startsWith('image/')) return <ImageIcon />;
+  if (/zip|tar|rar|7z/.test(mimeType)) return <ArchiveIcon />;
+  if (/json|xml|yaml/.test(mimeType)) return <DataObjectIcon />;
   return <DescriptionIcon />;
 }
 
@@ -83,342 +61,312 @@ interface FilesPageProps {
 
 export default function FilesPage({ token }: FilesPageProps) {
   const { enqueueSnackbar } = useSnackbar();
-  const [allItems, setAllItems] = useState<FileItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [folderPath, setFolderPath] = useState<FolderBreadcrumb[]>(() => {
+  const [allItems,    setAllItems]    = useState<FileItem[]>([]);
+  const [isLoading,   setIsLoading]   = useState(true);
+  const [folderPath,  setFolderPath]  = useState<Breadcrumb[]>(() => {
     try {
-      const stored = localStorage.getItem("keybox:folderPath");
+      const stored = localStorage.getItem('keybox:folderPath');
       if (stored) {
-        const parsed = JSON.parse(stored) as FolderBreadcrumb[];
+        const parsed = JSON.parse(stored) as Breadcrumb[];
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch { /* ignore */ }
-    return [{ id: "", name: "Files" }];
+    return [{ id: '', name: 'Files' }];
   });
-  const [uploadOpen, setUploadOpen] = useState(false);
-  const [folderOpen, setFolderOpen] = useState(false);
+  const [uploadOpen,   setUploadOpen]   = useState(false);
+  const [folderOpen,   setFolderOpen]   = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<FileItem | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(0);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [copiedId,     setCopiedId]     = useState<string | null>(null);
+  const [isDragging,   setIsDragging]   = useState(0);
 
-  const currentFolderId = folderPath[folderPath.length - 1]?.id ?? "";
-  const hasParent = currentFolderId !== "";
-  const visibleItems = allItems.filter((f) => f.parentId === currentFolderId);
+  const currentFolderId = folderPath[folderPath.length - 1]?.id ?? '';
+  const hasParent = currentFolderId !== '';
+  const visibleItems = allItems.filter(f => f.parentId === currentFolderId);
+
+  useEffect(() => { localStorage.setItem('keybox:folderPath', JSON.stringify(folderPath)); }, [folderPath]);
 
   const fetchFiles = useCallback(async () => {
     if (!token) return;
     setIsLoading(true);
     try {
-      const res = await fetch("/.netlify/functions/files", {
+      const res = await fetch('/.netlify/functions/files', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
-        const data = (await res.json()) as FileItem[];
-        setAllItems(data);
-      }
-    } catch {
-      // ignore
-    } finally {
-      setIsLoading(false);
-    }
+      if (res.ok) setAllItems(await res.json() as FileItem[]);
+    } catch { /* ignore */ }
+    finally { setIsLoading(false); }
   }, [token]);
 
-  useEffect(() => {
-    fetchFiles();
-  }, [fetchFiles]);
-
-  useEffect(() => { localStorage.setItem("keybox:folderPath", JSON.stringify(folderPath)); }, [folderPath]);
+  useEffect(() => { fetchFiles(); }, [fetchFiles]);
 
   const enterFolder = useCallback((id: string, name: string) => {
-    setFolderPath((prev) => [...prev, { id, name }]);
+    setFolderPath(prev => [...prev, { id, name }]);
   }, []);
 
   const navigateBreadcrumb = useCallback((index: number) => {
-    setFolderPath((prev) => prev.slice(0, index + 1));
+    setFolderPath(prev => prev.slice(0, index + 1));
   }, []);
 
   const goBack = useCallback(() => {
-    setFolderPath((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
+    setFolderPath(prev => (prev.length > 1 ? prev.slice(0, -1) : prev));
   }, []);
 
   const handleCopyUrl = useCallback(async (id: string) => {
-    const url = fileUrl(id);
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(fileUrl(id));
       setCopiedId(id);
-      enqueueSnackbar("File URL copied", { variant: "info" });
+      enqueueSnackbar('File URL copied', { variant: 'info' });
       setTimeout(() => setCopiedId(null), 1500);
     } catch {
-      enqueueSnackbar("Failed to copy", { variant: "error" });
+      enqueueSnackbar('Failed to copy', { variant: 'error' });
     }
   }, [enqueueSnackbar]);
 
   const handleDelete = useCallback(async () => {
     if (!token || !deleteTarget) return;
-    const res = await fetch("/.netlify/functions/files", {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+    const res = await fetch('/.netlify/functions/files', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ id: deleteTarget.id }),
     });
     if (res.ok) {
-      enqueueSnackbar("Deleted", { variant: "success" });
-      fetchFiles();
+      setAllItems(prev => prev.filter(f => f.id !== deleteTarget.id));
+      enqueueSnackbar('Deleted', { variant: 'success' });
     } else {
-      enqueueSnackbar("Failed to delete", { variant: "error" });
+      enqueueSnackbar('Failed to delete', { variant: 'error' });
     }
     setDeleteTarget(null);
-  }, [token, deleteTarget, enqueueSnackbar, fetchFiles]);
+  }, [token, deleteTarget, enqueueSnackbar]);
 
   const handleCreateFolder = useCallback(async (name: string) => {
     if (!token) return;
-    const res = await fetch("/.netlify/functions/files?folder=1", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+    const res = await fetch('/.netlify/functions/files?folder=1', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ name, parentId: currentFolderId }),
     });
     if (res.ok) {
-      enqueueSnackbar("Folder created", { variant: "success" });
-      fetchFiles();
+      const { id } = await res.json() as { id: string };
+      const now = new Date().toISOString();
+      setAllItems(prev => [...prev, {
+        id, name, mimeType: 'inode/directory', size: 0,
+        parentId: currentFolderId, isFolder: true, createdAt: now, updatedAt: now,
+      }]);
+      enqueueSnackbar('Folder created', { variant: 'success' });
     } else {
-      const text = await res.text();
-      enqueueSnackbar(text || "Failed to create folder", { variant: "error" });
+      enqueueSnackbar((await res.text()) || 'Failed to create folder', { variant: 'error' });
     }
-  }, [token, currentFolderId, enqueueSnackbar, fetchFiles]);
+  }, [token, currentFolderId, enqueueSnackbar]);
 
-  const uploadFile = useCallback(async (file: File) => {
-    if (!token) return;
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(await file.arrayBuffer())));
-    const res = await fetch("/.netlify/functions/files", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+  const uploadFile = useCallback(async (file: File): Promise<string> => {
+    if (!token) throw new Error('No token');
+    const base64 = await fileToBase64(file);
+    const res = await fetch('/.netlify/functions/files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         name: file.name,
         content: base64,
-        mimeType: file.type || "application/octet-stream",
+        mimeType: file.type || 'application/octet-stream',
         parentId: currentFolderId,
       }),
     });
-    if (!res.ok) throw new Error("Upload failed");
+    if (!res.ok) throw new Error('Upload failed');
+    const { id } = await res.json() as { id: string };
+    return id;
   }, [token, currentFolderId]);
 
-  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !token) return;
     try {
-      await uploadFile(file);
-      enqueueSnackbar("File uploaded", { variant: "success" });
-      fetchFiles();
+      const id = await uploadFile(file);
+      const now = new Date().toISOString();
+      setAllItems(prev => [...prev, {
+        id, name: file.name, mimeType: file.type || 'application/octet-stream',
+        size: file.size, parentId: currentFolderId, createdAt: now, updatedAt: now,
+      }]);
+      enqueueSnackbar('File uploaded', { variant: 'success' });
     } catch {
-      enqueueSnackbar("Upload failed", { variant: "error" });
+      enqueueSnackbar('Upload failed', { variant: 'error' });
     }
-    e.target.value = "";
-  }, [token, uploadFile, enqueueSnackbar, fetchFiles]);
+    e.target.value = '';
+  }, [token, uploadFile, currentFolderId, enqueueSnackbar]);
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(0);
     const files = Array.from(e.dataTransfer.files);
-    if (files.length === 0) return;
-
-    let success = 0;
-    let fail = 0;
-    for (const file of files) {
+    if (!files.length) return;
+    const now = new Date().toISOString();
+    let ok = 0; let fail = 0;
+    const newItems: FileItem[] = [];
+    for (const f of files) {
       try {
-        await uploadFile(file);
-        success++;
-      } catch {
-        fail++;
-      }
+        const id = await uploadFile(f);
+        newItems.push({
+          id, name: f.name, mimeType: f.type || 'application/octet-stream',
+          size: f.size, parentId: currentFolderId, createdAt: now, updatedAt: now,
+        });
+        ok++;
+      } catch { fail++; }
     }
-    fetchFiles();
-    if (fail === 0) {
-      enqueueSnackbar(`${success} file${success !== 1 ? "s" : ""} uploaded`, { variant: "success" });
-    } else {
-      enqueueSnackbar(`${success} uploaded, ${fail} failed`, { variant: "error" });
-    }
-  }, [uploadFile, fetchFiles, enqueueSnackbar]);
+    if (newItems.length > 0) setAllItems(prev => [...prev, ...newItems]);
+    enqueueSnackbar(
+      fail === 0 ? `${ok} file${ok !== 1 ? 's' : ''} uploaded` : `${ok} uploaded, ${fail} failed`,
+      { variant: fail === 0 ? 'success' : 'error' },
+    );
+  }, [uploadFile, currentFolderId, enqueueSnackbar]);
 
-  const totalSize = visibleItems.reduce((acc, f) => acc + f.size, 0);
-  const fileCount = visibleItems.filter((f) => !f.isFolder).length;
-  const folderCount = visibleItems.filter((f) => f.isFolder).length;
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const totalSize   = visibleItems.reduce((acc, f) => acc + f.size, 0);
+  const fileCount   = visibleItems.filter(f => !f.isFolder).length;
+  const folderCount = visibleItems.filter(f =>  f.isFolder).length;
 
   return (
-    <Box
-      sx={{ position: "relative", minHeight: "100%" }}
-      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
-      onDragEnter={(e) => { e.preventDefault(); setIsDragging((n) => n + 1); }}
-      onDragLeave={(e) => { e.preventDefault(); setIsDragging((n) => n - 1); }}
+    <div
+      style={{ position: 'relative', minHeight: '100%' }}
+      onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
+      onDragEnter={e => { e.preventDefault(); setIsDragging(n => n + 1); }}
+      onDragLeave={e => { e.preventDefault(); setIsDragging(n => n - 1); }}
       onDrop={handleDrop}
     >
       {isDragging > 0 && (
-        <Stack
-          alignItems="center"
-          justifyContent="center"
-          sx={{
-            position: "absolute", inset: 0, zIndex: 9999,
-            bgcolor: "rgba(17,19,24,0.85)",
-            border: "2px dashed",
-            borderColor: "primary.main",
-            borderRadius: 2, m: 1,
-          }}
-        >
-          <CloudUploadIcon sx={{ fontSize: 64, color: "primary.main", mb: 2 }} />
-          <Typography variant="h5" sx={{ color: "primary.main" }}>Drop files here</Typography>
-        </Stack>
+        <div className="drop-overlay">
+          <CloudUploadIcon sx={{ fontSize: 64, color: 'primary.main' }} />
+          <Typography variant="h5" sx={{ color: 'primary.main' }}>Drop files here</Typography>
+        </div>
       )}
 
-      <Stack spacing={3} sx={{ p: 4, maxWidth: 800 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-          <Stack>
-            <Breadcrumbs
-              sx={{ "& .MuiBreadcrumbs-separator": { color: "outline.main" } }}
-            >
-              {folderPath.map((crumb, i) => (
-                <Link
-                  key={crumb.id || "root"}
-                  underline={i < folderPath.length - 1 ? "hover" : "none"}
+      <div className="page">
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+            {folderPath.map((crumb, i) => (
+              <span key={crumb.id || 'root'}>
+                {i > 0 && <span style={{ color: 'var(--mdui-color-outline, #8E9099)', margin: '0 4px', fontSize: 22 }}>/</span>}
+                <span
                   onClick={() => navigateBreadcrumb(i)}
-                  sx={{
-                    color: i === folderPath.length - 1 ? "text.primary" : "primary.main",
-                    cursor: i < folderPath.length - 1 ? "pointer" : "default",
-                    fontSize: "22px",
+                  style={{
+                    cursor: i < folderPath.length - 1 ? 'pointer' : 'default',
+                    color: i === folderPath.length - 1 ? 'text.primary' : 'primary.main',
+                    fontSize: 22,
                     fontWeight: 400,
+                    fontFamily: "'Geist Mono', monospace",
                   }}
                 >
                   {crumb.name}
-                </Link>
-              ))}
-            </Breadcrumbs>
-          </Stack>
-          <Stack direction="row" spacing={1}>
-            <Tooltip title="New folder">
-              <Button
-                variant="outlined"
-                startIcon={<CreateNewFolderIcon />}
-                onClick={() => setFolderOpen(true)}
-                sx={{ textTransform: "none" }}
-                size="small"
-              >
-                Folder
-              </Button>
-            </Tooltip>
+                </span>
+              </span>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<CreateNewFolderIcon />}
+              onClick={() => setFolderOpen(true)}
+              sx={{ textTransform: 'none' }}
+            >
+              Folder
+            </Button>
             <Button
               variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => setUploadOpen(true)}
-              sx={{ textTransform: "none" }}
               size="small"
+              startIcon={<CloudUploadIcon />}
+              onClick={() => setUploadOpen(true)}
+              sx={{ textTransform: 'none' }}
             >
               Upload
             </Button>
-          </Stack>
-        </Stack>
+          </div>
+        </div>
 
         {visibleItems.length > 0 && (
-          <Stack direction="row" alignItems="center" spacing={1}>
+          <div className="meta-row" style={{ marginBottom: 16 }}>
             {hasParent && (
-              <IconButton size="small" onClick={goBack} sx={{ color: "text.secondary" }}>
+              <IconButton size="small" onClick={goBack} sx={{ color: 'text.secondary' }}>
                 <ArrowBackIcon fontSize="small" />
               </IconButton>
             )}
-            <Typography variant="caption" sx={{ color: "text.secondary" }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
               {[
-                folderCount > 0 && `${folderCount} folder${folderCount > 1 ? "s" : ""}`,
-                fileCount > 0 && `${fileCount} file${fileCount > 1 ? "s" : ""}`,
-              ].filter(Boolean).join(" · ")}
+                folderCount > 0 && `${folderCount} folder${folderCount > 1 ? 's' : ''}`,
+                fileCount   > 0 && `${fileCount} file${fileCount > 1 ? 's' : ''}`,
+              ].filter(Boolean).join(' · ')}
               {visibleItems.length > 0 && ` · ${formatSize(totalSize)} total`}
             </Typography>
-          </Stack>
+          </div>
         )}
 
         {isLoading ? (
-          <Stack spacing={1}>
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} variant="rectangular" height={52} sx={{ borderRadius: 1 }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="skeleton" style={{ height: 52 }} />
             ))}
-          </Stack>
+          </div>
         ) : visibleItems.length === 0 && !hasParent ? (
-          <Stack alignItems="center" justifyContent="center" sx={{ gap: 2, py: 8 }}>
-            <CloudUploadIcon sx={{ fontSize: 64, color: "outline.main" }} />
-            <Typography variant="h5" sx={{ color: "text.primary" }}>
-              No files yet
+          <div className="empty-state">
+            <CloudUploadIcon sx={{ fontSize: 64, color: 'outline.main' }} />
+            <Typography variant="h5" sx={{ color: 'text.primary' }}>No files yet</Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center' }}>
+              Upload a file or drop files anywhere on this page.
             </Typography>
-            <Typography variant="body2" sx={{ color: "text.secondary", textAlign: "center" }}>
-              Upload a file, fetch from a URL, or drop files anywhere on this page.
-            </Typography>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => setUploadOpen(true)}
-              sx={{ textTransform: "none" }}
-            >
+            <Button variant="contained" startIcon={<CloudUploadIcon />} onClick={() => setUploadOpen(true)} sx={{ textTransform: 'none' }}>
               Upload your first file
             </Button>
-          </Stack>
+          </div>
         ) : visibleItems.length === 0 && hasParent ? (
-          <Typography variant="body2" sx={{ color: "text.secondary", py: 4, textAlign: "center" }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', py: 4 }}>
             This folder is empty
           </Typography>
         ) : (
-          <Stack spacing={0.5}>
-            {visibleItems.map((file) => (
-              <Stack
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {visibleItems.map(file => (
+              <div
                 key={file.id}
-                direction="row"
-                alignItems="center"
-                sx={{
-                  p: 1.5,
-                  borderRadius: 1,
-                  bgcolor: "surfaceContainer.main",
-                  "&:hover": { bgcolor: "surfaceContainerHigh.main" },
-                  gap: 1.5,
-                  cursor: file.isFolder ? "pointer" : "default",
-                }}
+                className={`file-row${file.isFolder ? ' file-row--folder' : ''}`}
                 onClick={() => file.isFolder && enterFolder(file.id, file.name)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: 12,
+                  borderRadius: 8,
+                  background: 'var(--mdui-color-surface-container, #1E2128)',
+                  cursor: file.isFolder ? 'pointer' : 'default',
+                }}
               >
-                <Stack sx={{ color: file.isFolder ? "primary.main" : "text.secondary", fontSize: 20 }}>
+                <span style={{ color: file.isFolder ? 'primary.main' : 'text.secondary', display: 'flex' }}>
                   {fileIcon(file.mimeType, file.isFolder)}
-                </Stack>
+                </span>
 
-                <Stack sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" noWrap sx={{ color: "text.primary" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" noWrap sx={{ color: 'text.primary' }}>
                     {file.name}
                   </Typography>
                   {!file.isFolder && (
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                         {formatSize(file.size)}
                       </Typography>
-                      <Typography variant="caption" sx={{ color: "outline.main" }}>·</Typography>
-                      <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                      <Typography variant="caption" sx={{ color: 'outline.main' }}>·</Typography>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                         {relativeTime(file.createdAt)}
                       </Typography>
-                    </Stack>
+                    </div>
                   )}
-                </Stack>
+                </div>
 
                 {!file.isFolder && (
                   <Tooltip title="Copy raw URL">
                     <IconButton
                       size="small"
                       onClick={(e) => { e.stopPropagation(); handleCopyUrl(file.id); }}
-                      sx={{ color: "text.secondary" }}
+                      sx={{ color: 'text.secondary' }}
                     >
-                      {copiedId === file.id ? (
-                        <CheckIcon fontSize="small" sx={{ color: "success.main" }} />
-                      ) : (
-                        <ContentCopyIcon fontSize="small" />
-                      )}
+                      {copiedId === file.id ? <CheckIcon fontSize="small" sx={{ color: 'success.main' }} /> : <ContentCopyIcon fontSize="small" />}
                     </IconButton>
                   </Tooltip>
                 )}
@@ -427,53 +375,52 @@ export default function FilesPage({ token }: FilesPageProps) {
                   <IconButton
                     size="small"
                     onClick={(e) => { e.stopPropagation(); setDeleteTarget(file); }}
-                    sx={{ color: "text.secondary" }}
+                    sx={{ color: 'text.secondary' }}
                   >
                     <DeleteOutlineIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
-              </Stack>
+              </div>
             ))}
-          </Stack>
+          </div>
         )}
+      </div>
 
-        <UploadDialog
-          open={uploadOpen}
-          token={token}
-          currentFolderId={currentFolderId}
-          onClose={() => setUploadOpen(false)}
-          onUploaded={() => { setUploadOpen(false); fetchFiles(); }}
-          enqueueSnackbar={enqueueSnackbar}
-        />
+      <UploadDialog
+        open={uploadOpen}
+        token={token}
+        currentFolderId={currentFolderId}
+        onClose={() => setUploadOpen(false)}
+        onUploaded={() => setUploadOpen(false)}
+      />
 
-        <CreateFolderDialog
-          open={folderOpen}
-          onClose={() => setFolderOpen(false)}
-          onCreate={handleCreateFolder}
-        />
+      <CreateFolderDialog
+        open={folderOpen}
+        onClose={() => setFolderOpen(false)}
+        onCreate={handleCreateFolder}
+      />
 
-        <Dialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
-          <DialogTitle>
-            Delete {deleteTarget?.isFolder ? "folder" : "file"} &ldquo;{deleteTarget?.name}&rdquo;?
-          </DialogTitle>
-          <DialogContent>
-            <Typography variant="body2" sx={{ color: "text.secondary" }}>
-              {deleteTarget?.isFolder
-                ? "This will permanently remove the folder and all its contents."
-                : "This will permanently remove the file and its raw endpoint."}
-            </Typography>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setDeleteTarget(null)} variant="text">Cancel</Button>
-            <Button onClick={handleDelete} variant="contained" color="error">Delete</Button>
-          </DialogActions>
-        </Dialog>
+      <Dialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Delete {deleteTarget?.isFolder ? 'folder' : 'file'} &ldquo;{deleteTarget?.name}&rdquo;?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            {deleteTarget?.isFolder
+              ? 'This will permanently remove the folder and all its contents.'
+              : 'This will permanently remove the file and its raw endpoint.'}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTarget(null)} variant="text">Cancel</Button>
+          <Button onClick={handleDelete} variant="contained" color="error">Delete</Button>
+        </DialogActions>
+      </Dialog>
 
-        <input ref={fileInputRef} type="file" hidden onChange={handleFileUpload} />
-      </Stack>
-    </Box>
+      <input ref={fileInputRef} type="file" hidden onChange={handleFileChange} />
+    </div>
   );
 }
+
+/* ─── Upload Dialog ──────────────────────────────────────────────────────── */
 
 interface UploadDialogProps {
   open: boolean;
@@ -481,157 +428,115 @@ interface UploadDialogProps {
   currentFolderId: string;
   onClose: () => void;
   onUploaded: () => void;
-  enqueueSnackbar: (msg: string, opts: { variant: "success" | "error" | "info" }) => void;
 }
 
-function UploadDialog({ open, token, currentFolderId, onClose, onUploaded, enqueueSnackbar }: UploadDialogProps) {
-  const [mode, setMode] = useState<"file" | "url">("file");
-  const [url, setUrl] = useState("");
-  const [fileName, setFileName] = useState("");
+function UploadDialog({ open, token, currentFolderId, onClose, onUploaded }: UploadDialogProps) {
+  const { enqueueSnackbar } = useSnackbar();
+  const [mode,        setMode]        = useState<'file' | 'url'>('file');
+  const [url,         setUrl]         = useState('');
+  const [fileName,    setFileName]    = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUpload = useCallback(async () => {
     if (!token) return;
+    if (mode === 'file') { fileInputRef.current?.click(); return; }
     setIsUploading(true);
-
-    if (mode === "url") {
-      const name = fileName.trim() || `from-url-${Date.now()}`;
-      const params = new URLSearchParams({ name, url, parentId: currentFolderId });
-      const res = await fetch(`/.netlify/functions/files?${params}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        enqueueSnackbar("File uploaded from URL", { variant: "success" });
-        onUploaded();
-      } else {
-        const text = await res.text();
-        enqueueSnackbar(text || "Upload failed", { variant: "error" });
-      }
+    const name = fileName.trim() || `from-url-${Date.now()}`;
+    const params = new URLSearchParams({ name, url, parentId: currentFolderId });
+    const res = await fetch(`/.netlify/functions/files?${params}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      enqueueSnackbar('File uploaded from URL', { variant: 'success' });
+      onUploaded();
     } else {
-      fileInputRef.current?.click();
+      enqueueSnackbar((await res.text()) || 'Upload failed', { variant: 'error' });
     }
-
     setIsUploading(false);
-  }, [token, mode, url, fileName, currentFolderId, enqueueSnackbar, onUploaded]);
+  }, [token, mode, url, fileName, currentFolderId, onUploaded, enqueueSnackbar]);
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !token) return;
     setIsUploading(true);
-    const buffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-    let binary = "";
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]!);
-    }
-    const base64 = btoa(binary);
-    const res = await fetch("/.netlify/functions/files", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        name: file.name,
-        content: base64,
-        mimeType: file.type || "application/octet-stream",
-        parentId: currentFolderId,
-      }),
-    });
-    if (res.ok) {
-      enqueueSnackbar("File uploaded", { variant: "success" });
-      onUploaded();
-    } else {
-      enqueueSnackbar("Upload failed", { variant: "error" });
+    try {
+      const base64 = await fileToBase64(file);
+      const res = await fetch('/.netlify/functions/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          name: file.name,
+          content: base64,
+          mimeType: file.type || 'application/octet-stream',
+          parentId: currentFolderId,
+        }),
+      });
+      if (res.ok) {
+        enqueueSnackbar('File uploaded', { variant: 'success' });
+        onUploaded();
+      } else {
+        enqueueSnackbar('Upload failed', { variant: 'error' });
+      }
+    } catch {
+      enqueueSnackbar('Upload failed', { variant: 'error' });
     }
     setIsUploading(false);
-    e.target.value = "";
-  }, [token, currentFolderId, enqueueSnackbar, onUploaded]);
+    e.target.value = '';
+  }, [token, currentFolderId, onUploaded, enqueueSnackbar]);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle>Upload File</DialogTitle>
       <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <Stack direction="row" spacing={1}>
+        <div className="field-group">
+          <div className="mode-toggle">
             <Button
-              variant={mode === "file" ? "contained" : "outlined"}
+              variant={mode === 'file' ? 'contained' : 'outlined'}
               size="small"
-              onClick={() => setMode("file")}
-              startIcon={<CloudUploadIcon />}
-              sx={{ textTransform: "none" }}
+              startIcon={<UploadFileIcon />}
+              onClick={() => setMode('file')}
+              sx={{ textTransform: 'none' }}
             >
               From disk
             </Button>
             <Button
-              variant={mode === "url" ? "contained" : "outlined"}
+              variant={mode === 'url' ? 'contained' : 'outlined'}
               size="small"
-              onClick={() => setMode("url")}
               startIcon={<InsertLinkIcon />}
-              sx={{ textTransform: "none" }}
+              onClick={() => setMode('url')}
+              sx={{ textTransform: 'none' }}
             >
               From URL
             </Button>
-          </Stack>
+          </div>
 
-          {mode === "url" ? (
+          {mode === 'url' ? (
             <>
-              <TextField
-                label="File URL"
-                variant="outlined"
-                fullWidth
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://example.com/file.pdf"
-              />
-              <TextField
-                label="File name (optional)"
-                variant="outlined"
-                fullWidth
-                value={fileName}
-                onChange={(e) => setFileName(e.target.value)}
-                placeholder="my-file.pdf"
-              />
+              <TextField label="File URL" variant="outlined" fullWidth value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/file.pdf" sx={{ mt: 2 }} />
+              <TextField label="File name (optional)" variant="outlined" fullWidth value={fileName} onChange={(e) => setFileName(e.target.value)} placeholder="my-file.pdf" />
             </>
           ) : (
-            <Stack
-              alignItems="center"
-              justifyContent="center"
-              sx={{
-                border: "1px dashed",
-                borderColor: "outline.main",
-                borderRadius: 2,
-                p: 4,
-                cursor: "pointer",
-                "&:hover": { bgcolor: "surfaceContainer.main" },
-              }}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <CloudUploadIcon sx={{ fontSize: 40, color: "outline.main", mb: 1 }} />
-              <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                Click to select a file
-              </Typography>
-            </Stack>
+            <div className="upload-dropzone" onClick={() => fileInputRef.current?.click()} style={{ marginTop: 16 }}>
+              <CloudUploadIcon sx={{ fontSize: 40, color: 'outline.main' }} />
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>Click to select a file</Typography>
+            </div>
           )}
-        </Stack>
+        </div>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} variant="text">Cancel</Button>
-        <Button
-          onClick={handleUpload}
-          variant="contained"
-          disabled={isUploading || (mode === "url" && !url.trim())}
-        >
-          {isUploading ? "Uploading..." : "Upload"}
+        <Button onClick={handleUpload} variant="contained" disabled={isUploading || (mode === 'url' && !url.trim())}>
+          {isUploading ? 'Uploading\u2026' : 'Upload'}
         </Button>
       </DialogActions>
-
       <input ref={fileInputRef} type="file" hidden onChange={handleFileChange} />
     </Dialog>
   );
 }
+
+/* ─── Create Folder Dialog ───────────────────────────────────────────────── */
 
 interface CreateFolderDialogProps {
   open: boolean;
@@ -640,12 +545,12 @@ interface CreateFolderDialogProps {
 }
 
 function CreateFolderDialog({ open, onClose, onCreate }: CreateFolderDialogProps) {
-  const [name, setName] = useState("");
+  const [name, setName] = useState('');
 
-  const handleCreate = useCallback(() => {
+  const handle = useCallback(() => {
     if (!name.trim()) return;
     onCreate(name.trim());
-    setName("");
+    setName('');
     onClose();
   }, [name, onCreate, onClose]);
 
@@ -660,13 +565,13 @@ function CreateFolderDialog({ open, onClose, onCreate }: CreateFolderDialogProps
           autoFocus
           value={name}
           onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') handle(); }}
           sx={{ mt: 1 }}
         />
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} variant="text">Cancel</Button>
-        <Button onClick={handleCreate} variant="contained" disabled={!name.trim()}>Create</Button>
+        <Button onClick={handle} variant="contained" disabled={!name.trim()}>Create</Button>
       </DialogActions>
     </Dialog>
   );
