@@ -8,6 +8,10 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      "/.netlify/identity": {
+        target: "https://rawbin.netlify.app",
+        changeOrigin: true,
+      },
       "/.netlify/functions": {
         target: "https://rawbin.netlify.app",
         changeOrigin: true,
