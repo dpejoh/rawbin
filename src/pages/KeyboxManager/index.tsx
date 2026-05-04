@@ -192,7 +192,7 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
 
   const handleXmlImport = useCallback(async () => {
     if (!token || xmlItems.length === 0) return;
-    const valid = xmlItems.filter(item => item.source && item.text && item.version);
+    const valid = xmlItems.filter(item => item.source && item.version);
     if (valid.length === 0) {
       enqueueSnackbar('All items need a provider and version', { variant: 'error' });
       return;
