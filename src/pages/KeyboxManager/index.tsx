@@ -192,12 +192,14 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
 
   const handleXmlImport = useCallback(async () => {
     if (!token || xmlItems.length === 0) return;
-    const valid = xmlItems.filter(item => item.source && item.version);
+    setIsImporting(true);
+    const items = xmlItems.map(item => ({ ...item, version: item.version || nextVersion(item.source) }));
+    const valid = items.filter(item => item.source && item.version);
     if (valid.length === 0) {
       enqueueSnackbar('All items need a provider and version', { variant: 'error' });
+      setIsImporting(false);
       return;
     }
-    setIsImporting(true);
     try {
       const res = await fetch('/.netlify/functions/catalog', {
         method: 'POST',
@@ -270,12 +272,14 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
   }, [token, fetchHistory, enqueueSnackbar]);
 
   const handleAddSave = useCallback(async () => {
-    if (!token || !addSource || !addVersion || !addContent) return;
+    if (!token || !addSource || !addContent) return;
+    const finalVersion = addVersion || nextVersion(addSource);
+    if (!finalVersion) return;
     try {
       const res = await fetch('/.netlify/functions/catalog/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ source: addSource, version: addVersion, text: addText, content: addContent, useBase64: addUseBase64 }),
+        body: JSON.stringify({ source: addSource, version: finalVersion, text: addText, content: addContent, useBase64: addUseBase64 }),
       });
       if (res.ok) {
         enqueueSnackbar('Keybox added', { variant: 'success' });
