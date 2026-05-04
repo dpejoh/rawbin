@@ -79,10 +79,8 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
   const entryKey = (e: HistoryEntry) => `${e.source}:${e.version}`;
 
   const nextVersion = (src: string) => {
-    const latest = latestPerSource[src];
-    if (latest) return String(parseInt(latest, 10) + 1);
-    const nums = entries.filter(e => e.source === src).map(e => parseInt(e.version, 10)).filter(n => !isNaN(n));
-    return nums.length > 0 ? String(Math.max(...nums) + 1) : '1';
+    const count = entries.filter(e => e.source === src).length;
+    return String(count + 1);
   };
 
   const fetchHistory = useCallback(async () => {
