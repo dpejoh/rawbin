@@ -58,7 +58,7 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
   const [addUseBase64, setAddUseBase64] = useState(true);
 
   const [xmlDialogOpen, setXmlDialogOpen] = useState(false);
-  const [xmlItems, setXmlItems] = useState<Array<{ filename: string; content: string; version: string; source: string }>>([]);
+  const [xmlItems, setXmlItems] = useState<Array<{ filename: string; content: string; version: string; source: string; text: string }>>([]);
   const [addProviderForIndex, setAddProviderForIndex] = useState<number | null>(null);
   const [newProvider, setNewProvider] = useState('');
   const [addProviderOpen, setAddProviderOpen] = useState(false);
@@ -145,7 +145,7 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
     if (!files || files.length === 0 || !token) return;
     setIsImporting(true);
     const jsonImportData: Array<{ source: string; version: string; content: string; text?: string }> = [];
-    const xmlImportItems: Array<{ filename: string; content: string; version: string }> = [];
+    const xmlImportItems: Array<{ filename: string; content: string; version: string; text: string }> = [];
     for (const file of Array.from(files)) {
       try {
         const text = await file.text();
@@ -159,7 +159,7 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
           }
         } else if (file.name.endsWith('.xml')) {
           const vm = file.name.match(/(\d+)/);
-          xmlImportItems.push({ filename: file.name, content: text, version: vm && vm[1] ? vm[1] : String(Date.now()) });
+          xmlImportItems.push({ filename: file.name, content: text, version: vm && vm[1] ? vm[1] : String(Date.now()), text: vm && vm[1] ? `v${vm[1]}` : '' });
         }
       } catch { }
     }
@@ -195,7 +195,7 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
 
   const handleXmlImport = useCallback(async () => {
     if (!token || xmlItems.length === 0) return;
-    const valid = xmlItems.filter(item => item.source && item.version);
+    const valid = xmlItems.filter(item => item.source && item.text && item.version);
     if (valid.length === 0) {
       enqueueSnackbar('All items need a provider and version', { variant: 'error' });
       return;
@@ -205,7 +205,7 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
       const res = await fetch('/.netlify/functions/catalog', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(valid.map(item => ({ source: item.source, version: item.version, content: item.content }))),
+        body: JSON.stringify(valid.map(item => ({ source: item.source, version: item.version, text: item.text, content: item.content }))),
       });
       if (res.ok) {
         const result = await res.json() as { imported: number; results: Array<{ source: string; version: string; status: string }> };
@@ -701,9 +701,9 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
                       ✚ Add provider
                     </MenuItem>
                   </Select>
-                  <TextField label="Version" size="small" type="text" sx={{ width: 120 }}
-                    value={item.version}
-                    onChange={(e) => setXmlItems(prev => prev.map((x, j) => j === i ? { ...x, version: e.target.value } : x))} />
+                  <TextField label="Text" size="small" type="text" sx={{ width: 160 }}
+                    value={item.text}
+                    onChange={(e) => setXmlItems(prev => prev.map((x, j) => j === i ? { ...x, text: e.target.value } : x))} />
                 </Stack>
               </Stack>
             </Box>
