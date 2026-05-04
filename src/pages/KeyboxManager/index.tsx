@@ -156,8 +156,7 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
             }
           }
         } else if (file.name.endsWith('.xml')) {
-          const vm = file.name.match(/(\d+)/);
-          xmlImportItems.push({ filename: file.name, content: text, version: vm && vm[1] ? vm[1] : String(Date.now()), text: vm && vm[1] ? `v${vm[1]}` : '' });
+          xmlImportItems.push({ filename: file.name, content: text, version: '', text: '' });
         }
       } catch { }
     }
@@ -689,7 +688,7 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
                   <Select value={item.source}
                     onChange={(e) => {
                       if (e.target.value === '__add__') setAddProviderForIndex(i);
-                      else setXmlItems(prev => prev.map((x, j) => j === i ? { ...x, source: e.target.value } : x));
+                      else setXmlItems(prev => prev.map((x, j) => j === i ? { ...x, source: e.target.value, version: nextVersion(e.target.value) } : x));
                     }}
                     size="small" displayEmpty sx={{ minWidth: 160 }}
                     renderValue={(v) => v || 'Select provider'}
