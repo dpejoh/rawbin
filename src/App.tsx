@@ -17,16 +17,15 @@ import SnackbarProvider from './components/SnackbarProvider';
 import CommandPalette from './components/CommandPalette';
 import useAuth from './hooks/useAuth';
 
-const Keybox = lazy(() => import('./pages/Keybox'));
+const KeyboxManager = lazy(() => import('./pages/KeyboxManager'));
 const ClipboardsPage = lazy(() => import('./pages/Clipboards'));
 const FilesPage = lazy(() => import('./pages/Files'));
-const KeyboxHistory = lazy(() => import('./pages/KeyboxHistory'));
 
-export type Page = 'keybox' | 'clipboards' | 'files' | 'history';
+export type Page = 'keybox' | 'clipboards' | 'files';
 
 function getInitialPage(): Page {
   const stored = localStorage.getItem('keybox:page');
-  if (stored === 'keybox' || stored === 'clipboards' || stored === 'files' || stored === 'history') return stored;
+  if (stored === 'keybox' || stored === 'clipboards' || stored === 'files') return stored;
   return 'keybox';
 }
 
@@ -85,10 +84,9 @@ export default function App() {
 
           <Box component="main" sx={{ flex: 1, overflow: 'auto', pb: isMobile ? 7 : 0 }}>
             <Suspense fallback={<Stack alignItems="center" justifyContent="center" sx={{ p: 8 }}><CircularProgress /></Stack>}>
-              {page === 'keybox' && <Keybox token={token} />}
+              {page === 'keybox' && <KeyboxManager token={token} />}
               {page === 'clipboards' && <ClipboardsPage token={token} />}
               {page === 'files' && <FilesPage token={token} />}
-              {page === 'history' && <KeyboxHistory token={token} />}
             </Suspense>
           </Box>
         </Box>

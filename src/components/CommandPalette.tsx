@@ -78,8 +78,8 @@ export default function CommandPalette({ token, onNavigate }: CommandPaletteProp
       const result: PaletteItem[] = [
         {
           id: 'keybox-page',
-          label: 'Keybox',
-          description: 'Your private key store',
+          label: 'Keyboxes',
+          description: 'Manage keybox versions',
           type: 'keybox',
           page: 'keybox',
         },

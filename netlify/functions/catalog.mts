@@ -2,8 +2,9 @@ import { getStore } from "@netlify/blobs";
 import { X509Certificate } from "node:crypto";
 
 const SITE_URL = process.env.URL ?? `https://${process.env.SITE_NAME}.netlify.app`;
-const GOOGLE_REVOCATION_URL = "https://android.googleapis.com/attestation/status?encrypted=1";
+const GOOGLE_REVOCATION_URL = "https://android.googleapis.com/attestation/status";
 const RE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const CORS = { "Access-Control-Allow-Origin": "*" };
 
 async function verifyToken(token: string): Promise<{ email: string; id: string } | null> {
   try {
@@ -32,23 +33,24 @@ function extractPem(content: string): string | null {
   return pem;
 }
 
-function hexToDecimal(hex: string): string | null {
+function hexToDecimal(hex: string): string {
   const cleaned = hex.replace(/^0+/, "") || "0";
-  if (cleaned.length <= 16) {
-    return BigInt("0x" + cleaned).toString();
-  }
-  return null;
+  return BigInt("0x" + cleaned).toString();
 }
 
 async function checkGoogleRevocation(serial: string): Promise<boolean> {
   try {
     const res = await fetch(GOOGLE_REVOCATION_URL);
     if (!res.ok) return false;
-    const text = await res.text();
-    const dec = hexToDecimal(serial);
-    if (dec && text.includes(dec)) return true;
-    if (text.toLowerCase().includes(serial.toLowerCase())) return true;
-    return false;
+    const data = await res.json() as { entries: Record<string, unknown> };
+    const revokedKeys = Object.keys(data.entries ?? {});
+
+    const decForm = hexToDecimal(serial);
+    const hexPadded = serial.padStart(32, '0');
+
+    return revokedKeys.some(key =>
+      key === serial || key === hexPadded || key === decForm
+    );
   } catch {
     return false;
   }
@@ -68,6 +70,7 @@ function decodeCertSerial(content: string): string | null {
 interface HistoryEntry {
   source: string;
   version: string;
+  text: string;
   serial: string;
   revoked: boolean;
   last_checked: string;
@@ -88,6 +91,18 @@ async function getHistoryIndex(): Promise<HistoryEntry[]> {
 async function saveHistoryIndex(index: HistoryEntry[]): Promise<void> {
   const store = getHistoryStore();
   await store.set("index", JSON.stringify(index));
+}
+
+async function getContentMeta(key: string): Promise<{ useBase64: boolean } | null> {
+  const store = getHistoryStore();
+  const raw = await store.get(`meta:${key}`);
+  if (!raw) return null;
+  return JSON.parse(raw) as { useBase64: boolean };
+}
+
+async function setContentMeta(key: string, meta: { useBase64: boolean }): Promise<void> {
+  const store = getHistoryStore();
+  await store.set(`meta:${key}`, JSON.stringify(meta));
 }
 
 async function reCheckRevocations(index: HistoryEntry[]): Promise<boolean> {
@@ -113,6 +128,7 @@ async function reCheckRevocations(index: HistoryEntry[]): Promise<boolean> {
 function computeLatestPerSource(index: HistoryEntry[]): Record<string, string> {
   const latest: Record<string, string> = {};
   for (const entry of index) {
+    if (!entry.source) continue;
     const existing = parseInt(latest[entry.source] ?? "0", 10);
     const candidate = parseInt(entry.version, 10);
     if (!isNaN(candidate) && candidate > existing) {
@@ -122,11 +138,11 @@ function computeLatestPerSource(index: HistoryEntry[]): Record<string, string> {
   return latest;
 }
 
-function findWorking(index: HistoryEntry[], latest: Record<string, string>): { source: string; version: string } | null {
+function findWorking(index: HistoryEntry[]): { source: string; version: string } | null {
   let best: { source: string; version: string } | null = null;
   let bestVer = 0;
   for (const entry of index) {
-    if (entry.revoked) continue;
+    if (!entry.source || entry.revoked) continue;
     const v = parseInt(entry.version, 10);
     if (!isNaN(v) && v > bestVer) {
       bestVer = v;
@@ -145,15 +161,47 @@ export default async (req: Request) => {
     const serialQuery = url.searchParams.get("serial");
     const index = await getHistoryIndex();
 
+    let needsSave = false;
+    for (const entry of index) {
+      if (!entry.source) {
+        entry.source = "unknown";
+        needsSave = true;
+      }
+      if (!entry.text) {
+        entry.text = entry.version;
+        needsSave = true;
+      }
+    }
+    if (needsSave) await saveHistoryIndex(index);
+
+    const recheckQuery = url.searchParams.get("recheck");
+    if (recheckQuery) {
+      const colon = recheckQuery.indexOf(":");
+      const src = colon >= 0 ? recheckQuery.slice(0, colon) : "";
+      const ver = colon >= 0 ? recheckQuery.slice(colon + 1) : recheckQuery;
+      const entry = index.find(e => e.source === src && e.version === ver);
+      if (!entry) return new Response("Not found", { status: 404 });
+      const isRevoked = await checkGoogleRevocation(entry.serial);
+      entry.revoked = isRevoked;
+      entry.last_checked = new Date().toISOString();
+      await saveHistoryIndex(index);
+      return new Response(JSON.stringify(serializeEntry(entry)), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...CORS },
+      });
+    }
+
     if (versionQuery) {
       const store = getHistoryStore();
       const content = await store.get(`content:${versionQuery}`);
       if (!content) {
         return new Response("Not found", { status: 404 });
       }
-      return new Response(content, {
+      const meta = await getContentMeta(versionQuery);
+      const decoded = meta?.useBase64 ? Buffer.from(content, "base64").toString() : content;
+      return new Response(decoded, {
         status: 200,
-        headers: { "Content-Type": "text/plain" },
+        headers: { "Content-Type": "text/plain", ...CORS },
       });
     }
 
@@ -162,9 +210,9 @@ export default async (req: Request) => {
       if (!entry) {
         return new Response("Not found", { status: 404 });
       }
-      return new Response(JSON.stringify(entry), {
+      return new Response(JSON.stringify(serializeEntry(entry)), {
         status: 200,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...CORS },
       });
     }
 
@@ -172,11 +220,11 @@ export default async (req: Request) => {
     if (changed) await saveHistoryIndex(index);
 
     const latest = computeLatestPerSource(index);
-    const working = findWorking(index, latest);
+    const working = findWorking(index);
 
-    return new Response(JSON.stringify({ entries: index, latest, working }), {
+    return new Response(JSON.stringify({ entries: index.map(serializeEntry), latest, working }), {
       status: 200,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...CORS },
     });
   }
 
@@ -203,38 +251,42 @@ export default async (req: Request) => {
     }
 
     if (isSave) {
-      const { content, version, source } = body as { content?: string; version?: string; source?: string };
-      if (!content || !version) {
-        return new Response("Missing content or version", { status: 400 });
+      const { content, version, source, text, useBase64 } = body as { content?: string; version?: string; source?: string; text?: string; useBase64?: boolean };
+      if (!content || !version || !source) {
+        return new Response("Missing content, version, or source", { status: 400 });
       }
       const serial = decodeCertSerial(content);
       if (!serial) {
         return new Response("Could not decode certificate", { status: 400 });
       }
 
-      const src = source || "yuri";
+      const src = source;
+      const txt = text ?? version;
       const isRevoked = await checkGoogleRevocation(serial);
       const now = new Date().toISOString();
 
       const index = await getHistoryIndex();
       const existing = index.find(e => e.source === src && e.version === version);
       if (existing) {
+        existing.text = txt;
         existing.serial = serial;
         existing.revoked = isRevoked;
         existing.last_checked = now;
         existing.timestamp = now;
       } else {
-        index.push({ source: src, version, serial, revoked: isRevoked, last_checked: now, timestamp: now });
+        index.push({ source: src, version, text: txt, serial, revoked: isRevoked, last_checked: now, timestamp: now });
       }
       await saveHistoryIndex(index);
 
       const store = getHistoryStore();
-      await store.set(`content:${src}:${version}`, content);
+      const storedContent = useBase64 ? Buffer.from(content).toString("base64") : content;
+      await store.set(`content:${src}:${version}`, storedContent);
+      await setContentMeta(`${src}:${version}`, { useBase64: !!useBase64 });
 
       return new Response(JSON.stringify({ source: src, version, serial, revoked: isRevoked }), { status: 200 });
     }
 
-    const entries = body as Array<{ source?: string; version?: string; content?: string }>;
+    const entries = body as Array<{ source?: string; version?: string; content?: string; text?: string; useBase64?: boolean }>;
     if (!Array.isArray(entries)) {
       return new Response("Expected array", { status: 400 });
     }
@@ -244,25 +296,30 @@ export default async (req: Request) => {
     const results: Array<{ source: string; version: string; status: string }> = [];
 
     for (const entry of entries) {
-      if (!entry.version || !entry.content) {
+      if (!entry.version || !entry.content || !entry.source) {
         results.push({ source: entry.source ?? "?", version: entry.version ?? "?", status: "skipped: missing fields" });
         continue;
       }
       const serial = decodeCertSerial(entry.content);
       if (!serial) {
-        results.push({ source: entry.source ?? "?", version: entry.version, status: "skipped: could not decode" });
+        results.push({ source: entry.source, version: entry.version, status: "skipped: could not decode" });
         continue;
       }
 
-      const src = entry.source || "yuri";
+      const src = entry.source;
+      const txt = entry.text ?? entry.version;
       const isRevoked = await checkGoogleRevocation(serial);
       const now = new Date().toISOString();
 
       const existing = index.find(e => e.source === src && e.version === entry.version);
       if (!existing) {
-        index.push({ source: src, version: entry.version, serial, revoked: isRevoked, last_checked: now, timestamp: now });
+        index.push({ source: src, version: entry.version, text: txt, serial, revoked: isRevoked, last_checked: now, timestamp: now });
+      } else {
+        existing.text = txt;
       }
-      await store.set(`content:${src}:${entry.version}`, entry.content);
+      const storedContent = entry.useBase64 ? Buffer.from(entry.content).toString("base64") : entry.content;
+      await store.set(`content:${src}:${entry.version}`, storedContent);
+      await setContentMeta(`${src}:${entry.version}`, { useBase64: !!entry.useBase64 });
       results.push({ source: src, version: entry.version, status: "ok" });
     }
 
@@ -300,3 +357,15 @@ export default async (req: Request) => {
 
   return new Response("Method Not Allowed", { status: 405 });
 };
+
+function serializeEntry(e: HistoryEntry): Record<string, unknown> {
+  return {
+    source: e.source,
+    version: e.version,
+    text: e.text,
+    revoked: e.revoked,
+    serial: e.serial,
+    last_checked: e.last_checked,
+    timestamp: e.timestamp,
+  };
+}

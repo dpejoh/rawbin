@@ -37,8 +37,9 @@ export default async (req: Request) => {
   const isMeta = url.searchParams.has("meta");
 
   const segments = path.split("/").filter(Boolean);
-  const provider = segments.length >= 1 && segments[0] !== "key" ? segments[0] : null;
-  const ver = segments.length >= 2 ? segments[1] : null;
+  const isKeyPrefix = segments[0] === "key";
+  const provider = isKeyPrefix ? (segments[1] ?? null) : (segments[0] ?? null);
+  const ver = isKeyPrefix ? (segments[2] ?? null) : (segments[1] ?? null);
 
   const ua = (req.headers.get("user-agent") ?? "").toLowerCase();
   if (BLOCKED_AGENTS.some((bot) => ua.includes(bot))) {
@@ -114,8 +115,13 @@ export default async (req: Request) => {
     return new Response("Not found", { status: 404 });
   }
 
-  return new Response(value, {
+  const metaKey = `meta:${contentKey.slice(8)}`;
+  const metaRaw = await store.get(metaKey);
+  const meta = metaRaw ? JSON.parse(metaRaw) as { useBase64: boolean } | null : null;
+  const output = meta?.useBase64 ? value : Buffer.from(value).toString("base64");
+
+  return new Response(output, {
     status: 200,
-    headers: { "Content-Type": "text/plain" },
+    headers: { "Content-Type": "text/plain", "Access-Control-Allow-Origin": "*" },
   });
 };
