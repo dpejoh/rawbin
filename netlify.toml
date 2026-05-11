@@ -29,14 +29,24 @@ to = "/.netlify/functions/catalog"
   status = 200
 
 [[redirects]]
-  from = "/file"
-  to = "/.netlify/functions/files"
-  status = 200
+from = "/file"
+to = "/.netlify/functions/files"
+status = 200
 
 [[redirects]]
-  from = "/file/*"
-  to = "/.netlify/functions/files/:splat"
-  status = 200
+from = "/file/*"
+to = "/.netlify/functions/files/:splat"
+status = 200
+
+[[redirects]]
+from = "/apps"
+to = "/.netlify/functions/apps"
+status = 200
+
+[[redirects]]
+from = "/apps/*"
+to = "/.netlify/functions/apps/:splat"
+status = 200
 
 [[headers]]
   for = "/*"

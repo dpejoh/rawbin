@@ -20,8 +20,9 @@ import useAuth from './hooks/useAuth';
 const KeyboxManager = lazy(() => import('./pages/KeyboxManager'));
 const ClipboardsPage = lazy(() => import('./pages/Clipboards'));
 const FilesPage = lazy(() => import('./pages/Files'));
+const AppCatalog = lazy(() => import('./pages/AppCatalog'));
 
-export type Page = 'keybox' | 'clipboards' | 'files';
+export type Page = 'keybox' | 'clipboards' | 'files' | 'apps';
 
 function getInitialPage(): Page {
   const stored = localStorage.getItem('keybox:page');
@@ -87,6 +88,7 @@ export default function App() {
               {page === 'keybox' && <KeyboxManager token={token} />}
               {page === 'clipboards' && <ClipboardsPage token={token} />}
               {page === 'files' && <FilesPage token={token} />}
+              {page === 'apps' && <AppCatalog token={token} />}
             </Suspense>
           </Box>
         </Box>

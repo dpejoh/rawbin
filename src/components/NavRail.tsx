@@ -13,6 +13,7 @@ import {
 import KeyIcon from '@mui/icons-material/Key';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import FolderIcon from '@mui/icons-material/Folder';
+import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import LogoutIcon from '@mui/icons-material/Logout';
 import type { Page } from '../App';
 
@@ -27,6 +28,7 @@ const navItems: { id: Page; icon: React.ReactNode; label: string }[] = [
   { id: 'keybox', icon: <KeyIcon />, label: 'Keyboxes' },
   { id: 'clipboards', icon: <ContentPasteIcon />, label: 'Boards' },
   { id: 'files', icon: <FolderIcon />, label: 'Files' },
+  { id: 'apps', icon: <PlaylistAddCheckIcon />, label: 'Apps' },
 ];
 
 export default function NavRail({

@@ -2,6 +2,7 @@ import { BottomNavigation, BottomNavigationAction, Paper } from "@mui/material";
 import KeyIcon from "@mui/icons-material/Key";
 import ContentPasteIcon from "@mui/icons-material/ContentPaste";
 import FolderIcon from "@mui/icons-material/Folder";
+import PlaylistAddCheckIcon from "@mui/icons-material/PlaylistAddCheck";
 import type { Page } from "../App";
 
 interface BottomNavProps {
@@ -36,6 +37,12 @@ export default function BottomNav({ activePage, onNavigate }: BottomNavProps) {
           value="files"
           label="Files"
           icon={<FolderIcon />}
+          sx={{ color: "text.secondary", "&.Mui-selected": { color: "primary.main" } }}
+        />
+        <BottomNavigationAction
+          value="apps"
+          label="Apps"
+          icon={<PlaylistAddCheckIcon />}
           sx={{ color: "text.secondary", "&.Mui-selected": { color: "primary.main" } }}
         />
       </BottomNavigation>
