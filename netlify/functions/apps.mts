@@ -65,14 +65,22 @@ export default async (req: Request) => {
   const method = req.method;
 
   if (method === "GET") {
-    const path = url.pathname;
-    if (path.endsWith("/version")) {
+    const fullPath = url.pathname + url.search;
+
+    // Check if request is for version
+    if (fullPath.includes("/version")) {
       const version = await getVersion();
       return new Response(JSON.stringify({ version }), {
         status: 200,
         headers: { "Content-Type": "application/json", ...CORS },
       });
     }
+
+    // /apps/save → handled by POST below
+    if (pathname.endsWith("/save")) {
+      return new Response("Method Not Allowed", { status: 405 });
+    }
+
     const catalog = await getCatalog();
     const searchQuery = url.searchParams.get("q");
     const result = searchQuery ? filterCatalog(catalog, searchQuery) : catalog;
