@@ -175,7 +175,18 @@ export default function AppCatalog({ token }: AppCatalogProps) {
         for (const item of items) {
           const pkg = item.packageName || item.package_name || item.package;
           const name = item.appName || item.app_name || item.name || item.label;
-          if (pkg && name) entriesToImport.push({ packageName: pkg, appName: name });
+          if (pkg && name) {
+            entriesToImport.push({ packageName: pkg, appName: name });
+          } else if (typeof item === 'string') {
+            continue;
+          } else {
+            // flat format: { "pkg.name": "App Name", ... }
+            for (const [key, val] of Object.entries(item)) {
+              if (typeof val === 'string' && key.length > 3 && key.includes('.')) {
+                entriesToImport.push({ packageName: key, appName: val });
+              }
+            }
+          }
         }
       } catch { }
     }
