@@ -35,6 +35,20 @@ async function saveCatalog(data: AppCatalog): Promise<void> {
   await store.set("data", JSON.stringify(data, null, 2));
 }
 
+async function getVersion(): Promise<number> {
+  const store = getStoreInstance();
+  const raw = await store.get("version");
+  return raw ? parseInt(raw, 10) || 0 : 0;
+}
+
+async function incrementVersion(): Promise<number> {
+  const store = getStoreInstance();
+  const current = await getVersion();
+  const next = current + 1;
+  await store.set("version", String(next));
+  return next;
+}
+
 function filterCatalog(catalog: AppCatalog, query: string): AppCatalog {
   const q = query.toLowerCase();
   const result: AppCatalog = {};
@@ -51,6 +65,14 @@ export default async (req: Request) => {
   const method = req.method;
 
   if (method === "GET") {
+    const path = url.pathname;
+    if (path.endsWith("/version")) {
+      const version = await getVersion();
+      return new Response(JSON.stringify({ version }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...CORS },
+      });
+    }
     const catalog = await getCatalog();
     const searchQuery = url.searchParams.get("q");
     const result = searchQuery ? filterCatalog(catalog, searchQuery) : catalog;
@@ -89,8 +111,9 @@ export default async (req: Request) => {
       }
       const catalog = await getCatalog();
       catalog[packageName] = appName;
+      const ver = await incrementVersion();
       await saveCatalog(catalog);
-      return new Response(JSON.stringify({ packageName, appName }), {
+      return new Response(JSON.stringify({ packageName, appName, version: ver }), {
         status: 200,
         headers: { "Content-Type": "application/json", ...CORS },
       });
@@ -108,9 +131,10 @@ export default async (req: Request) => {
       catalog[entry.packageName] = entry.appName;
       imported++;
     }
+    const ver = await incrementVersion();
     await saveCatalog(catalog);
 
-    return new Response(JSON.stringify({ imported, total: Object.keys(catalog).length }), {
+    return new Response(JSON.stringify({ imported, total: Object.keys(catalog).length, version: ver }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...CORS },
     });
@@ -138,9 +162,10 @@ export default async (req: Request) => {
         deleted++;
       }
     }
+    const ver = await incrementVersion();
     await saveCatalog(catalog);
 
-    return new Response(JSON.stringify({ deleted }), {
+    return new Response(JSON.stringify({ deleted, version: ver }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...CORS },
     });
