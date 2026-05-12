@@ -35,20 +35,6 @@ async function saveCatalog(data: AppCatalog): Promise<void> {
   await store.set("data", JSON.stringify(data, null, 2));
 }
 
-async function getVersion(): Promise<number> {
-  const store = getStoreInstance();
-  const raw = await store.get("version");
-  return raw ? parseInt(raw, 10) || 0 : 0;
-}
-
-async function incrementVersion(): Promise<number> {
-  const store = getStoreInstance();
-  const current = await getVersion();
-  const next = current + 1;
-  await store.set("version", String(next));
-  return next;
-}
-
 function filterCatalog(catalog: AppCatalog, query: string): AppCatalog {
   const q = query.toLowerCase();
   const result: AppCatalog = {};
@@ -65,19 +51,8 @@ export default async (req: Request) => {
   const method = req.method;
 
   if (method === "GET") {
-    const fullPath = url.pathname + url.search;
-
-    // Check if request is for version
-    if (fullPath.includes("/version")) {
-      const version = await getVersion();
-      return new Response(JSON.stringify({ version }), {
-        status: 200,
-        headers: { "Content-Type": "application/json", ...CORS },
-      });
-    }
-
     // /apps/save → handled by POST below
-    if (pathname.endsWith("/save")) {
+    if (url.pathname.endsWith("/save")) {
       return new Response("Method Not Allowed", { status: 405 });
     }
 
@@ -119,9 +94,8 @@ export default async (req: Request) => {
       }
       const catalog = await getCatalog();
       catalog[packageName] = appName;
-      const ver = await incrementVersion();
       await saveCatalog(catalog);
-      return new Response(JSON.stringify({ packageName, appName, version: ver }), {
+      return new Response(JSON.stringify({ packageName, appName }), {
         status: 200,
         headers: { "Content-Type": "application/json", ...CORS },
       });
@@ -139,10 +113,9 @@ export default async (req: Request) => {
       catalog[entry.packageName] = entry.appName;
       imported++;
     }
-    const ver = await incrementVersion();
     await saveCatalog(catalog);
 
-    return new Response(JSON.stringify({ imported, total: Object.keys(catalog).length, version: ver }), {
+    return new Response(JSON.stringify({ imported, total: Object.keys(catalog).length }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...CORS },
     });
@@ -170,10 +143,9 @@ export default async (req: Request) => {
         deleted++;
       }
     }
-    const ver = await incrementVersion();
     await saveCatalog(catalog);
 
-    return new Response(JSON.stringify({ deleted, version: ver }), {
+    return new Response(JSON.stringify({ deleted }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...CORS },
     });
@@ -182,6 +154,4 @@ export default async (req: Request) => {
   return new Response("Method Not Allowed", { status: 405 });
 };
 
-function serializeAppCatalog(data: AppCatalog): Record<string, string> {
-  return data;
-}
+
