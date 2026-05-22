@@ -333,9 +333,20 @@ export default async (req: Request) => {
       if (!entry) {
         return new Response("Not found", { status: 404 });
       }
-      entry.softbanned = status === "softbanned";
-      entry.revoked = status === "revoked";
-      if (status === "revoked") entry.last_checked = new Date().toISOString();
+      if (status === "active" || status === "softbanned") {
+        const isRevoked = await checkGoogleRevocation(entry.serial);
+        if (isRevoked) {
+          entry.revoked = true;
+          entry.softbanned = false;
+        } else {
+          entry.revoked = false;
+          entry.softbanned = status === "softbanned";
+        }
+      } else {
+        entry.revoked = true;
+        entry.softbanned = false;
+      }
+      entry.last_checked = new Date().toISOString();
       await saveHistoryIndex(index);
       return new Response(JSON.stringify(serializeEntry(entry)), {
         status: 200,
