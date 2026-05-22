@@ -15,6 +15,7 @@ interface HistoryEntry {
   version: string;
   serial: string;
   revoked: boolean;
+  softbanned: boolean;
   last_checked: string;
   timestamp: string;
 }
@@ -90,7 +91,7 @@ export default async (req: Request) => {
     }
   } else if (provider && !ver) {
     // /key/{source} → latest non-revoked from that source
-    const sourceEntries = history.entries.filter(e => e.source === provider && !e.revoked);
+    const sourceEntries = history.entries.filter(e => e.source === provider && !e.revoked && !e.softbanned);
     let bestVer = 0;
     let bestVerStr = "";
     for (const e of sourceEntries) {

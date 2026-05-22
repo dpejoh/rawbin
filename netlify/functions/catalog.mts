@@ -73,6 +73,7 @@ interface HistoryEntry {
   text: string;
   serial: string;
   revoked: boolean;
+  softbanned: boolean;
   last_checked: string;
   timestamp: string;
 }
@@ -125,6 +126,11 @@ async function reCheckRevocations(index: HistoryEntry[]): Promise<boolean> {
   return changed;
 }
 
+interface AutoOverride {
+  source: string;
+  version?: string;
+}
+
 function computeLatestPerSource(index: HistoryEntry[]): Record<string, string> {
   const latest: Record<string, string> = {};
   for (const entry of index) {
@@ -138,11 +144,50 @@ function computeLatestPerSource(index: HistoryEntry[]): Record<string, string> {
   return latest;
 }
 
-function findWorking(index: HistoryEntry[]): { source: string; version: string } | null {
+async function getAutoOverride(): Promise<AutoOverride | null> {
+  const store = getHistoryStore();
+  const raw = await store.get("auto-override");
+  if (!raw) return null;
+  return JSON.parse(raw) as AutoOverride;
+}
+
+async function setAutoOverride(override: AutoOverride): Promise<void> {
+  const store = getHistoryStore();
+  await store.set("auto-override", JSON.stringify(override));
+}
+
+async function clearAutoOverride(): Promise<void> {
+  const store = getHistoryStore();
+  await store.delete("auto-override");
+}
+
+async function findWorking(index: HistoryEntry[]): Promise<{ source: string; version: string } | null> {
+  const autoOverride = await getAutoOverride();
+  if (autoOverride) {
+    let entries: HistoryEntry[];
+    if (autoOverride.version) {
+      entries = index.filter(e => e.source === autoOverride.source && e.version === autoOverride.version);
+    } else {
+      entries = index.filter(e => e.source === autoOverride.source);
+    }
+    const valid = entries.filter(e => !e.revoked && !e.softbanned);
+    if (valid.length > 0) {
+      let best = valid[0];
+      let bestVer = parseInt(best.version, 10);
+      for (const entry of valid) {
+        const v = parseInt(entry.version, 10);
+        if (!isNaN(v) && v > bestVer) {
+          bestVer = v;
+          best = entry;
+        }
+      }
+      return { source: best.source, version: best.version };
+    }
+  }
   let best: { source: string; version: string } | null = null;
   let bestVer = 0;
   for (const entry of index) {
-    if (!entry.source || entry.revoked) continue;
+    if (!entry.source || entry.revoked || entry.softbanned) continue;
     const v = parseInt(entry.version, 10);
     if (!isNaN(v) && v > bestVer) {
       bestVer = v;
@@ -220,9 +265,10 @@ export default async (req: Request) => {
     if (changed) await saveHistoryIndex(index);
 
     const latest = computeLatestPerSource(index);
-    const working = findWorking(index);
+    const working = await findWorking(index);
+    const autoOverride = await getAutoOverride();
 
-    return new Response(JSON.stringify({ entries: index.map(serializeEntry), latest, working }), {
+    return new Response(JSON.stringify({ entries: index.map(serializeEntry), latest, working, autoOverride }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...CORS },
     });
@@ -242,12 +288,59 @@ export default async (req: Request) => {
   if (method === "POST") {
     const path = url.pathname;
     const isSave = path.endsWith("/save");
+    const isSetStatus = path.endsWith("/set-status");
+    const isSetAutoOverride = path.endsWith("/set-auto-override");
+    const isClearAutoOverride = path.endsWith("/clear-auto-override");
+
+    if (isClearAutoOverride) {
+      await clearAutoOverride();
+      return new Response(JSON.stringify({ autoOverride: null }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...CORS },
+      });
+    }
 
     let body: unknown;
     try {
       body = (await req.json()) as unknown;
     } catch {
       return new Response("Invalid JSON", { status: 400 });
+    }
+
+    if (isSetAutoOverride) {
+      const { source, version } = body as { source?: string; version?: string };
+      if (!source) {
+        return new Response("Missing source", { status: 400 });
+      }
+      const override: AutoOverride = version ? { source, version } : { source };
+      await setAutoOverride(override);
+      return new Response(JSON.stringify({ autoOverride: override }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...CORS },
+      });
+    }
+
+    if (isSetStatus) {
+      const { source, version, status } = body as { source?: string; version?: string; status?: string };
+      if (!source || !version || !status) {
+        return new Response("Missing source, version, or status", { status: 400 });
+      }
+      if (!["active", "softbanned", "revoked"].includes(status)) {
+        return new Response("Invalid status", { status: 400 });
+      }
+      const index = await getHistoryIndex();
+      const entry = index.find(e => e.source === source && e.version === version);
+      if (!entry) {
+        return new Response("Not found", { status: 404 });
+      }
+      entry.softbanned = status === "softbanned";
+      entry.revoked = status === "revoked";
+      if (status === "revoked") entry.last_checked = new Date().toISOString();
+      await saveHistoryIndex(index);
+      return new Response(JSON.stringify(serializeEntry(entry)), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...CORS },
+      });
     }
 
     if (isSave) {
@@ -274,7 +367,7 @@ export default async (req: Request) => {
         existing.last_checked = now;
         existing.timestamp = now;
       } else {
-        index.push({ source: src, version, text: txt, serial, revoked: isRevoked, last_checked: now, timestamp: now });
+        index.push({ source: src, version, text: txt, serial, revoked: isRevoked, softbanned: false, last_checked: now, timestamp: now });
       }
       await saveHistoryIndex(index);
 
@@ -283,7 +376,7 @@ export default async (req: Request) => {
       await store.set(`content:${src}:${version}`, storedContent);
       await setContentMeta(`${src}:${version}`, { useBase64: !!useBase64 });
 
-      return new Response(JSON.stringify({ source: src, version, serial, revoked: isRevoked }), { status: 200 });
+      return new Response(JSON.stringify({ source: src, version, serial, revoked: isRevoked, softbanned: false }), { status: 200 });
     }
 
     const entries = body as Array<{ source?: string; version?: string; content?: string; text?: string; useBase64?: boolean }>;
@@ -313,7 +406,7 @@ export default async (req: Request) => {
 
       const existing = index.find(e => e.source === src && e.version === entry.version);
       if (!existing) {
-        index.push({ source: src, version: entry.version, text: txt, serial, revoked: isRevoked, last_checked: now, timestamp: now });
+        index.push({ source: src, version: entry.version, text: txt, serial, revoked: isRevoked, softbanned: false, last_checked: now, timestamp: now });
       } else {
         existing.text = txt;
       }
@@ -364,6 +457,7 @@ function serializeEntry(e: HistoryEntry): Record<string, unknown> {
     version: e.version,
     text: e.text,
     revoked: e.revoked,
+    softbanned: e.softbanned,
     serial: e.serial,
     last_checked: e.last_checked,
     timestamp: e.timestamp,

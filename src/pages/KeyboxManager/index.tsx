@@ -15,6 +15,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import HistoryIcon from '@mui/icons-material/History';
 import GppBadIcon from '@mui/icons-material/GppBad';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import { useSnackbar } from 'notistack';
@@ -27,6 +28,7 @@ interface HistoryEntry {
   text: string;
   serial: string;
   revoked: boolean;
+  softbanned?: boolean;
   timestamp: string;
 }
 
@@ -74,7 +76,12 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
   const [editNewProvider, setEditNewProvider] = useState('');
   const [editAddProviderOpen, setEditAddProviderOpen] = useState(false);
   const [recheckingKey, setRecheckingKey] = useState<string | null>(null);
+  const [settingStatusKey, setSettingStatusKey] = useState<string | null>(null);
   const [latestPerSource, setLatestPerSource] = useState<Record<string, string>>({});
+  const [autoOverride, setAutoOverride] = useState<{ source: string; version?: string } | null>(null);
+  const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
+  const [overrideSource, setOverrideSource] = useState('');
+  const [overrideVersion, setOverrideVersion] = useState('');
 
   const entryKey = (e: HistoryEntry) => `${e.source}:${e.version}`;
 
@@ -87,7 +94,7 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
     try {
       const res = await fetch('/.netlify/functions/catalog');
       if (res.ok) {
-        const data = await res.json() as { entries: HistoryEntry[]; latest: Record<string, string> };
+        const data = await res.json() as { entries: HistoryEntry[]; latest: Record<string, string>; autoOverride?: { source: string; version?: string } | null };
         const list = Array.isArray(data) ? data as HistoryEntry[] : data.entries;
         setEntries(list.sort((a, b) => {
           const na = parseInt(a.version, 10);
@@ -98,6 +105,8 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
         const unique = [...new Set(list.map(e => e.source))].sort();
         setSources(unique);
         if (data.latest) setLatestPerSource(data.latest);
+        if (data.autoOverride) setAutoOverride(data.autoOverride);
+        else setAutoOverride(null);
       }
     } catch { }
     finally { setIsLoading(false); }
@@ -271,6 +280,59 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
     finally { setRecheckingKey(null); }
   }, [token, fetchHistory, enqueueSnackbar]);
 
+  const handleSetStatus = useCallback(async (entry: HistoryEntry, status: 'active' | 'softbanned' | 'revoked') => {
+    if (!token) return;
+    const key = entryKey(entry);
+    setSettingStatusKey(key);
+    try {
+      const res = await fetch('/.netlify/functions/catalog/set-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ source: entry.source, version: entry.version, status }),
+      });
+      if (res.ok) {
+        enqueueSnackbar(`${entry.source} v${entry.version} → ${status}`, { variant: 'success' });
+        setContentCache({});
+        await fetchHistory();
+      } else enqueueSnackbar('Set status failed', { variant: 'error' });
+    } catch { enqueueSnackbar('Set status failed', { variant: 'error' }); }
+    finally { setSettingStatusKey(null); }
+  }, [token, fetchHistory, enqueueSnackbar]);
+
+  const handleSetAutoOverride = useCallback(async () => {
+    if (!token || !overrideSource) return;
+    try {
+      const res = await fetch('/.netlify/functions/catalog/set-auto-override', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ source: overrideSource, version: overrideVersion || undefined }),
+      });
+      if (res.ok) {
+        enqueueSnackbar('Auto-override set', { variant: 'success' });
+        setOverrideDialogOpen(false);
+        setOverrideSource('');
+        setOverrideVersion('');
+        setContentCache({});
+        await fetchHistory();
+      } else enqueueSnackbar('Failed to set override', { variant: 'error' });
+    } catch { enqueueSnackbar('Failed to set override', { variant: 'error' }); }
+  }, [token, overrideSource, overrideVersion, fetchHistory, enqueueSnackbar]);
+
+  const handleClearAutoOverride = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch('/.netlify/functions/catalog/clear-auto-override', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        enqueueSnackbar('Auto-override cleared', { variant: 'success' });
+        setContentCache({});
+        await fetchHistory();
+      } else enqueueSnackbar('Failed to clear override', { variant: 'error' });
+    } catch { enqueueSnackbar('Failed to clear override', { variant: 'error' }); }
+  }, [token, fetchHistory, enqueueSnackbar]);
+
   const handleAddSave = useCallback(async () => {
     if (!token || !addSource || !addContent) return;
     const finalVersion = addVersion || nextVersion(addSource);
@@ -376,6 +438,11 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
           sx={{ textTransform: 'none' }}>
           {addMode ? 'Cancel' : 'Add Keybox'}
         </Button>
+        <Button variant="outlined" size="small"
+          onClick={() => { setOverrideSource(autoOverride?.source || ''); setOverrideVersion(autoOverride?.version || ''); setOverrideDialogOpen(true); }}
+          sx={{ textTransform: 'none', ml: 'auto' }}>
+          {autoOverride ? `Override: ${autoOverride.source}${autoOverride.version ? ` v${autoOverride.version}` : ''}` : 'Auto Override'}
+        </Button>
       </Stack>
 
       {addMode && (
@@ -416,7 +483,7 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
             </Stack>
             <Stack direction="row" spacing={1} justifyContent="flex-end">
               <Button variant="text" onClick={() => { setAddMode(false); setAddSource(''); setAddVersion(''); setAddText(''); setAddContent(''); }}>Cancel</Button>
-              <Button variant="contained" onClick={handleAddSave} disabled={!addSource || !addText || !addContent}>Save</Button>
+              <Button variant="contained" onClick={handleAddSave} disabled={!addSource || !addContent}>Save</Button>
             </Stack>
           </Stack>
         </Box>
@@ -571,10 +638,16 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
                     </Box>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                    <Chip icon={entry.revoked ? <GppBadIcon /> : <VerifiedUserIcon />}
-                      label={entry.revoked ? 'Revoked' : 'Active'} size="small"
-                      sx={{ color: entry.revoked ? 'error.main' : 'success.main', '& .MuiChip-icon': { color: entry.revoked ? 'error.main' : 'success.main' } }}
-                    />
+                    {(() => {
+                      const icon = entry.revoked ? <GppBadIcon /> : entry.softbanned ? <WarningAmberIcon /> : <VerifiedUserIcon />;
+                      const label = entry.revoked ? 'Revoked' : entry.softbanned ? 'Softbanned' : 'Active';
+                      const color = entry.revoked ? 'error.main' : entry.softbanned ? 'warning.main' : 'success.main';
+                      return (
+                        <Chip icon={icon} label={label} size="small"
+                          sx={{ color, '& .MuiChip-icon': { color } }}
+                        />
+                      );
+                    })()}
                     {isExpanded ? <ExpandLessIcon sx={{ color: 'text.secondary' }} /> : <ExpandMoreIcon sx={{ color: 'text.secondary' }} />}
                   </Box>
                 </Box>
@@ -613,7 +686,7 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
                         </Stack>
                         <Stack direction="row" spacing={1} justifyContent="flex-end">
                           <Button size="small" onClick={() => setEditingKey(null)}>Cancel</Button>
-                          <Button size="small" variant="contained" onClick={() => handleEditSave(entry)} disabled={!editSource || !editText || !editContent}>Save</Button>
+                          <Button size="small" variant="contained" onClick={() => handleEditSave(entry)} disabled={!editSource || !editContent}>Save</Button>
                         </Stack>
                       </Stack>
                     ) : (
@@ -640,9 +713,15 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
                         </Stack>
                         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ py: 0.5 }}>
                           <Typography variant="caption" color="text.secondary">Status</Typography>
-                          <Chip icon={entry.revoked ? <GppBadIcon /> : <VerifiedUserIcon />}
-                            label={entry.revoked ? 'Revoked' : 'Active'} size="small"
-                            sx={{ color: entry.revoked ? 'error.main' : 'success.main', '& .MuiChip-icon': { color: entry.revoked ? 'error.main' : 'success.main' } }} />
+                          {(() => {
+                            const icon = entry.revoked ? <GppBadIcon /> : entry.softbanned ? <WarningAmberIcon /> : <VerifiedUserIcon />;
+                            const label = entry.revoked ? 'Revoked' : entry.softbanned ? 'Softbanned' : 'Active';
+                            const color = entry.revoked ? 'error.main' : entry.softbanned ? 'warning.main' : 'success.main';
+                            return (
+                              <Chip icon={icon} label={label} size="small"
+                                sx={{ color, '& .MuiChip-icon': { color } }} />
+                            );
+                          })()}
                         </Stack>
                         <Box sx={{ mt: 1 }}>
                           <RawUrlRow url={`${window.location.origin}/key/${entry.source}/${entry.version}`} />
@@ -666,6 +745,18 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
                             onClick={(e) => { e.stopPropagation(); handleRecheck(entry); }} disabled={isRechecking} sx={{ textTransform: 'none' }}>
                             {isRechecking ? 'Checking...' : 'Re-check'}
                           </Button>
+                          <Select
+                            value={entry.revoked ? 'revoked' : entry.softbanned ? 'softbanned' : 'active'}
+                            onChange={(e) => { e.stopPropagation(); handleSetStatus(entry, e.target.value as 'active' | 'softbanned' | 'revoked'); }}
+                            size="small"
+                            disabled={settingStatusKey === key}
+                            sx={{ textTransform: 'none', minWidth: 110, height: 32, fontSize: 13 }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MenuItem value="active"><VerifiedUserIcon sx={{ fontSize: 16, mr: 0.5, color: 'success.main' }} />Active</MenuItem>
+                            <MenuItem value="softbanned"><WarningAmberIcon sx={{ fontSize: 16, mr: 0.5, color: 'warning.main' }} />Softbanned</MenuItem>
+                            <MenuItem value="revoked"><GppBadIcon sx={{ fontSize: 16, mr: 0.5, color: 'error.main' }} />Revoked</MenuItem>
+                          </Select>
                           <Button variant="outlined" size="small" startIcon={<DeleteIcon />} color="error"
                             onClick={(e) => { e.stopPropagation(); handleDelete(entry); }} sx={{ textTransform: 'none' }}>
                             Delete
@@ -767,6 +858,39 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
               setEditAddProviderOpen(false);
             }
           }}>Add</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={overrideDialogOpen} onClose={() => setOverrideDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Auto Override</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Override the automatic working selection. Leave version empty to always use the latest.
+          </Typography>
+          <Stack spacing={1.5}>
+            <Select
+              value={overrideSource}
+              onChange={(e) => setOverrideSource(e.target.value)}
+              size="small" displayEmpty sx={{ minWidth: 160 }}
+              renderValue={(v) => v || 'Select source'}
+            >
+              {sources.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+            </Select>
+            <TextField label="Version (optional)" size="small" type="text"
+              value={overrideVersion}
+              onChange={(e) => setOverrideVersion(e.target.value)}
+              placeholder="Leave empty for latest"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          {autoOverride && (
+            <Button color="error" onClick={() => { handleClearAutoOverride(); setOverrideDialogOpen(false); }} sx={{ mr: 'auto' }}>
+              Clear
+            </Button>
+          )}
+          <Button onClick={() => setOverrideDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleSetAutoOverride} disabled={!overrideSource}>Save</Button>
         </DialogActions>
       </Dialog>
     </Box>
