@@ -172,7 +172,7 @@ async function findWorking(index: HistoryEntry[]): Promise<{ source: string; ver
     }
     const valid = entries.filter(e => !e.revoked && !e.softbanned);
     if (valid.length > 0) {
-      let best = valid[0];
+      let best = valid[0]!;
       let bestVer = parseInt(best.version, 10);
       for (const entry of valid) {
         const v = parseInt(entry.version, 10);
