@@ -128,14 +128,9 @@ export default function GlobalFab({ token, onNavigate }: GlobalFabProps) {
 
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', form.file);
-
-      let endpoint = '';
       let successMsg = '';
 
       if (form.detectedType === 'keybox') {
-        endpoint = '/.netlify/functions/catalog/save';
         const body = {
           source: form.keybox.source.trim() || 'uploaded',
           version: form.keybox.version.trim() || '1',
@@ -143,7 +138,7 @@ export default function GlobalFab({ token, onNavigate }: GlobalFabProps) {
           content: form.file ? await form.file.text() : '',
           useBase64: form.keybox.useBase64,
         };
-        const res = await fetch(endpoint, {
+        const res = await fetch('/.netlify/functions/catalog/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify(body),
@@ -151,71 +146,89 @@ export default function GlobalFab({ token, onNavigate }: GlobalFabProps) {
         if (res.ok) {
           successMsg = `Keybox "${body.source} v${body.version}" saved`;
         } else {
-          const msg = await res.text().catch(() => 'Upload failed');
-          enqueueSnackbar(msg, { variant: 'error' });
-          setUploading(false);
-          return;
-        }
-      } else if (form.detectedType === 'module') {
-        endpoint = '/.netlify/functions/modules';
-        const data = {
-          moduleId: form.module.moduleId.trim() || form.file.name.replace(/\.zip$/i, '').trim(),
-          name: form.module.name.trim() || form.file.name.replace(/\.zip$/i, '').trim(),
-          version: form.module.version.trim() || '1.0',
-          versionCode: parseInt(form.module.versionCode, 10) || 1,
-          author: form.module.author.trim(),
-          description: form.module.description.trim(),
-        };
-        formData.append('moduleId', data.moduleId);
-        formData.append('name', data.name);
-        formData.append('version', data.version);
-        formData.append('versionCode', String(data.versionCode));
-        formData.append('author', data.author);
-        formData.append('description', data.description);
-
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
-        if (res.ok) {
-          successMsg = `Module "${data.moduleId}" uploaded`;
-        } else {
-          enqueueSnackbar('Upload failed', { variant: 'error' });
+          enqueueSnackbar(await res.text().catch(() => 'Upload failed'), { variant: 'error' });
           setUploading(false);
           return;
         }
       } else {
-        endpoint = '/.netlify/functions/apks';
-        const data = {
-          packageName: form.apk.packageName.trim() || form.file.name.replace(/\.apk$/i, '').trim(),
-          appName: form.apk.appName.trim() || form.file.name.replace(/\.apk$/i, '').trim(),
-          versionCode: parseInt(form.apk.versionCode, 10) || 0,
-          versionName: form.apk.versionName.trim(),
-        };
-        formData.append('packageName', data.packageName);
-        formData.append('appName', data.appName);
-        formData.append('versionCode', String(data.versionCode));
-        formData.append('versionName', data.versionName);
-
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
-        if (res.ok) {
-          successMsg = `APK "${data.packageName}" uploaded`;
-        } else {
-          enqueueSnackbar('Upload failed', { variant: 'error' });
+        const r2Worker = import.meta.env.VITE_R2_WORKER_URL;
+        if (!r2Worker) {
+          enqueueSnackbar('R2 Worker not configured', { variant: 'error' });
           setUploading(false);
           return;
         }
+
+        const bucket = form.detectedType === 'module' ? 'modules' : 'apks';
+        const fileRes = await fetch(`${r2Worker}/upload/${bucket}`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}` },
+          body: form.file,
+        });
+        if (!fileRes.ok) {
+          const errText = await fileRes.text().catch(() => '');
+          enqueueSnackbar(errText || `Upload failed (HTTP ${fileRes.status})`, { variant: 'error' });
+          setUploading(false);
+          return;
+        }
+        let blobId: string, size: number;
+        try {
+          const data = await fileRes.json() as { id: string; size: number };
+          blobId = data.id;
+          size = data.size;
+        } catch {
+          enqueueSnackbar('Invalid response from storage server', { variant: 'error' });
+          setUploading(false);
+          return;
+        }
+
+        const endpoint = form.detectedType === 'module' ? '/.netlify/functions/modules' : '/.netlify/functions/apks';
+        const metadata = form.detectedType === 'module'
+          ? {
+              blobId, size,
+              moduleId: form.module.moduleId.trim() || form.file.name.replace(/\.zip$/i, '').trim(),
+              name: form.module.name.trim() || form.file.name.replace(/\.zip$/i, '').trim(),
+              version: form.module.version.trim() || '1.0',
+              versionCode: parseInt(form.module.versionCode, 10) || 1,
+              author: form.module.author.trim(),
+              description: form.module.description.trim(),
+            }
+          : {
+              blobId, size,
+              packageName: form.apk.packageName.trim() || form.file.name.replace(/\.apk$/i, '').trim(),
+              appName: form.apk.appName.trim() || form.file.name.replace(/\.apk$/i, '').trim(),
+              versionCode: parseInt(form.apk.versionCode, 10) || 0,
+              versionName: form.apk.versionName.trim(),
+            };
+
+        const metaRes = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(metadata),
+        });
+        let metaData: Record<string, unknown>;
+        try {
+          metaData = await metaRes.json() as Record<string, unknown>;
+        } catch {
+          const body = await metaRes.text().catch(() => '');
+          enqueueSnackbar(body || 'Invalid JSON response from server', { variant: 'error' });
+          setUploading(false);
+          return;
+        }
+        if (metaData.error) {
+          enqueueSnackbar(String(metaData.error), { variant: 'error' });
+          setUploading(false);
+          return;
+        }
+        successMsg = form.detectedType === 'module'
+          ? `Module "${(metadata as { moduleId: string }).moduleId}" uploaded`
+          : `APK "${(metadata as { packageName: string }).packageName}" uploaded`;
       }
 
       enqueueSnackbar(successMsg, { variant: 'success' });
       handleClose();
-    } catch {
-      enqueueSnackbar('Upload failed', { variant: 'error' });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      enqueueSnackbar(msg || 'Upload failed', { variant: 'error' });
     }
     setUploading(false);
   }, [token, form, enqueueSnackbar, handleClose]);

@@ -1,8 +1,22 @@
 import { getStore } from "@netlify/blobs";
-import { randomUUID } from "node:crypto";
-import AdmZip from "adm-zip";
 
 const SITE_URL = process.env.URL ?? `https://${process.env.SITE_NAME}.netlify.app`;
+const R2_WORKER = process.env.R2_WORKER_URL ?? "http://localhost:8787";
+const STORAGE_R2 = "r2";
+
+function ok(data: unknown) {
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function fail(msg: string) {
+  return new Response(JSON.stringify({ error: msg }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
 
 async function verifyToken(token: string): Promise<{ email: string; id: string } | null> {
   try {
@@ -28,10 +42,15 @@ interface ModuleMeta {
   size: number;
   createdAt: string;
   updatedAt: string;
+  storage?: string;
 }
 
 function getStoreInstance() {
   return getStore("modules");
+}
+
+async function flush(store: ReturnType<typeof getStoreInstance>, key?: string): Promise<void> {
+  await store.get(key ?? "index");
 }
 
 async function getIndex(): Promise<ModuleMeta[]> {
@@ -44,199 +63,154 @@ async function getIndex(): Promise<ModuleMeta[]> {
 async function saveIndex(index: ModuleMeta[]): Promise<void> {
   const store = getStoreInstance();
   await store.set("index", JSON.stringify(index));
+  await flush(store);
 }
 
-function parseModuleProp(zip: AdmZip): Record<string, string> {
-  const entry = zip.getEntry("module.prop");
-  if (!entry) return {};
-  const text = entry.getData().toString("utf-8");
-  const result: Record<string, string> = {};
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eqIdx = trimmed.indexOf("=");
-    if (eqIdx === -1) continue;
-    result[trimmed.slice(0, eqIdx).trim()] = trimmed.slice(eqIdx + 1).trim();
-  }
-  return result;
+async function deleteFromR2(blobId: string): Promise<void> {
+  await fetch(`${R2_WORKER}/raw/modules/${blobId}`, { method: "DELETE" });
 }
 
 export default async (req: Request) => {
-  const method = req.method;
-  const url = new URL(req.url);
-  const path = url.pathname;
-  const segments = path.split("/").filter(Boolean);
-  const rawId = segments[segments.length - 1];
+  try {
+    const method = req.method;
+    const url = new URL(req.url);
+    const path = url.pathname;
+    const segments = path.split("/").filter(Boolean);
+    const rawId = segments[segments.length - 1];
 
-  const isRawRequest = method === "GET" && !!rawId && (
-    (segments[0] === "mod" && segments.length >= 2) ||
-    (segments[segments.length - 2] === "modules")
-  );
+    const isRawRequest = method === "GET" && !!rawId && (
+      (segments[0] === "mod" && segments.length >= 2) ||
+      (segments[segments.length - 2] === "modules")
+    );
 
-  if (isRawRequest && rawId) {
-    const index = await getIndex();
-    const item = index.find((m) => m.moduleId === rawId);
-    if (!item) {
-      return new Response("Not found", { status: 404 });
-    }
-    const store = getStoreInstance();
-    const content = await store.get(item.id, { type: "arrayBuffer" });
-    if (!content) {
-      return new Response("Not found", { status: 404 });
-    }
-    return new Response(content, {
-      status: 200,
-      headers: { "Content-Type": "application/zip" },
-    });
-  }
-
-  const auth = req.headers.get("Authorization") ?? "";
-  const token = auth.replace("Bearer ", "");
-  if (!token) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-
-  const user = await verifyToken(token);
-  if (!user) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-
-  const store = getStoreInstance();
-
-  switch (method) {
-    case "GET": {
+    if (isRawRequest && rawId) {
       const index = await getIndex();
-      const result = index.map(({ id, moduleId, name, version, versionCode, author, description, size, createdAt, updatedAt }) => ({
-        id, moduleId, name, version, versionCode, author, description, size, createdAt, updatedAt,
-      }));
-      return new Response(JSON.stringify(result), {
+      const item = index.find((m) => m.moduleId === rawId);
+      if (!item) return new Response("Not found", { status: 404 });
+
+      if (item.storage === STORAGE_R2) {
+        return Response.redirect(`${R2_WORKER}/raw/modules/${item.id}`, 302);
+      }
+
+      const store = getStoreInstance();
+      const stored = await store.get(item.id, { type: "json" });
+      if (!stored || typeof stored !== "object" || !("bin" in stored)) {
+        return new Response("Not found", { status: 404 });
+      }
+      const content = Buffer.from((stored as { bin: string }).bin, "base64");
+      return new Response(content, {
         status: 200,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/zip" },
       });
     }
 
-    case "POST": {
-      const contentType = req.headers.get("content-type") ?? "";
+    const auth = req.headers.get("Authorization") ?? "";
+    const token = auth.replace("Bearer ", "");
+    if (!token) return fail("Unauthorized");
 
-      if (contentType.includes("application/json")) {
+    const user = await verifyToken(token);
+    if (!user) return fail("Unauthorized");
+
+    const store = getStoreInstance();
+
+    switch (method) {
+      case "GET": {
+        const index = await getIndex();
+        const result = index.map(({ id, moduleId, name, version, versionCode, author, description, size, createdAt, updatedAt }) => ({
+          id, moduleId, name, version, versionCode, author, description, size, createdAt, updatedAt,
+        }));
+        return ok(result);
+      }
+
+      case "POST": {
         let body: unknown;
         try {
           body = (await req.json()) as unknown;
         } catch {
-          return new Response("Invalid JSON", { status: 400 });
+          return fail("Invalid JSON");
         }
         if (
           typeof body !== "object" || body === null ||
           !("moduleId" in body) || typeof (body as Record<string, unknown>).moduleId !== "string" ||
           !("name" in body) || typeof (body as Record<string, unknown>).name !== "string"
         ) {
-          return new Response("Invalid body. Required: moduleId, name", { status: 400 });
+          return fail("Invalid body. Required: moduleId, name");
         }
 
-        const { moduleId, name, version, versionCode, author, description, content: bodyContent } = body as {
-          moduleId: string; name: string; version?: string; versionCode?: number; author?: string; description?: string; content?: string;
+        const {
+          moduleId, name, version, versionCode, author, description,
+          blobId, size,
+        } = body as {
+          moduleId: string; name: string; version?: string; versionCode?: number;
+          author?: string; description?: string; blobId?: string; size?: number;
         };
 
-        const buf = bodyContent ? Buffer.from(bodyContent, "base64") : Buffer.alloc(0);
-        const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+        if (!blobId) return fail("Missing blobId");
 
-        const id = randomUUID();
+        const id = blobId;
         const now = new Date().toISOString();
         const meta: ModuleMeta = {
           id, moduleId: moduleId.trim(), name: name.trim(),
           version: version ?? "1.0", versionCode: versionCode ?? 1,
           author: author ?? "", description: description ?? "",
-          size: buf.byteLength, createdAt: now, updatedAt: now,
+          size: size ?? 0, createdAt: now, updatedAt: now,
+          storage: STORAGE_R2,
         };
 
-        const index = await getIndex();
-        const existing = index.findIndex((m) => m.moduleId === meta.moduleId);
-        if (existing !== -1) {
-          index.splice(existing, 1);
+        try {
+          const idx = await getIndex();
+          const existing = idx.findIndex((m) => m.moduleId === meta.moduleId);
+          const oldEntry = existing !== -1 ? idx[existing] : null;
+          if (existing !== -1) idx.splice(existing, 1);
+          idx.push(meta);
+          if (oldEntry && oldEntry.id !== id) {
+            if (oldEntry.storage === STORAGE_R2) deleteFromR2(oldEntry.id).catch(() => {});
+            else await store.delete(oldEntry.id);
+          }
+          await saveIndex(idx);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          return fail("Internal error saving module: " + msg);
         }
-        index.push(meta);
-        await saveIndex(index);
-        if (bodyContent) await store.set(id, ab);
 
-        return new Response(JSON.stringify({ id, moduleId: meta.moduleId }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
+        return ok({ id, moduleId: meta.moduleId });
       }
 
-      const formData = await req.formData().catch(() => null);
-      if (formData) {
-        const file = formData.get("file") as File | null;
-        if (!file) {
-          return new Response("Missing file field", { status: 400 });
+      case "DELETE": {
+        let body: unknown;
+        try {
+          body = (await req.json()) as unknown;
+        } catch {
+          return fail("Invalid JSON");
         }
 
-        const arrayBuffer = await file.arrayBuffer();
-        const zip = new AdmZip(Buffer.from(arrayBuffer));
-        const props = parseModuleProp(zip);
-
-        const moduleId = (formData.get("moduleId") as string) || props.id || file.name.replace(/\.zip$/i, "").trim();
-        const name = (formData.get("name") as string) || props.name || moduleId;
-        const version = (formData.get("version") as string) || props.version || "1.0";
-        const versionCodeStr = (formData.get("versionCode") as string) || props.versionCode || "1";
-        const author = (formData.get("author") as string) || props.author || "";
-        const description = (formData.get("description") as string) || props.description || "";
-
-        const id = randomUUID();
-        const now = new Date().toISOString();
-        const meta: ModuleMeta = {
-          id, moduleId: moduleId.trim(), name: name.trim(),
-          version, versionCode: parseInt(versionCodeStr, 10) || 1,
-          author: author.trim(), description: description.trim(),
-          size: arrayBuffer.byteLength, createdAt: now, updatedAt: now,
-        };
+        const delId = (body as { id?: string; moduleId?: string }).id || (body as { id?: string; moduleId?: string }).moduleId;
+        if (!delId || typeof delId !== "string") {
+          return fail("Invalid body. Required: id or moduleId");
+        }
 
         const index = await getIndex();
-        const existing = index.findIndex((m) => m.moduleId === meta.moduleId);
-        if (existing !== -1) {
-          index.splice(existing, 1);
-        }
-        index.push(meta);
+        const idx = index.findIndex((m) => m.id === delId || m.moduleId === delId);
+        if (idx === -1) return fail("Not found");
+
+        const removed = index[idx]!;
+        index.splice(idx, 1);
         await saveIndex(index);
-        await store.set(id, arrayBuffer);
+        if (removed.storage === STORAGE_R2) {
+          deleteFromR2(removed.id).catch(() => {});
+        } else {
+          await store.delete(removed.id);
+        }
+        await flush(store);
 
-        return new Response(JSON.stringify({ id, moduleId: meta.moduleId }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
+        return ok({ deleted: true });
       }
 
-      return new Response("Unexpected content type", { status: 400 });
+      default:
+        return fail("Method Not Allowed");
     }
-
-    case "DELETE": {
-      let body: unknown;
-      try {
-        body = (await req.json()) as unknown;
-      } catch {
-        return new Response("Invalid JSON", { status: 400 });
-      }
-
-      const delId = (body as { id?: string; moduleId?: string }).id || (body as { id?: string; moduleId?: string }).moduleId;
-      if (!delId || typeof delId !== "string") {
-        return new Response("Invalid body. Required: id or moduleId", { status: 400 });
-      }
-
-      const index = await getIndex();
-      const idx = index.findIndex((m) => m.id === delId || m.moduleId === delId);
-      if (idx === -1) {
-        return new Response("Not found", { status: 404 });
-      }
-
-      const removed = index[idx]!;
-      index.splice(idx, 1);
-      await saveIndex(index);
-      await store.delete(removed.id);
-
-      return new Response("Deleted", { status: 200 });
-    }
-
-    default:
-      return new Response("Method Not Allowed", { status: 405 });
+  } catch (err) {
+    const msg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
+    return fail(msg);
   }
 };
