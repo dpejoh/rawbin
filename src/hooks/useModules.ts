@@ -81,6 +81,7 @@ export default function useModules(): UseModulesReturn {
           versionCode: metadata.versionCode,
           author: metadata.author,
           description: metadata.description,
+          fileName: file.name,
         }),
       });
       const metaData = await metaRes.json().catch(() => ({})) as Record<string, unknown>;
