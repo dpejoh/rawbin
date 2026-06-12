@@ -28,9 +28,9 @@ export function parseAXML(buffer: ArrayBuffer): ParsedManifest | null {
   if (!stringPool) return null;
 
   const pool = new DataView(buffer, stringPool.offset, stringPool.chunkSize);
-  const stringCount = pool.getUint32(12, true);
-  const flags = pool.getUint32(20, true);
-  const stringsStart = pool.getUint32(24, true);
+  const stringCount = pool.getUint32(8, true);
+  const flags = pool.getUint32(16, true);
+  const stringsStart = pool.getUint32(20, true);
   const isUTF8 = !!(flags & (1 << 8));
 
   function getString(idx: number): string {
@@ -115,7 +115,7 @@ export function parseAXML(buffer: ArrayBuffer): ParsedManifest | null {
         const attrNs = dv.getUint32(attrOff, true) >>> 0;
         const attrName = dv.getUint32(attrOff + 4, true);
         const attrRawValue = dv.getUint32(attrOff + 8, true);
-        const tvType = dv.getUint8(attrOff + 14);
+        const tvType = dv.getUint8(attrOff + 15);
         const tvData = dv.getUint32(attrOff + 16, true);
 
         if (name === manifestIdx) {
