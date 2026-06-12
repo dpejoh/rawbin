@@ -118,6 +118,7 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
       const parsed = await parseAPK(file);
       if (parsed) {
         apkFields.packageName = parsed.packageName;
+        apkFields.appName = parsed.label || parsed.packageName;
         apkFields.versionCode = String(parsed.versionCode);
         apkFields.versionName = parsed.versionName;
       }

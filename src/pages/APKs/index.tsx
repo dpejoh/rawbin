@@ -79,7 +79,7 @@ export default function APKsPage({ token, role }: APKsPageProps) {
       const metadata = parsed
         ? {
             packageName: parsed.packageName,
-            appName: parsed.packageName,
+            appName: parsed.label || parsed.packageName,
             versionCode: parsed.versionCode,
             versionName: parsed.versionName,
           }
@@ -116,7 +116,7 @@ export default function APKsPage({ token, role }: APKsPageProps) {
     }
     const parsed = await parseAPK(file);
     const metadata = parsed
-      ? { packageName: parsed.packageName, appName: parsed.packageName, versionCode: parsed.versionCode, versionName: parsed.versionName }
+      ? { packageName: parsed.packageName, appName: parsed.label || parsed.packageName, versionCode: parsed.versionCode, versionName: parsed.versionName }
       : { packageName: file.name.replace(/\.apks?$/i, '').replace(/[_-]\d+.*$/, '').trim(), appName: file.name.replace(/\.apks?$/i, '').replace(/[_-]\d+.*$/, '').trim(), versionCode: 0, versionName: '' };
     const result = await upload(token, file, metadata);
     if (result) {
