@@ -53,7 +53,6 @@ async function requireRole(email: string, minRole: string): Promise<boolean> {
 interface ApkMeta {
   id: string;
   packageName: string;
-  appName: string;
   versionCode: number;
   versionName: string;
   minSdk: number;
@@ -140,8 +139,8 @@ export default async (req: Request) => {
     switch (method) {
       case "GET": {
         const index = await getIndex();
-        const result = index.map(({ id, packageName, appName, versionCode, versionName, minSdk, targetSdk, size, createdAt, updatedAt }) => ({
-          id, packageName, appName, versionCode, versionName, minSdk, targetSdk, size, createdAt, updatedAt,
+        const result = index.map(({ id, packageName, versionCode, versionName, minSdk, targetSdk, size, createdAt, updatedAt }) => ({
+          id, packageName, versionCode, versionName, minSdk, targetSdk, size, createdAt, updatedAt,
         }));
         return ok(result);
       }
@@ -167,7 +166,6 @@ export default async (req: Request) => {
           const item = idx.find((a) => a.id === updateId || a.packageName === updateId);
           if (!item) return fail("Not found");
           if (typeof b.packageName === 'string') item.packageName = b.packageName.trim();
-          if (typeof b.appName === 'string') item.appName = b.appName.trim();
           if (typeof b.versionCode === 'number') item.versionCode = b.versionCode;
           if (typeof b.versionName === 'string') item.versionName = b.versionName.trim();
           item.updatedAt = new Date().toISOString();
@@ -182,10 +180,10 @@ export default async (req: Request) => {
         }
 
         const {
-          packageName, appName, versionCode, versionName, minSdk, targetSdk,
+          packageName, versionCode, versionName, minSdk, targetSdk,
           blobId, size,
         } = body as {
-          packageName: string; appName?: string; versionCode?: number; versionName?: string;
+          packageName: string; versionCode?: number; versionName?: string;
           minSdk?: number; targetSdk?: number; blobId?: string; size?: number;
         };
 
@@ -197,7 +195,6 @@ export default async (req: Request) => {
         const now = new Date().toISOString();
         const meta: ApkMeta = {
           id, packageName: packageName.trim(),
-          appName: appName ?? packageName.trim(),
           versionCode: versionCode ?? 0, versionName: versionName ?? "",
           minSdk: minSdk ?? 0, targetSdk: targetSdk ?? 0,
           size: size ?? 0, createdAt: now, updatedAt: now,

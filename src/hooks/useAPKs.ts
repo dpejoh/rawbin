@@ -3,7 +3,6 @@ import { useState, useCallback } from "react";
 export interface APK {
   id: string;
   packageName: string;
-  appName: string;
   versionCode: number;
   versionName: string;
   minSdk: number;
@@ -18,7 +17,7 @@ interface UseAPKsReturn {
   isLoading: boolean;
   isUploading: boolean;
   fetchAll: (token: string) => Promise<APK[]>;
-  upload: (token: string, file: File, metadata: { packageName: string; appName: string; versionCode: number; versionName: string }) => Promise<{ id: string } | null>;
+  upload: (token: string, file: File, metadata: { packageName: string; versionCode: number; versionName: string }) => Promise<{ id: string } | null>;
   remove: (token: string, id: string) => Promise<boolean>;
 }
 
@@ -51,7 +50,7 @@ export default function useAPKs(): UseAPKsReturn {
   const upload = useCallback(async (
     token: string,
     file: File,
-    metadata: { packageName: string; appName: string; versionCode: number; versionName: string },
+    metadata: { packageName: string; versionCode: number; versionName: string },
   ): Promise<{ id: string } | null> => {
     setIsUploading(true);
     try {
@@ -77,7 +76,6 @@ export default function useAPKs(): UseAPKsReturn {
         body: JSON.stringify({
           blobId, size,
           packageName: metadata.packageName,
-          appName: metadata.appName,
           versionCode: metadata.versionCode,
           versionName: metadata.versionName,
         }),

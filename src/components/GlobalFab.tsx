@@ -29,7 +29,6 @@ interface ModuleFields {
 
 interface ApkFields {
   packageName: string;
-  appName: string;
   versionCode: string;
   versionName: string;
 }
@@ -75,7 +74,7 @@ function guessApkFields(file: File): ApkFields {
   const name = file.name.replace(/\.apks?$/i, '');
   const parts = name.split(/[-_]/);
   const packageName = parts[0] ?? name;
-  return { packageName, appName: packageName, versionCode: '0', versionName: '' };
+  return { packageName, versionCode: '0', versionName: '' };
 }
 
 const DEFAULT_STATE: FormState = {
@@ -83,7 +82,7 @@ const DEFAULT_STATE: FormState = {
   detectedType: 'keybox',
   keybox: { source: '', version: '1', text: '', useBase64: true },
   module: { moduleId: '', name: '', version: '1.0', versionCode: '1', author: '', description: '' },
-  apk: { packageName: '', appName: '', versionCode: '0', versionName: '' },
+  apk: { packageName: '', versionCode: '0', versionName: '' },
 };
 
 export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
@@ -118,7 +117,6 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
       const parsed = await parseAPK(file);
       if (parsed) {
         apkFields.packageName = parsed.packageName;
-        apkFields.appName = parsed.label || parsed.packageName;
         apkFields.versionCode = String(parsed.versionCode);
         apkFields.versionName = parsed.versionName;
       }
@@ -210,7 +208,6 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
           : {
               blobId, size,
               packageName: form.apk.packageName.trim() || form.file.name.replace(/\.apks?$/i, '').trim(),
-              appName: form.apk.appName.trim() || form.file.name.replace(/\.apks?$/i, '').trim(),
               versionCode: parseInt(form.apk.versionCode, 10) || 0,
               versionName: form.apk.versionName.trim(),
             };
@@ -372,11 +369,6 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
                   value={form.apk.packageName}
                   onChange={(e) => setForm(prev => ({ ...prev, apk: { ...prev.apk, packageName: e.target.value } }))}
                   placeholder="e.g. com.example.app"
-                />
-                <TextField label="App Name (optional)" size="small" fullWidth
-                  value={form.apk.appName}
-                  onChange={(e) => setForm(prev => ({ ...prev, apk: { ...prev.apk, appName: e.target.value } }))}
-                  placeholder="Display name"
                 />
                 <TextField label="Version Name (optional)" size="small" fullWidth
                   value={form.apk.versionName}

@@ -2,7 +2,6 @@ export interface ParsedManifest {
   packageName: string;
   versionCode: number;
   versionName: string;
-  label?: string;
 }
 
 export function parseAXML(buffer: ArrayBuffer): ParsedManifest | null {
@@ -81,17 +80,15 @@ export function parseAXML(buffer: ArrayBuffer): ParsedManifest | null {
 
   const androidNsStr = "http://schemas.android.com/apk/res/android";
   let androidNsIdx = -1, pkgIdx = -1, vcIdx = -1, vnIdx = -1;
-  let manifestIdx = -1, applicationIdx = -1, labelIdx = -1;
+  let manifestIdx = -1;
 
   for (let i = 0; i < stringCount; i++) {
     const s = getString(i);
     if (s === "android") continue;
     if (s === "manifest") manifestIdx = i;
-    else if (s === "application") applicationIdx = i;
     else if (s === "package") pkgIdx = i;
     else if (s === "versionCode") vcIdx = i;
     else if (s === "versionName") vnIdx = i;
-    else if (s === "label") labelIdx = i;
     else if (s === androidNsStr) androidNsIdx = i;
   }
 
@@ -132,14 +129,9 @@ export function parseAXML(buffer: ArrayBuffer): ParsedManifest | null {
           }
         }
 
-        if (name === applicationIdx && attrName === labelIdx && attrNs === androidNsIdx) {
-          if (tvType === 0x03 && attrRawValue < stringCount) {
-            result.label = getString(attrRawValue);
-          }
-        }
       }
 
-      if (result.packageName && (result.label !== undefined || name === applicationIdx)) {
+      if (result.packageName) {
         break;
       }
     }
@@ -152,6 +144,5 @@ export function parseAXML(buffer: ArrayBuffer): ParsedManifest | null {
     packageName: result.packageName,
     versionCode: result.versionCode ?? 0,
     versionName: result.versionName ?? "",
-    label: result.label,
   };
 }
