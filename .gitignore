@@ -9,3 +9,4 @@ dist/
 .netlify
 deno.lock
 .wrangler/
+netlify/functions/manifest.json
