@@ -210,6 +210,7 @@ export default async (req: Request) => {
           const oldEntry = existing !== -1 ? idx[existing] : null;
           if (existing !== -1) idx.splice(existing, 1);
           if (oldEntry) {
+            meta.appName = oldEntry.appName;
             if (oldEntry.id !== id) {
               if (oldEntry.storage === STORAGE_R2) deleteFromR2(oldEntry.id, token).catch(() => {});
               else await store.delete(oldEntry.id);
