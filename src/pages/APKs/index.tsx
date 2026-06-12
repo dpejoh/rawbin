@@ -18,6 +18,7 @@ import { useSnackbar } from 'notistack';
 import useAPKs from '../../hooks/useAPKs';
 import { relativeTime, formatSize } from '../../utils/time';
 import { parseAPK } from '../../utils/parseAPK';
+import { guessAppName } from '../../utils/guessAppName';
 import type { APK } from '../../hooks/useAPKs';
 
 interface APKsPageProps {
@@ -27,6 +28,7 @@ interface APKsPageProps {
 
 interface EditForm {
   packageName: string;
+  appName: string;
   versionCode: number;
   versionName: string;
 }
@@ -38,13 +40,13 @@ export default function APKsPage({ token, role }: APKsPageProps) {
   const [deleteTarget, setDeleteTarget] = useState<APK | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [sortBy, setSortBy] = useState<'packageName' | 'versionCode' | 'updatedAt'>('updatedAt');
+  const [sortBy, setSortBy] = useState<'packageName' | 'appName' | 'versionCode' | 'updatedAt'>('updatedAt');
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<APK | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({ packageName: '', versionCode: 0, versionName: '' });
+  const [editForm, setEditForm] = useState<EditForm>({ packageName: '', appName: '', versionCode: 0, versionName: '' });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const dropInputRef = useRef<HTMLInputElement>(null);
 
@@ -56,7 +58,7 @@ export default function APKsPage({ token, role }: APKsPageProps) {
     .filter(a => {
       if (!searchQuery.trim()) return true;
       const q = searchQuery.trim().toLowerCase();
-      return a.packageName.toLowerCase().includes(q);
+      return a.packageName.toLowerCase().includes(q) || a.appName.toLowerCase().includes(q);
     })
     .sort((a, b) => {
       const dir = sortOrder === 'asc' ? 1 : -1;
@@ -75,17 +77,15 @@ export default function APKsPage({ token, role }: APKsPageProps) {
       }
       setIsUploading(true);
       const parsed = await parseAPK(file);
-      const metadata = parsed
-        ? {
-            packageName: parsed.packageName,
-            versionCode: parsed.versionCode,
-            versionName: parsed.versionName,
-          }
-        : {
-            packageName: file.name.replace(/\.apks?$/i, '').replace(/[_-]\d+.*$/, '').trim(),
-            versionCode: 0,
-            versionName: '',
-          };
+      const pkgName = parsed
+        ? parsed.packageName
+        : file.name.replace(/\.apks?$/i, '').replace(/[_-]\d+.*$/, '').trim();
+      const metadata = {
+        packageName: pkgName,
+        appName: guessAppName(pkgName),
+        versionCode: parsed ? parsed.versionCode : 0,
+        versionName: parsed ? parsed.versionName : '',
+      };
       const result = await upload(token, file, metadata);
       if (result) {
         enqueueSnackbar(`"${metadata.packageName}" uploaded`, { variant: 'success' });
@@ -112,9 +112,15 @@ export default function APKsPage({ token, role }: APKsPageProps) {
       return;
     }
     const parsed = await parseAPK(file);
-    const metadata = parsed
-      ? { packageName: parsed.packageName, versionCode: parsed.versionCode, versionName: parsed.versionName }
-      : { packageName: file.name.replace(/\.apks?$/i, '').replace(/[_-]\d+.*$/, '').trim(), versionCode: 0, versionName: '' };
+    const pkgName = parsed
+      ? parsed.packageName
+      : file.name.replace(/\.apks?$/i, '').replace(/[_-]\d+.*$/, '').trim();
+    const metadata = {
+      packageName: pkgName,
+      appName: guessAppName(pkgName),
+      versionCode: parsed ? parsed.versionCode : 0,
+      versionName: parsed ? parsed.versionName : '',
+    };
     const result = await upload(token, file, metadata);
     if (result) {
       enqueueSnackbar('APK uploaded', { variant: 'success' });
@@ -153,6 +159,7 @@ export default function APKsPage({ token, role }: APKsPageProps) {
     setEditTarget(apk);
     setEditForm({
       packageName: apk.packageName,
+      appName: apk.appName,
       versionCode: apk.versionCode,
       versionName: apk.versionName,
     });
@@ -160,14 +167,14 @@ export default function APKsPage({ token, role }: APKsPageProps) {
 
   const handleEditSave = useCallback(async () => {
     if (!token || !editTarget) return;
-    const { packageName, versionCode, versionName } = editForm;
+    const { packageName, appName, versionCode, versionName } = editForm;
     if (!packageName.trim()) { enqueueSnackbar('Package name is required', { variant: 'error' }); return; }
     setIsSavingEdit(true);
     try {
       const res = await fetch('/.netlify/functions/apks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ id: editTarget.packageName, packageName, versionCode, versionName }),
+        body: JSON.stringify({ id: editTarget.packageName, packageName, appName, versionCode, versionName }),
       });
       const data = await res.json() as Record<string, unknown>;
       if (data.error) {
@@ -290,7 +297,12 @@ export default function APKsPage({ token, role }: APKsPageProps) {
                     Package
                   </TableSortLabel>
                 </TableCell>
-
+                <TableCell sx={{ fontWeight: 600 }}>
+                  <TableSortLabel active={sortBy === 'appName'} direction={sortBy === 'appName' ? sortOrder : 'asc'}
+                    onClick={() => { if (sortBy === 'appName') setSortOrder(o => o === 'asc' ? 'desc' : 'asc'); else { setSortBy('appName'); setSortOrder('asc'); } }}>
+                    App
+                  </TableSortLabel>
+                </TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>
                   <TableSortLabel active={sortBy === 'versionCode'} direction={sortBy === 'versionCode' ? sortOrder : 'asc'}
                     onClick={() => { if (sortBy === 'versionCode') setSortOrder(o => o === 'asc' ? 'desc' : 'asc'); else { setSortBy('versionCode'); setSortOrder('desc'); } }}>
@@ -321,6 +333,7 @@ export default function APKsPage({ token, role }: APKsPageProps) {
                     </TableCell>
                   )}
                   <TableCell sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 13 }}>{apk.packageName}</TableCell>
+                  <TableCell sx={{ fontSize: 13 }}>{apk.appName}</TableCell>
                   <TableCell>
                     <Typography variant="caption" sx={{ fontFamily: '"Geist Mono", monospace' }}>
                       v{apk.versionName || apk.versionCode}
@@ -379,6 +392,10 @@ export default function APKsPage({ token, role }: APKsPageProps) {
             <TextField autoFocus fullWidth label="Package name" size="small"
               value={editForm.packageName}
               onChange={(e) => setEditForm(f => ({ ...f, packageName: e.target.value }))}
+            />
+            <TextField fullWidth label="App name" size="small"
+              value={editForm.appName}
+              onChange={(e) => setEditForm(f => ({ ...f, appName: e.target.value }))}
             />
             <TextField fullWidth label="Version code" size="small" type="number"
               value={editForm.versionCode}
