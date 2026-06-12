@@ -10,7 +10,7 @@ export interface Module {
   description: string;
   size: number;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
 }
 
 interface UseModulesReturn {
@@ -21,6 +21,8 @@ interface UseModulesReturn {
   upload: (token: string, file: File, metadata: { moduleId: string; name: string; version: string; versionCode: number; author: string; description: string }) => Promise<{ id: string } | null>;
   remove: (token: string, id: string) => Promise<boolean>;
 }
+
+const R2_WORKER = import.meta.env.VITE_R2_WORKER_URL;
 
 export default function useModules(): UseModulesReturn {
   const [modules, setModules] = useState<Module[]>([]);
@@ -53,26 +55,41 @@ export default function useModules(): UseModulesReturn {
   ): Promise<{ id: string } | null> => {
     setIsUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("moduleId", metadata.moduleId);
-      formData.append("name", metadata.name);
-      formData.append("version", metadata.version);
-      formData.append("versionCode", String(metadata.versionCode));
-      formData.append("author", metadata.author);
-      formData.append("description", metadata.description);
+      if (!R2_WORKER) return null;
 
-      const res = await fetch("/.netlify/functions/modules", {
-        method: "POST",
+      const fileRes = await fetch(`${R2_WORKER}/upload/modules`, {
+        method: "PUT",
         headers: { Authorization: `Bearer ${token}` },
-        body: formData,
+        body: file,
       });
-      if (res.ok) {
-        const result = await res.json() as { id: string; moduleId: string };
-        return result;
+      if (!fileRes.ok) {
+        const errText = await fileRes.text().catch(() => "");
+        console.error("Worker upload failed:", errText);
+        return null;
       }
-      return null;
-    } catch {
+      const { id: blobId, size } = await fileRes.json() as { id: string; size: number };
+
+      const metaRes = await fetch("/.netlify/functions/modules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          blobId, size,
+          moduleId: metadata.moduleId,
+          name: metadata.name,
+          version: metadata.version,
+          versionCode: metadata.versionCode,
+          author: metadata.author,
+          description: metadata.description,
+        }),
+      });
+      const metaData = await metaRes.json().catch(() => ({})) as Record<string, unknown>;
+      if (metaData.error) {
+        console.error("Metadata upload failed:", metaData.error);
+        return null;
+      }
+      return metaData as { id: string };
+    } catch (e) {
+      console.error("Upload error:", e);
       return null;
     } finally {
       setIsUploading(false);

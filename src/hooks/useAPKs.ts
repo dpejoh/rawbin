@@ -10,7 +10,7 @@ export interface APK {
   targetSdk: number;
   size: number;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
 }
 
 interface UseAPKsReturn {
@@ -21,6 +21,8 @@ interface UseAPKsReturn {
   upload: (token: string, file: File, metadata: { packageName: string; appName: string; versionCode: number; versionName: string }) => Promise<{ id: string } | null>;
   remove: (token: string, id: string) => Promise<boolean>;
 }
+
+const R2_WORKER = import.meta.env.VITE_R2_WORKER_URL;
 
 export default function useAPKs(): UseAPKsReturn {
   const [apks, setApks] = useState<APK[]>([]);
@@ -53,24 +55,39 @@ export default function useAPKs(): UseAPKsReturn {
   ): Promise<{ id: string } | null> => {
     setIsUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("packageName", metadata.packageName);
-      formData.append("appName", metadata.appName);
-      formData.append("versionCode", String(metadata.versionCode));
-      formData.append("versionName", metadata.versionName);
+      if (!R2_WORKER) return null;
 
-      const res = await fetch("/.netlify/functions/apks", {
-        method: "POST",
+      const fileRes = await fetch(`${R2_WORKER}/upload/apks`, {
+        method: "PUT",
         headers: { Authorization: `Bearer ${token}` },
-        body: formData,
+        body: file,
       });
-      if (res.ok) {
-        const result = await res.json() as { id: string; packageName: string };
-        return result;
+      if (!fileRes.ok) {
+        const errText = await fileRes.text().catch(() => "");
+        console.error("Worker upload failed:", errText);
+        return null;
       }
-      return null;
-    } catch {
+      const { id: blobId, size } = await fileRes.json() as { id: string; size: number };
+
+      const metaRes = await fetch("/.netlify/functions/apks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          blobId, size,
+          packageName: metadata.packageName,
+          appName: metadata.appName,
+          versionCode: metadata.versionCode,
+          versionName: metadata.versionName,
+        }),
+      });
+      const metaData = await metaRes.json().catch(() => ({})) as Record<string, unknown>;
+      if (metaData.error) {
+        console.error("Metadata upload failed:", metaData.error);
+        return null;
+      }
+      return metaData as { id: string };
+    } catch (e) {
+      console.error("Upload error:", e);
       return null;
     } finally {
       setIsUploading(false);
