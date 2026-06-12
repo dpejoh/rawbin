@@ -32,6 +32,25 @@ async function verifyToken(token: string): Promise<{ email: string; id: string }
   }
 }
 
+const HIERARCHY: Record<string, number> = { viewer: 0, editor: 1, admin: 2 };
+
+async function getUserRole(email: string): Promise<string> {
+  try {
+    const store = getStore("user-roles");
+    const raw = await store.get("index");
+    if (!raw) return "viewer";
+    const roles = JSON.parse(raw) as Record<string, string>;
+    return roles[email] ?? "viewer";
+  } catch {
+    return "viewer";
+  }
+}
+
+async function requireRole(email: string, minRole: string): Promise<boolean> {
+  const role = await getUserRole(email);
+  return (HIERARCHY[role] ?? 0) >= (HIERARCHY[minRole] ?? 0);
+}
+
 interface FileMeta {
   id: string;
   name: string;
@@ -162,6 +181,7 @@ export default async (req: Request) => {
       }
 
       case "POST": {
+        if (!await requireRole(user.email, "editor")) return fail("Forbidden");
         const contentType = req.headers.get("content-type") ?? "";
         const isFolderEndpoint = url.searchParams.has("folder");
 
@@ -249,6 +269,7 @@ export default async (req: Request) => {
       }
 
       case "DELETE": {
+        if (!await requireRole(user.email, "editor")) return fail("Forbidden");
         let body: unknown;
         try {
           body = (await req.json()) as unknown;

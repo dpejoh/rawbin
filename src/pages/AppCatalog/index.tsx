@@ -22,9 +22,10 @@ interface AppCatalogEntry {
 
 interface AppCatalogProps {
   token: string | null;
+  role: string;
 }
 
-export default function AppCatalog({ token }: AppCatalogProps) {
+export default function AppCatalog({ token, role }: AppCatalogProps) {
   const { enqueueSnackbar } = useSnackbar();
   const [entries, setEntries] = useState<AppCatalogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -249,28 +250,32 @@ export default function AppCatalog({ token }: AppCatalogProps) {
         </Box>
       </Stack>
 
-      <Box sx={{
-        border: `2px dashed ${dragging ? 'var(--mdui-color-primary, #A8C7FA)' : 'var(--mdui-color-outline, #8E9099)'}`,
-        borderRadius: '12px', p: 2, mb: 2, textAlign: 'center', cursor: 'pointer',
-        transition: 'border-color 150ms, background 150ms',
-        bgcolor: dragging ? 'rgba(168,199,250,0.05)' : 'transparent',
-      }}
-        onDrop={handleDrop} onDragOver={handleDragOver}
-        onDragEnter={handleDragEnter} onDragLeave={handleDragLeave}
-        onClick={() => { if (!isImporting) fileInputRef.current?.click(); }}
-      >
-        <CloudUploadIcon sx={{ fontSize: 28, color: 'text.secondary', mb: 0.5 }} />
-        <Typography variant="body2">{isImporting ? 'Importing...' : 'Drop JSON files here to import'}</Typography>
-        <input ref={fileInputRef} type="file" accept=".json" multiple style={{ display: 'none' }}
-          onChange={e => handleImport(e.target.files)} />
-        {isImporting && <CircularProgress size={20} sx={{ mt: 0.5 }} />}
-      </Box>
+      {role === 'admin' && (
+        <Box sx={{
+          border: `2px dashed ${dragging ? 'var(--mdui-color-primary, #A8C7FA)' : 'var(--mdui-color-outline, #8E9099)'}`,
+          borderRadius: '12px', p: 2, mb: 2, textAlign: 'center', cursor: 'pointer',
+          transition: 'border-color 150ms, background 150ms',
+          bgcolor: dragging ? 'rgba(168,199,250,0.05)' : 'transparent',
+        }}
+          onDrop={handleDrop} onDragOver={handleDragOver}
+          onDragEnter={handleDragEnter} onDragLeave={handleDragLeave}
+          onClick={() => { if (!isImporting) fileInputRef.current?.click(); }}
+        >
+          <CloudUploadIcon sx={{ fontSize: 28, color: 'text.secondary', mb: 0.5 }} />
+          <Typography variant="body2">{isImporting ? 'Importing...' : 'Drop JSON files here to import'}</Typography>
+          <input ref={fileInputRef} type="file" accept=".json" multiple style={{ display: 'none' }}
+            onChange={e => handleImport(e.target.files)} />
+          {isImporting && <CircularProgress size={20} sx={{ mt: 0.5 }} />}
+        </Box>
+      )}
 
       <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center">
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setAddPackageName(''); setAddAppName(''); setAddDialogOpen(true); }}
-          sx={{ textTransform: 'none' }}>
-          Add Entry
-        </Button>
+        {role === 'admin' && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setAddPackageName(''); setAddAppName(''); setAddDialogOpen(true); }}
+            sx={{ textTransform: 'none' }}>
+            Add Entry
+          </Button>
+        )}
         <Button variant="outlined" startIcon={<CloudDownloadIcon />} onClick={handleExport}
           sx={{ textTransform: 'none' }}>
           Export
@@ -291,7 +296,7 @@ export default function AppCatalog({ token }: AppCatalogProps) {
             Cancel
           </Button>
         )}
-        {selectMode && selectedIds.size > 0 && (
+        {role === 'admin' && selectMode && selectedIds.size > 0 && (
           <Button variant="contained" color="error" size="small" startIcon={<DeleteSweepIcon />}
             onClick={handleBulkDelete} disabled={isDeleting}
             sx={{ textTransform: 'none', height: 24 }}>
@@ -363,8 +368,12 @@ export default function AppCatalog({ token }: AppCatalogProps) {
                     <TableCell sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 13 }}>{entry.packageName}</TableCell>
                     <TableCell sx={{ fontSize: 13 }}>{entry.appName}</TableCell>
                     <TableCell align="right">
-                      <IconButton size="small" onClick={() => handleOpenEdit(entry)} title="Edit"><EditIcon fontSize="small" /></IconButton>
-                      <IconButton size="small" onClick={() => handleDelete(entry.packageName)} title="Delete" color="error"><DeleteIcon fontSize="small" /></IconButton>
+                      {role === 'admin' && (
+                        <>
+                          <IconButton size="small" onClick={() => handleOpenEdit(entry)} title="Edit"><EditIcon fontSize="small" /></IconButton>
+                          <IconButton size="small" onClick={() => handleDelete(entry.packageName)} title="Delete" color="error"><DeleteIcon fontSize="small" /></IconButton>
+                        </>
+                      )}
                     </TableCell>
                   </TableRow>
                 );

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import netlifyIdentity from "netlify-identity-widget";
 
+export type UserRole = "viewer" | "editor" | "admin";
+
 export interface AuthUser {
   email: string;
   id: string;
@@ -9,6 +11,7 @@ export interface AuthUser {
 interface UseAuthReturn {
   user: AuthUser | null;
   token: string | null;
+  role: UserRole;
   isLoading: boolean;
   signOut: () => void;
   openLogin: () => void;
@@ -17,12 +20,31 @@ interface UseAuthReturn {
 export default function useAuth(): UseAuthReturn {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [role, setRole] = useState<UserRole>("viewer");
   const [isLoading, setIsLoading] = useState(true);
+
+  const fetchRole = useCallback(async (jwt: string) => {
+    try {
+      const res = await fetch("/.netlify/functions/roles", {
+        headers: { Authorization: `Bearer ${jwt}` },
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { role?: string };
+        if (data.role === "editor" || data.role === "admin") setRole(data.role);
+        else setRole("viewer");
+      } else {
+        setRole("viewer");
+      }
+    } catch {
+      setRole("viewer");
+    }
+  }, []);
 
   const handleUser = useCallback(async (u: unknown) => {
     if (!u) {
       setUser(null);
       setToken(null);
+      setRole("viewer");
       setIsLoading(false);
       return;
     }
@@ -32,11 +54,12 @@ export default function useAuth(): UseAuthReturn {
     try {
       const jwt = await netlifyIdentity.refresh();
       setToken(jwt);
+      await fetchRole(jwt);
     } catch {
       setToken(null);
     }
     setIsLoading(false);
-  }, []);
+  }, [fetchRole]);
 
   useEffect(() => {
     const onInit = (u: unknown) => {
@@ -88,5 +111,5 @@ export default function useAuth(): UseAuthReturn {
     netlifyIdentity.open();
   }, []);
 
-  return { user, token, isLoading, signOut, openLogin };
+  return { user, token, role, isLoading, signOut, openLogin };
 }

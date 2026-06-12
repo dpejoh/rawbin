@@ -34,9 +34,10 @@ interface HistoryEntry {
 
 interface KeyboxManagerProps {
   token: string | null;
+  role: string;
 }
 
-export default function KeyboxManager({ token }: KeyboxManagerProps) {
+export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
   const { enqueueSnackbar } = useSnackbar();
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -416,28 +417,32 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
         </Box>
       </Stack>
 
-      <Box sx={{
-        border: `2px dashed ${dragging ? 'var(--mdui-color-primary, #A8C7FA)' : 'var(--mdui-color-outline, #8E9099)'}`,
-        borderRadius: '12px', p: 2, mb: 2, textAlign: 'center', cursor: 'pointer',
-        transition: 'border-color 150ms, background 150ms',
-        bgcolor: dragging ? 'rgba(168,199,250,0.05)' : 'transparent',
-      }}
-        onDrop={handleDrop} onDragOver={handleDragOver}
-        onDragEnter={handleDragEnter} onDragLeave={handleDragLeave}
-        onClick={() => fileInputRef.current?.click()}
-      >
-        <CloudUploadIcon sx={{ fontSize: 28, color: 'text.secondary', mb: 0.5 }} />
-        <Typography variant="body2">{isImporting ? 'Importing...' : 'Drop XML or JSON files here'}</Typography>
-        <input ref={fileInputRef} type="file" accept=".xml,.json" multiple style={{ display: 'none' }}
-          onChange={e => handleImport(e.target.files)} />
-        {isImporting && <CircularProgress size={20} sx={{ mt: 0.5 }} />}
-      </Box>
+      {role === 'admin' && (
+        <Box sx={{
+          border: `2px dashed ${dragging ? 'var(--mdui-color-primary, #A8C7FA)' : 'var(--mdui-color-outline, #8E9099)'}`,
+          borderRadius: '12px', p: 2, mb: 2, textAlign: 'center', cursor: 'pointer',
+          transition: 'border-color 150ms, background 150ms',
+          bgcolor: dragging ? 'rgba(168,199,250,0.05)' : 'transparent',
+        }}
+          onDrop={handleDrop} onDragOver={handleDragOver}
+          onDragEnter={handleDragEnter} onDragLeave={handleDragLeave}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <CloudUploadIcon sx={{ fontSize: 28, color: 'text.secondary', mb: 0.5 }} />
+          <Typography variant="body2">{isImporting ? 'Importing...' : 'Drop XML or JSON files here'}</Typography>
+          <input ref={fileInputRef} type="file" accept=".xml,.json" multiple style={{ display: 'none' }}
+            onChange={e => handleImport(e.target.files)} />
+          {isImporting && <CircularProgress size={20} sx={{ mt: 0.5 }} />}
+        </Box>
+      )}
 
       <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setAddMode(!addMode); if (!addMode) { setExpandedKey(null); setEditingKey(null); } }}
-          sx={{ textTransform: 'none' }}>
-          {addMode ? 'Cancel' : 'Add Keybox'}
-        </Button>
+        {role === 'admin' && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setAddMode(!addMode); if (!addMode) { setExpandedKey(null); setEditingKey(null); } }}
+            sx={{ textTransform: 'none' }}>
+            {addMode ? 'Cancel' : 'Add Keybox'}
+          </Button>
+        )}
         <Button variant="outlined" size="small"
           onClick={() => { setOverrideSource(autoOverride?.source || ''); setOverrideVersion(autoOverride?.version || ''); setOverrideDialogOpen(true); }}
           sx={{ textTransform: 'none', ml: 'auto' }}>
@@ -539,7 +544,7 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
             Cancel
           </Button>
         )}
-        {selectMode && selectedIds.size > 0 && (
+        {role === 'admin' && selectMode && selectedIds.size > 0 && (
           <Button variant="contained" color="error" size="small" startIcon={<DeleteSweepIcon />}
             onClick={async () => {
               if (!token || selectedIds.size === 0) return;
@@ -737,10 +742,12 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
                           </Box>
                         )}
                         <Box sx={{ mt: 1.5, display: 'flex', gap: 1 }}>
-                          <Button variant="outlined" size="small" startIcon={<EditIcon />}
-                            onClick={(e) => { e.stopPropagation(); handleStartEdit(entry); }} sx={{ textTransform: 'none' }}>
-                            Edit
-                          </Button>
+                          {role === 'admin' && (
+                            <Button variant="outlined" size="small" startIcon={<EditIcon />}
+                              onClick={(e) => { e.stopPropagation(); handleStartEdit(entry); }} sx={{ textTransform: 'none' }}>
+                              Edit
+                            </Button>
+                          )}
                           <Button variant="outlined" size="small" startIcon={<AutorenewIcon />}
                             onClick={(e) => { e.stopPropagation(); handleRecheck(entry); }} disabled={isRechecking} sx={{ textTransform: 'none' }}>
                             {isRechecking ? 'Checking...' : 'Re-check'}
@@ -757,10 +764,12 @@ export default function KeyboxManager({ token }: KeyboxManagerProps) {
                             <MenuItem value="softbanned"><WarningAmberIcon sx={{ fontSize: 16, mr: 0.5, color: 'warning.main' }} />Softbanned</MenuItem>
                             <MenuItem value="revoked"><GppBadIcon sx={{ fontSize: 16, mr: 0.5, color: 'error.main' }} />Revoked</MenuItem>
                           </Select>
-                          <Button variant="outlined" size="small" startIcon={<DeleteIcon />} color="error"
-                            onClick={(e) => { e.stopPropagation(); handleDelete(entry); }} sx={{ textTransform: 'none' }}>
-                            Delete
-                          </Button>
+                          {role === 'admin' && (
+                            <Button variant="outlined" size="small" startIcon={<DeleteIcon />} color="error"
+                              onClick={(e) => { e.stopPropagation(); handleDelete(entry); }} sx={{ textTransform: 'none' }}>
+                              Delete
+                            </Button>
+                          )}
                         </Box>
                       </>
                     )}

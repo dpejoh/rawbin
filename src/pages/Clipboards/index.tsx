@@ -12,9 +12,10 @@ import { clipboardUrl } from "../../utils/clipboardUrl";
 
 interface ClipboardsPageProps {
   token: string | null;
+  role: string;
 }
 
-export default function ClipboardsPage({ token }: ClipboardsPageProps) {
+export default function ClipboardsPage({ token, role }: ClipboardsPageProps) {
   const { enqueueSnackbar } = useSnackbar();
   const isMobile = useMediaQuery("(max-width: 899px)");
   const {
@@ -140,6 +141,7 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
         <ClipboardEditor
           clipboard={selected}
           token={token}
+          role={role}
           onUpdate={handleUpdate}
         />
       </Box>
@@ -164,14 +166,16 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
             Freeform text storage with raw endpoints.
           </Typography>
         </Stack>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setCreateOpen(true)}
-          sx={{ textTransform: "none" }}
-        >
-          New Clipboard
-        </Button>
+        {role === "admin" && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setCreateOpen(true)}
+            sx={{ textTransform: "none" }}
+          >
+            New Clipboard
+          </Button>
+        )}
       </Stack>
 
       {isEmpty ? (
@@ -183,14 +187,16 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
           <Typography variant="body2" sx={{ color: "text.secondary" }}>
             Create one to start storing text with its own raw URL endpoint.
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setCreateOpen(true)}
-            sx={{ textTransform: "none" }}
-          >
-            Create your first clipboard
-          </Button>
+          {role === "admin" && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setCreateOpen(true)}
+              sx={{ textTransform: "none" }}
+            >
+              Create your first clipboard
+            </Button>
+          )}
         </Stack>
       ) : (
         <Stack direction="row" sx={{ flex: 1, overflow: "hidden" }}>
@@ -198,6 +204,7 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
             clipboards={clipboards}
             selectedId={selected?.id ?? null}
             isLoading={isLoading}
+            role={role}
             onSelect={handleSelect}
             onCopyUrl={handleCopyUrl}
             onDelete={(id) => {
@@ -210,6 +217,7 @@ export default function ClipboardsPage({ token }: ClipboardsPageProps) {
             <ClipboardEditor
               clipboard={selected}
               token={token}
+              role={role}
               onUpdate={handleUpdate}
             />
           )}

@@ -17,32 +17,40 @@ import FolderIcon from '@mui/icons-material/Folder';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import ExtensionIcon from '@mui/icons-material/Extension';
 import SmartphoneIcon from '@mui/icons-material/Smartphone';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import LogoutIcon from '@mui/icons-material/Logout';
 import type { Page } from '../App';
+import type { UserRole } from '../hooks/useAuth';
 
 interface NavRailProps {
   activePage: Page;
   onNavigate: (page: Page) => void;
   userInitials: string;
   onSignOut: () => void;
+  role: UserRole;
 }
-
-const navItems: { id: Page; icon: React.ReactNode; label: string }[] = [
-  { id: 'keybox', icon: <KeyIcon />, label: 'Keyboxes' },
-  { id: 'clipboards', icon: <ContentPasteIcon />, label: 'Boards' },
-  { id: 'files', icon: <FolderIcon />, label: 'Files' },
-  { id: 'apps', icon: <PlaylistAddCheckIcon />, label: 'Apps' },
-  { id: 'modules', icon: <ExtensionIcon />, label: 'Modules' },
-  { id: 'apks', icon: <SmartphoneIcon />, label: 'APKs' },
-];
 
 export default function NavRail({
   activePage,
   onNavigate,
   userInitials,
   onSignOut,
+  role,
 }: NavRailProps) {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+
+  const allNavItems: { id: Page; icon: React.ReactNode; label: string }[] = [
+    { id: 'keybox', icon: <KeyIcon />, label: 'Keyboxes' },
+    { id: 'clipboards', icon: <ContentPasteIcon />, label: 'Boards' },
+    { id: 'files', icon: <FolderIcon />, label: 'Files' },
+    { id: 'apps', icon: <PlaylistAddCheckIcon />, label: 'Apps' },
+    { id: 'modules', icon: <ExtensionIcon />, label: 'Modules' },
+    { id: 'apks', icon: <SmartphoneIcon />, label: 'APKs' },
+  ];
+
+  if (role === 'admin') {
+    allNavItems.push({ id: 'roles', icon: <AdminPanelSettingsIcon />, label: 'Roles' });
+  }
 
   return (
     <Stack
@@ -64,7 +72,7 @@ export default function NavRail({
       </Stack>
 
       <Stack spacing={0.5} alignItems="center">
-        {navItems.map((item) => {
+        {allNavItems.map((item) => {
           const isActive = activePage === item.id;
           return (
             <IconButton
@@ -115,6 +123,9 @@ export default function NavRail({
         anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
         transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
+        <MenuItem disabled sx={{ opacity: 0.7 }}>
+          <ListItemText secondary={role} sx={{ textTransform: 'capitalize' }} />
+        </MenuItem>
         <MenuItem onClick={() => { setAnchorEl(null); onSignOut(); }}>
           <ListItemIcon><LogoutIcon fontSize="small" /></ListItemIcon>
           <ListItemText>Sign out</ListItemText>

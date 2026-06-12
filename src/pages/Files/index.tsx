@@ -59,9 +59,10 @@ function fileUrl(id: string): string {
 
 interface FilesPageProps {
   token: string | null;
+  role: string;
 }
 
-export default function FilesPage({ token }: FilesPageProps) {
+export default function FilesPage({ token, role }: FilesPageProps) {
   const { enqueueSnackbar } = useSnackbar();
   const [allItems,    setAllItems]    = useState<FileItem[]>([]);
   const [isLoading,   setIsLoading]   = useState(true);
@@ -273,26 +274,28 @@ export default function FilesPage({ token }: FilesPageProps) {
             ))}
           </Box>
 
-          <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<CreateNewFolderIcon />}
-              onClick={() => setFolderOpen(true)}
-              sx={{ textTransform: 'none' }}
-            >
-              Folder
-            </Button>
-            <Button
-              variant="contained"
-              size="small"
-              startIcon={<CloudUploadIcon />}
-              onClick={() => setUploadOpen(true)}
-              sx={{ textTransform: 'none' }}
-            >
-              Upload
-            </Button>
-          </Box>
+          {role !== 'viewer' && (
+            <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<CreateNewFolderIcon />}
+                onClick={() => setFolderOpen(true)}
+                sx={{ textTransform: 'none' }}
+              >
+                Folder
+              </Button>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<CloudUploadIcon />}
+                onClick={() => setUploadOpen(true)}
+                sx={{ textTransform: 'none' }}
+              >
+                Upload
+              </Button>
+            </Box>
+          )}
         </Box>
 
         {visibleItems.length > 0 && (
@@ -382,9 +385,11 @@ export default function FilesPage({ token }: FilesPageProps) {
             <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center' }}>
               Upload a file or drop files anywhere on this page.
             </Typography>
-            <Button variant="contained" startIcon={<CloudUploadIcon />} onClick={() => setUploadOpen(true)} sx={{ textTransform: 'none' }}>
-              Upload your first file
-            </Button>
+            {role !== 'viewer' && (
+              <Button variant="contained" startIcon={<CloudUploadIcon />} onClick={() => setUploadOpen(true)} sx={{ textTransform: 'none' }}>
+                Upload your first file
+              </Button>
+            )}
           </Box>
         ) : visibleItems.length === 0 && hasParent ? (
           <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', py: 4 }}>
@@ -464,15 +469,17 @@ export default function FilesPage({ token }: FilesPageProps) {
                   </Tooltip>
                 )}
 
-                <Tooltip title="Delete">
-                  <IconButton
-                    size="small"
-                    onClick={(e) => { e.stopPropagation(); setDeleteTarget(file); }}
-                    sx={{ color: 'text.secondary' }}
-                  >
-                    <DeleteOutlineIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
+                {role !== 'viewer' && (
+                  <Tooltip title="Delete">
+                    <IconButton
+                      size="small"
+                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(file); }}
+                      sx={{ color: 'text.secondary' }}
+                    >
+                      <DeleteOutlineIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                )}
               </Box>
             ))}
           </Box>

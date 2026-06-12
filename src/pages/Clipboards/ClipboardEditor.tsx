@@ -23,12 +23,14 @@ import type { Clipboard } from "../../hooks/useClipboards";
 interface ClipboardEditorProps {
   clipboard: Clipboard;
   token: string | null;
+  role: string;
   onUpdate: (token: string, id: string, data: { name?: string; content?: string; slug?: string; useBase64?: boolean }) => Promise<boolean>;
 }
 
 export default function ClipboardEditor({
   clipboard,
   token,
+  role,
   onUpdate,
 }: ClipboardEditorProps) {
   const { enqueueSnackbar } = useSnackbar();
@@ -152,7 +154,7 @@ export default function ClipboardEditor({
     <Box sx={{ flex: 1, p: 4, overflow: "auto", maxWidth: 800 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Box>
-          {isEditingName ? (
+          {role === 'admin' && isEditingName ? (
             <TextField
               variant="standard"
               value={name}
@@ -179,10 +181,10 @@ export default function ClipboardEditor({
               variant="h4"
               sx={{
                 mb: 0.5,
-                cursor: "pointer",
-                "&:hover": { color: "primary.main" },
+                cursor: role === 'admin' ? "pointer" : "default",
+                "&:hover": { color: role === 'admin' ? "primary.main" : "text.primary" },
               }}
-              onClick={() => setIsEditingName(true)}
+              onClick={() => { if (role === 'admin') setIsEditingName(true); }}
             >
               {name}
             </Typography>
@@ -211,49 +213,51 @@ export default function ClipboardEditor({
         )}
       </Card>
 
-      <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.08 }}>
-          Custom URL Slug
-        </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-          <Typography variant="body2" color="text.secondary">
-            /clips/
+      {role === 'admin' && (
+        <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.08 }}>
+            Custom URL Slug
           </Typography>
-          {isEditingSlug ? (
-            <TextField
-              variant="standard"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              onBlur={handleSaveSlug}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSaveSlug();
-                if (e.key === "Escape") {
-                  setSlug(savedSlug);
-                  setIsEditingSlug(false);
-                }
-              }}
-              autoFocus
-              size="small"
-              placeholder="custom-slug"
-              inputProps={{ style: { fontSize: "13px", fontFamily: '"Geist Mono", monospace' } }}
-              sx={{ width: 200 }}
-            />
-          ) : (
-            <Typography
-              variant="body2"
-              sx={{
-                color: slug ? "primary.main" : "text.secondary",
-                cursor: "pointer",
-                fontFamily: '"Geist Mono", monospace',
-                "&:hover": { textDecoration: "underline" },
-              }}
-              onClick={() => setIsEditingSlug(true)}
-            >
-              {slug || "set custom URL..."}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              /clips/
             </Typography>
-          )}
-        </Box>
-      </Card>
+            {isEditingSlug ? (
+              <TextField
+                variant="standard"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value)}
+                onBlur={handleSaveSlug}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveSlug();
+                  if (e.key === "Escape") {
+                    setSlug(savedSlug);
+                    setIsEditingSlug(false);
+                  }
+                }}
+                autoFocus
+                size="small"
+                placeholder="custom-slug"
+                inputProps={{ style: { fontSize: "13px", fontFamily: '"Geist Mono", monospace' } }}
+                sx={{ width: 200 }}
+              />
+            ) : (
+              <Typography
+                variant="body2"
+                sx={{
+                  color: slug ? "primary.main" : "text.secondary",
+                  cursor: "pointer",
+                  fontFamily: '"Geist Mono", monospace',
+                  "&:hover": { textDecoration: "underline" },
+                }}
+                onClick={() => setIsEditingSlug(true)}
+              >
+                {slug || "set custom URL..."}
+              </Typography>
+            )}
+          </Box>
+        </Card>
+      )}
 
       {showPreview ? (
         <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
@@ -277,7 +281,7 @@ export default function ClipboardEditor({
               {revealed ? 'Release to hide' : 'Hold to reveal'}
             </Button>
             <Button variant="outlined" startIcon={<ContentCopyIcon />} onClick={handleCopy}>Copy</Button>
-            <Button variant="outlined" startIcon={<EditIcon />} onClick={handleEdit}>Edit</Button>
+            {role === 'admin' && <Button variant="outlined" startIcon={<EditIcon />} onClick={handleEdit}>Edit</Button>}
           </Box>
         </Card>
       ) : (
@@ -290,39 +294,44 @@ export default function ClipboardEditor({
             placeholder="Start typing…"
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            inputProps={{ spellCheck: false }}
+            inputProps={{ spellCheck: false, readOnly: role !== 'admin' }}
             sx={{
               "& .MuiInputBase-root": { fontFamily: '"Geist Mono", monospace', fontSize: "16px" },
+              "& .MuiInputBase-input.Mui-readOnly": { color: 'text.secondary' },
             }}
           />
         </Card>
       )}
 
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="body2" color="text.secondary">
-          {charCount} characters
-        </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {editing && <Button variant="text" onClick={handleCancelEdit}>Cancel</Button>}
-          <Button variant="outlined" startIcon={<ContentCopyIcon />} onClick={handleCopy}>Copy</Button>
-          <Button variant="contained" startIcon={<ContentPasteIcon />} onClick={handlePaste}>Paste</Button>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Switch
-              checked={useBase64}
-              onChange={(e) => setUseBase64(e.target.checked)}
-              size="small"
-            />
-            <Typography variant="body2" color="text.secondary">
-              Base64
-            </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography variant="body2" color="text.secondary">
+            {charCount} characters
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {role === 'admin' && editing && <Button variant="text" onClick={handleCancelEdit}>Cancel</Button>}
+            <Button variant="outlined" startIcon={<ContentCopyIcon />} onClick={handleCopy}>Copy</Button>
+            {role === 'admin' && (
+              <>
+                <Button variant="contained" startIcon={<ContentPasteIcon />} onClick={handlePaste}>Paste</Button>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Switch
+                    checked={useBase64}
+                    onChange={(e) => setUseBase64(e.target.checked)}
+                    size="small"
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    Base64
+                  </Typography>
+                </Box>
+                <SaveButton
+                  loading={isSaving}
+                  hasUnsaved={hasUnsaved}
+                  onSave={handleSaveContent}
+                />
+              </>
+            )}
           </Box>
-          <SaveButton
-            loading={isSaving}
-            hasUnsaved={hasUnsaved}
-            onSave={handleSaveContent}
-          />
         </Box>
-      </Box>
     </Box>
   );
 }

@@ -24,18 +24,19 @@ const FilesPage = lazy(() => import('./pages/Files'));
 const AppCatalog = lazy(() => import('./pages/AppCatalog'));
 const ModulesPage = lazy(() => import('./pages/Modules'));
 const APKsPage = lazy(() => import('./pages/APKs'));
+const RolesPage = lazy(() => import('./pages/Roles'));
 
-export type Page = 'keybox' | 'clipboards' | 'files' | 'apps' | 'modules' | 'apks';
+export type Page = 'keybox' | 'clipboards' | 'files' | 'apps' | 'modules' | 'apks' | 'roles';
 
 function getInitialPage(): Page {
   const stored = localStorage.getItem('keybox:page');
-  if (stored === 'keybox' || stored === 'clipboards' || stored === 'files' || stored === 'modules' || stored === 'apks') return stored;
+  if (stored === 'keybox' || stored === 'clipboards' || stored === 'files' || stored === 'modules' || stored === 'apks' || stored === 'roles') return stored;
   return 'keybox';
 }
 
 export default function App() {
   const isMobile = useMediaQuery('(max-width: 599px)');
-  const { user, token, isLoading, signOut, openLogin } = useAuth();
+  const { user, token, role, isLoading, signOut, openLogin } = useAuth();
   const [page, setPage] = useState<Page>(getInitialPage);
 
   useEffect(() => {
@@ -81,25 +82,26 @@ export default function App() {
       <SnackbarProvider>
         <Box sx={{ display: 'flex', height: '100vh', bgcolor: 'background.default', overflow: 'hidden' }}>
           {isMobile ? (
-            <BottomNav activePage={page} onNavigate={handleNavigate} />
+            <BottomNav activePage={page} onNavigate={handleNavigate} role={role} />
           ) : (
-            <NavRail activePage={page} onNavigate={handleNavigate} userInitials={userInitials} onSignOut={signOut} />
+            <NavRail activePage={page} onNavigate={handleNavigate} userInitials={userInitials} onSignOut={signOut} role={role} />
           )}
 
           <Box component="main" sx={{ flex: 1, overflow: 'auto', pb: isMobile ? 7 : 0 }}>
             <Suspense fallback={<Stack alignItems="center" justifyContent="center" sx={{ p: 8 }}><CircularProgress /></Stack>}>
-              {page === 'keybox' && <KeyboxManager token={token} />}
-              {page === 'clipboards' && <ClipboardsPage token={token} />}
-              {page === 'files' && <FilesPage token={token} />}
-              {page === 'apps' && <AppCatalog token={token} />}
-              {page === 'modules' && <ModulesPage token={token} />}
-              {page === 'apks' && <APKsPage token={token} />}
+              {page === 'keybox' && <KeyboxManager token={token} role={role} />}
+              {page === 'clipboards' && <ClipboardsPage token={token} role={role} />}
+              {page === 'files' && <FilesPage token={token} role={role} />}
+              {page === 'apps' && <AppCatalog token={token} role={role} />}
+              {page === 'modules' && <ModulesPage token={token} role={role} />}
+              {page === 'apks' && <APKsPage token={token} role={role} />}
+              {page === 'roles' && <RolesPage token={token} role={role} />}
             </Suspense>
           </Box>
         </Box>
 
         {token && <CommandPalette token={token} onNavigate={handleNavigate} />}
-        {token && <GlobalFab token={token} onNavigate={handleNavigate} />}
+        {token && <GlobalFab token={token} role={role} onNavigate={handleNavigate} />}
       </SnackbarProvider>
     </ThemeProvider>
   );

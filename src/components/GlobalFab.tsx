@@ -7,6 +7,7 @@ import AddIcon from '@mui/icons-material/Add';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { useSnackbar } from 'notistack';
 import type { Page } from '../App';
+import type { UserRole } from '../hooks/useAuth';
 
 type DetectedType = 'keybox' | 'module' | 'apk';
 
@@ -43,6 +44,7 @@ type FormState = {
 
 interface GlobalFabProps {
   token: string | null;
+  role: string;
   onNavigate: (page: Page) => void;
 }
 
@@ -84,8 +86,9 @@ const DEFAULT_STATE: FormState = {
   apk: { packageName: '', appName: '', versionCode: '0', versionName: '' },
 };
 
-export default function GlobalFab({ token, onNavigate }: GlobalFabProps) {
+export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
   const { enqueueSnackbar } = useSnackbar();
+  if (role === 'viewer') return null;
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(DEFAULT_STATE);
   const [uploading, setUploading] = useState(false);

@@ -16,9 +16,10 @@ import type { Module } from '../../hooks/useModules';
 
 interface ModulesPageProps {
   token: string | null;
+  role: string;
 }
 
-export default function ModulesPage({ token }: ModulesPageProps) {
+export default function ModulesPage({ token, role }: ModulesPageProps) {
   const { enqueueSnackbar } = useSnackbar();
   const { modules, isLoading, fetchAll, upload, remove } = useModules();
   const [searchQuery, setSearchQuery] = useState('');
@@ -145,24 +146,28 @@ export default function ModulesPage({ token }: ModulesPageProps) {
         </Box>
       </Stack>
 
-      <Box sx={{
-        border: '2px dashed var(--mdui-color-outline, #8E9099)',
-        borderRadius: '12px', p: 2, mb: 2, textAlign: 'center', cursor: 'pointer',
-        transition: 'border-color 150ms, background 150ms',
-        '&:hover': { borderColor: 'primary.main' },
-        opacity: isUploading ? 0.6 : 1,
-      }} onClick={() => dropInputRef.current?.click()}>
-        <UploadFileIcon sx={{ fontSize: 28, color: 'text.secondary', mb: 0.5 }} />
-        <Typography variant="body2">{isUploading ? 'Uploading...' : 'Drop .zip files here or click to upload'}</Typography>
-        <input ref={dropInputRef} type="file" accept=".zip" multiple style={{ display: 'none' }} onChange={handleDropZoneFiles} />
-      </Box>
+      {role !== 'viewer' && (
+        <>
+          <Box sx={{
+            border: '2px dashed var(--mdui-color-outline, #8E9099)',
+            borderRadius: '12px', p: 2, mb: 2, textAlign: 'center', cursor: 'pointer',
+            transition: 'border-color 150ms, background 150ms',
+            '&:hover': { borderColor: 'primary.main' },
+            opacity: isUploading ? 0.6 : 1,
+          }} onClick={() => dropInputRef.current?.click()}>
+            <UploadFileIcon sx={{ fontSize: 28, color: 'text.secondary', mb: 0.5 }} />
+            <Typography variant="body2">{isUploading ? 'Uploading...' : 'Drop .zip files here or click to upload'}</Typography>
+            <input ref={dropInputRef} type="file" accept=".zip" multiple style={{ display: 'none' }} onChange={handleDropZoneFiles} />
+          </Box>
 
-      <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-        <Button variant="contained" startIcon={<CloudUploadIcon />} onClick={() => handleUploadClick()}
-          sx={{ textTransform: 'none' }}>
-          Upload Module
-        </Button>
-      </Stack>
+          <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+            <Button variant="contained" startIcon={<CloudUploadIcon />} onClick={() => handleUploadClick()}
+              sx={{ textTransform: 'none' }}>
+              Upload Module
+            </Button>
+          </Stack>
+        </>
+      )}
 
       <TextField variant="filled" fullWidth placeholder="Search by module ID, name, or author..."
         value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
@@ -219,13 +224,17 @@ export default function ModulesPage({ token }: ModulesPageProps) {
                   <Typography variant="caption" color="text.secondary">{relativeTime(mod.updatedAt)}</Typography>
                 </Box>
               </Box>
-              <Button variant="outlined" size="small" startIcon={<CloudUploadIcon />}
-                onClick={() => handleUploadClick(mod)} sx={{ textTransform: 'none', flexShrink: 0 }}>
-                Upload
-              </Button>
-              <IconButton size="small" onClick={() => setDeleteTarget(mod)} color="error">
-                <DeleteIcon fontSize="small" />
-              </IconButton>
+              {role !== 'viewer' && (
+                <>
+                  <Button variant="outlined" size="small" startIcon={<CloudUploadIcon />}
+                    onClick={() => handleUploadClick(mod)} sx={{ textTransform: 'none', flexShrink: 0 }}>
+                    Upload
+                  </Button>
+                  <IconButton size="small" onClick={() => setDeleteTarget(mod)} color="error">
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </>
+              )}
             </Box>
           ))}
         </Box>

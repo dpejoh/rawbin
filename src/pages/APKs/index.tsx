@@ -17,9 +17,10 @@ import type { APK } from '../../hooks/useAPKs';
 
 interface APKsPageProps {
   token: string | null;
+  role: string;
 }
 
-export default function APKsPage({ token }: APKsPageProps) {
+export default function APKsPage({ token, role }: APKsPageProps) {
   const { enqueueSnackbar } = useSnackbar();
   const { apks, isLoading, fetchAll, upload, remove } = useAPKs();
   const [searchQuery, setSearchQuery] = useState('');
@@ -154,24 +155,28 @@ export default function APKsPage({ token }: APKsPageProps) {
         </Box>
       </Stack>
 
-      <Box sx={{
-        border: '2px dashed var(--mdui-color-outline, #8E9099)',
-        borderRadius: '12px', p: 2, mb: 2, textAlign: 'center', cursor: 'pointer',
-        transition: 'border-color 150ms, background 150ms',
-        '&:hover': { borderColor: 'primary.main' },
-        opacity: isUploading ? 0.6 : 1,
-      }} onClick={() => dropInputRef.current?.click()}>
-        <UploadFileIcon sx={{ fontSize: 28, color: 'text.secondary', mb: 0.5 }} />
-        <Typography variant="body2">{isUploading ? 'Uploading...' : 'Drop .apk files here or click to upload'}</Typography>
-        <input ref={dropInputRef} type="file" accept=".apk" multiple style={{ display: 'none' }} onChange={handleDropZoneFiles} />
-      </Box>
+      {role !== 'viewer' && (
+        <>
+          <Box sx={{
+            border: '2px dashed var(--mdui-color-outline, #8E9099)',
+            borderRadius: '12px', p: 2, mb: 2, textAlign: 'center', cursor: 'pointer',
+            transition: 'border-color 150ms, background 150ms',
+            '&:hover': { borderColor: 'primary.main' },
+            opacity: isUploading ? 0.6 : 1,
+          }} onClick={() => dropInputRef.current?.click()}>
+            <UploadFileIcon sx={{ fontSize: 28, color: 'text.secondary', mb: 0.5 }} />
+            <Typography variant="body2">{isUploading ? 'Uploading...' : 'Drop .apk files here or click to upload'}</Typography>
+            <input ref={dropInputRef} type="file" accept=".apk" multiple style={{ display: 'none' }} onChange={handleDropZoneFiles} />
+          </Box>
 
-      <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-        <Button variant="contained" startIcon={<CloudUploadIcon />} onClick={() => handleUploadClick()}
-          sx={{ textTransform: 'none' }}>
-          Upload APK
-        </Button>
-      </Stack>
+          <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+            <Button variant="contained" startIcon={<CloudUploadIcon />} onClick={() => handleUploadClick()}
+              sx={{ textTransform: 'none' }}>
+              Upload APK
+            </Button>
+          </Stack>
+        </>
+      )}
 
       <TextField variant="filled" fullWidth placeholder="Search by package name or app name..."
         value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
@@ -243,12 +248,16 @@ export default function APKsPage({ token }: APKsPageProps) {
                     <Typography variant="caption" color="text.secondary">{formatSize(apk.size)}</Typography>
                   </TableCell>
                   <TableCell align="right">
-                    <IconButton size="small" onClick={() => handleUploadClick(apk)} title="Update APK">
-                      <CloudUploadIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" onClick={() => setDeleteTarget(apk)} title="Delete" color="error">
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
+                    {role !== 'viewer' && (
+                      <>
+                        <IconButton size="small" onClick={() => handleUploadClick(apk)} title="Update APK">
+                          <CloudUploadIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton size="small" onClick={() => setDeleteTarget(apk)} title="Delete" color="error">
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

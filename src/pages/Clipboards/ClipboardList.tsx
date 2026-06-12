@@ -25,6 +25,7 @@ interface ClipboardListProps {
   clipboards: Clipboard[];
   selectedId: string | null;
   isLoading: boolean;
+  role: string;
   onSelect: (id: string) => void;
   onCopyUrl: (id: string) => void;
   onDelete: (id: string) => void;
@@ -46,6 +47,7 @@ export default function ClipboardList({
   clipboards,
   selectedId,
   isLoading,
+  role,
   onSelect,
   onCopyUrl,
   onDelete,
@@ -146,7 +148,7 @@ export default function ClipboardList({
             {selectedIds.size === clipboards.length ? 'Deselect All' : 'Select All'}
           </Button>
         )}
-        {selectMode && selectedIds.size > 0 && (
+        {role === 'admin' && selectMode && selectedIds.size > 0 && (
           <Button
             variant="contained"
             color="error"
@@ -226,11 +228,15 @@ export default function ClipboardList({
           <MenuItemIcon><LinkIcon fontSize="small" /></MenuItemIcon>
           Copy raw URL
         </MenuItem>
-        <Divider />
-        <MenuItem onClick={() => handleMenuAction(onDelete)} sx={{ color: 'error.main' }}>
-          <MenuItemIcon><DeleteOutlineIcon fontSize="small" sx={{ color: 'error.main' }} /></MenuItemIcon>
-          Delete
-        </MenuItem>
+        {role === 'admin' && (
+          <>
+            <Divider />
+            <MenuItem onClick={() => handleMenuAction(onDelete)} sx={{ color: 'error.main' }}>
+              <MenuItemIcon><DeleteOutlineIcon fontSize="small" sx={{ color: 'error.main' }} /></MenuItemIcon>
+              Delete
+            </MenuItem>
+          </>
+        )}
       </Menu>
     </Box>
   );
