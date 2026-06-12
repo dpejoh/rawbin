@@ -57,10 +57,11 @@ export default function UploadDialog({ open, token, currentFolderId, onClose, on
     if (!file || !token) return;
     setIsUploading(true);
     try {
-      const fileRes = await fetch(`${R2_WORKER}/upload/files`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}` },
-        body: file,
+      const uploadForm = new FormData();
+      uploadForm.append('file', file);
+      const fileRes = await fetch(`${R2_WORKER}/upload/files?token=${encodeURIComponent(token)}`, {
+        method: 'POST',
+        body: uploadForm,
       });
       if (!fileRes.ok) {
         const errText = await fileRes.text().catch(() => '');

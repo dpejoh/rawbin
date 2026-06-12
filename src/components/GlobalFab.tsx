@@ -173,10 +173,11 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
         const uploadKey = form.detectedType === 'module'
           ? `${form.module.moduleId.trim() || form.file.name.replace(/\.zip$/i, '').trim()}.zip`
           : `${form.apk.packageName.trim() || form.file.name.replace(/\.apks?$/i, '').trim()}.apk`;
-        const fileRes = await fetch(`${r2Worker}/upload/${bucket}?key=${encodeURIComponent(uploadKey)}`, {
-          method: 'PUT',
-          headers: { Authorization: `Bearer ${token}` },
-          body: form.file,
+        const uploadForm = new FormData();
+        uploadForm.append('file', form.file!);
+        const fileRes = await fetch(`${r2Worker}/upload/${bucket}?key=${encodeURIComponent(uploadKey)}&token=${encodeURIComponent(token!)}`, {
+          method: 'POST',
+          body: uploadForm,
         });
         if (!fileRes.ok) {
           const errText = await fileRes.text().catch(() => '');

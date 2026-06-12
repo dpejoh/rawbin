@@ -58,10 +58,11 @@ export default function useAPKs(): UseAPKsReturn {
       if (!R2_WORKER) return null;
 
       const key = `${metadata.packageName}.apk`;
-      const fileRes = await fetch(`${R2_WORKER}/upload/apks?key=${encodeURIComponent(key)}`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}` },
-        body: file,
+      const form = new FormData();
+      form.append("file", file);
+      const fileRes = await fetch(`${R2_WORKER}/upload/apks?key=${encodeURIComponent(key)}&token=${encodeURIComponent(token)}`, {
+        method: "POST",
+        body: form,
       });
       if (!fileRes.ok) {
         const errText = await fileRes.text().catch(() => "");

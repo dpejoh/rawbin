@@ -8,7 +8,7 @@ const MAX_UPLOAD_SIZE = 100 * 1024 * 1024;
 
 const CORS = {
   "access-control-allow-origin": "*",
-  "access-control-allow-methods": "PUT, GET, DELETE, OPTIONS",
+  "access-control-allow-methods": "PUT, GET, DELETE, POST, OPTIONS",
   "access-control-allow-headers": "Content-Type, Authorization",
   "access-control-max-age": "86400",
 } as const;
@@ -50,7 +50,7 @@ export default {
         return new Response(null, { headers: CORS });
       }
 
-      if (request.method === "PUT" && path === "upload" && action && ALLOWED_BUCKETS.includes(action as typeof ALLOWED_BUCKETS[number])) {
+      if ((request.method === "PUT" || request.method === "POST") && path === "upload" && action && ALLOWED_BUCKETS.includes(action as typeof ALLOWED_BUCKETS[number])) {
         return handleUpload(request, env, action, url);
       }
 
@@ -87,23 +87,37 @@ async function verifyToken(token: string, env: Env): Promise<boolean> {
 }
 
 async function handleUpload(request: Request, env: Env, bucket: string, url: URL): Promise<Response> {
-  const auth = request.headers.get("Authorization") ?? "";
-  const token = auth.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+  let token: string | null;
+  if (request.method === "POST") {
+    token = url.searchParams.get("token");
+  } else {
+    token = extractBearer(request);
+  }
   if (!token) return respond("Unauthorized", 401);
 
   const isValid = await verifyToken(token, env);
   if (!isValid) return respond("Unauthorized", 401);
 
-  const contentLength = request.headers.get("content-length");
-  if (contentLength && parseInt(contentLength, 10) > MAX_UPLOAD_SIZE) {
-    return respond("Payload too large", 413);
-  }
-
   let blob: Blob;
-  try {
-    blob = await request.blob();
-  } catch {
-    return respond("Failed to read body", 400);
+  if (request.method === "POST") {
+    try {
+      const formData = await request.formData();
+      const file = formData.get("file");
+      if (!file || typeof file === "string") return respond("Missing file", 400);
+      blob = file as Blob;
+    } catch {
+      return respond("Failed to parse form", 400);
+    }
+  } else {
+    const contentLength = request.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > MAX_UPLOAD_SIZE) {
+      return respond("Payload too large", 413);
+    }
+    try {
+      blob = await request.blob();
+    } catch {
+      return respond("Failed to read body", 400);
+    }
   }
 
   if (blob.size === 0) return respond("Empty file", 400);
