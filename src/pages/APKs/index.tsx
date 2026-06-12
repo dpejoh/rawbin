@@ -140,10 +140,12 @@ export default function APKsPage({ token, role }: APKsPageProps) {
     setDeleteTarget(null);
   }, [token, deleteTarget, remove, fetchAll, enqueueSnackbar]);
 
-  const handleCopyUrl = useCallback(async (pkg: string) => {
+  const handleCopyUrl = useCallback(async (apk: APK) => {
+    const r2Worker = import.meta.env.VITE_R2_WORKER_URL ?? "http://localhost:8787";
+    const url = `${r2Worker}/raw/apks/${apk.id}?name=${encodeURIComponent(`${apk.packageName}.apk`)}`;
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/apk/${encodeURIComponent(pkg)}`);
-      setCopiedId(pkg);
+      await navigator.clipboard.writeText(url);
+      setCopiedId(apk.packageName);
       enqueueSnackbar('Raw URL copied', { variant: 'info' });
       setTimeout(() => setCopiedId(null), 1500);
     } catch {
@@ -351,7 +353,7 @@ export default function APKsPage({ token, role }: APKsPageProps) {
                       </IconButton>
                     </Tooltip>
                     <Tooltip title="Copy raw URL">
-                      <IconButton size="small" onClick={() => handleCopyUrl(apk.packageName)} sx={{ color: 'text.secondary' }}>
+                      <IconButton size="small" onClick={() => handleCopyUrl(apk)} sx={{ color: 'text.secondary' }}>
                         {copiedId === apk.packageName ? <CheckIcon fontSize="small" sx={{ color: 'success.main' }} /> : <ContentCopyIcon fontSize="small" />}
                       </IconButton>
                     </Tooltip>

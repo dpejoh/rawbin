@@ -122,16 +122,18 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
     setDeleteTarget(null);
   }, [token, deleteTarget, remove, fetchAll, enqueueSnackbar]);
 
-  const handleCopyUrl = useCallback(async (id: string) => {
+  const handleCopyUrl = useCallback(async (mod: Module) => {
+    const r2Worker = import.meta.env.VITE_R2_WORKER_URL ?? "http://localhost:8787";
+    const url = `${r2Worker}/raw/modules/${mod.id}?name=${encodeURIComponent(`${mod.moduleId}.zip`)}`;
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/mod/${encodeURIComponent(id)}`);
-      setCopiedId(id);
+      await navigator.clipboard.writeText(url);
+      setCopiedId(mod.moduleId);
       enqueueSnackbar('Raw URL copied', { variant: 'info' });
       setTimeout(() => setCopiedId(null), 1500);
     } catch {
       enqueueSnackbar('Failed to copy', { variant: 'error' });
     }
-      }, [enqueueSnackbar]);
+  }, [enqueueSnackbar]);
 
   const handleEditOpen = useCallback((mod: Module) => {
     setEditTarget(mod);
@@ -349,7 +351,7 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
                 </IconButton>
               </Tooltip>
               <Tooltip title="Copy raw URL">
-                <IconButton size="small" onClick={() => handleCopyUrl(mod.moduleId)} sx={{ color: 'text.secondary', flexShrink: 0 }}>
+                <IconButton size="small" onClick={() => handleCopyUrl(mod)} sx={{ color: 'text.secondary', flexShrink: 0 }}>
                   {copiedId === mod.moduleId ? <CheckIcon fontSize="small" sx={{ color: 'success.main' }} /> : <ContentCopyIcon fontSize="small" />}
                 </IconButton>
               </Tooltip>

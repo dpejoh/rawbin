@@ -123,7 +123,10 @@ export default async (req: Request) => {
       const content = Buffer.from((stored as { bin: string }).bin, "base64");
       return new Response(content, {
         status: 200,
-        headers: { "Content-Type": "application/vnd.android.package-archive" },
+        headers: {
+          "Content-Type": "application/vnd.android.package-archive",
+          "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(`${item.packageName}.apk`)}`,
+        },
       });
     }
 
