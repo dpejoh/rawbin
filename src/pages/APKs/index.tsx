@@ -27,9 +27,11 @@ export default function APKsPage({ token }: APKsPageProps) {
   const [uploadTarget, setUploadTarget] = useState<APK | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [sortBy, setSortBy] = useState<'packageName' | 'appName' | 'versionCode' | 'updatedAt'>('updatedAt');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (token) fetchAll(token);
@@ -53,6 +55,31 @@ export default function APKsPage({ token }: APKsPageProps) {
     setUploadFile(null);
     setUploadOpen(true);
   }, []);
+
+  const handleDropZoneFiles = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    e.target.value = '';
+    if (!files || !token) return;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]!;
+      if (!file.name.endsWith('.apk')) {
+        enqueueSnackbar(`Skipped "${file.name}" — only .apk files are supported`, { variant: 'warning' });
+        continue;
+      }
+      setIsUploading(true);
+      const guessPkg = file.name.replace(/\.apk$/i, '').replace(/[_-]\d+.*$/, '').trim();
+      const result = await upload(token, file, {
+        packageName: guessPkg, appName: guessPkg, versionCode: 0, versionName: '',
+      });
+      if (result) {
+        enqueueSnackbar(`"${guessPkg}" uploaded`, { variant: 'success' });
+      } else {
+        enqueueSnackbar(`"${guessPkg}" upload failed`, { variant: 'error' });
+      }
+      setIsUploading(false);
+    }
+    await fetchAll(token);
+  }, [token, upload, fetchAll, enqueueSnackbar]);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -132,10 +159,11 @@ export default function APKsPage({ token }: APKsPageProps) {
         borderRadius: '12px', p: 2, mb: 2, textAlign: 'center', cursor: 'pointer',
         transition: 'border-color 150ms, background 150ms',
         '&:hover': { borderColor: 'primary.main' },
-      }} onClick={() => fileInputRef.current?.click()}>
+        opacity: isUploading ? 0.6 : 1,
+      }} onClick={() => dropInputRef.current?.click()}>
         <UploadFileIcon sx={{ fontSize: 28, color: 'text.secondary', mb: 0.5 }} />
-        <Typography variant="body2">Drop .apk files here or click to upload</Typography>
-        <input ref={fileInputRef} type="file" accept=".apk" style={{ display: 'none' }} onChange={handleFileSelect} />
+        <Typography variant="body2">{isUploading ? 'Uploading...' : 'Drop .apk files here or click to upload'}</Typography>
+        <input ref={dropInputRef} type="file" accept=".apk" multiple style={{ display: 'none' }} onChange={handleDropZoneFiles} />
       </Box>
 
       <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
@@ -247,6 +275,7 @@ export default function APKsPage({ token }: APKsPageProps) {
                 </>
               )}
             </Box>
+            <input ref={fileInputRef} type="file" accept=".apk" style={{ display: 'none' }} onChange={handleFileSelect} />
           </Stack>
         </DialogContent>
         <DialogActions>

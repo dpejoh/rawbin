@@ -151,12 +151,7 @@ export default function GlobalFab({ token, onNavigate }: GlobalFabProps) {
           return;
         }
       } else {
-        const r2Worker = import.meta.env.VITE_R2_WORKER_URL;
-        if (!r2Worker) {
-          enqueueSnackbar('R2 Worker not configured', { variant: 'error' });
-          setUploading(false);
-          return;
-        }
+        const r2Worker = import.meta.env.VITE_R2_WORKER_URL ?? "http://localhost:8787";
 
         const bucket = form.detectedType === 'module' ? 'modules' : 'apks';
         const fileRes = await fetch(`${r2Worker}/upload/${bucket}`, {

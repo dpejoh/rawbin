@@ -3,9 +3,6 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
-  define: {
-    "import.meta.env.VITE_R2_WORKER_URL": JSON.stringify(process.env.VITE_R2_WORKER_URL ?? "http://localhost:8787"),
-  },
   build: {
     outDir: "dist",
   },

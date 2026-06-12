@@ -22,7 +22,7 @@ interface UseModulesReturn {
   remove: (token: string, id: string) => Promise<boolean>;
 }
 
-const R2_WORKER = import.meta.env.VITE_R2_WORKER_URL;
+const R2_WORKER = import.meta.env.VITE_R2_WORKER_URL ?? "http://localhost:8787";
 
 export default function useModules(): UseModulesReturn {
   const [modules, setModules] = useState<Module[]>([]);
