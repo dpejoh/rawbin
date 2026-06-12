@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Typography, TextField, Button, IconButton, Tooltip, Chip, CircularProgress,
-  InputAdornment, Checkbox, Box, Stack, Dialog, DialogTitle,
+  InputAdornment, Box, Stack, Dialog, DialogTitle,
   DialogContent, DialogActions, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, TableSortLabel,
 } from '@mui/material';
@@ -17,6 +17,7 @@ import SmartphoneIcon from '@mui/icons-material/Smartphone';
 import { useSnackbar } from 'notistack';
 import useAPKs from '../../hooks/useAPKs';
 import { relativeTime, formatSize } from '../../utils/time';
+import { parseAPK } from '../../utils/parseAPK';
 import type { APK } from '../../hooks/useAPKs';
 
 interface APKsPageProps {
@@ -24,14 +25,19 @@ interface APKsPageProps {
   role: string;
 }
 
+interface EditForm {
+  packageName: string;
+  appName: string;
+  versionCode: number;
+  versionName: string;
+  fileName: string;
+}
+
 export default function APKsPage({ token, role }: APKsPageProps) {
   const { enqueueSnackbar } = useSnackbar();
   const { apks, isLoading, fetchAll, upload, remove } = useAPKs();
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<APK | null>(null);
-  const [uploadTarget, setUploadTarget] = useState<APK | null>(null);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadOpen, setUploadOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [sortBy, setSortBy] = useState<'packageName' | 'appName' | 'versionCode' | 'updatedAt'>('updatedAt');
@@ -39,9 +45,9 @@ export default function APKsPage({ token, role }: APKsPageProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [renameTarget, setRenameTarget] = useState<APK | null>(null);
-  const [renameName, setRenameName] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [editTarget, setEditTarget] = useState<APK | null>(null);
+  const [editForm, setEditForm] = useState<EditForm>({ packageName: '', appName: '', versionCode: 0, versionName: '', fileName: '' });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const dropInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -61,16 +67,8 @@ export default function APKsPage({ token, role }: APKsPageProps) {
       return a[sortBy].localeCompare(b[sortBy]) * dir;
     });
 
-  const handleUploadClick = useCallback((apk?: APK) => {
-    setUploadTarget(apk ?? null);
-    setUploadFile(null);
-    setUploadOpen(true);
-  }, []);
-
-  const handleDropZoneFiles = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    e.target.value = '';
-    if (!files || !token) return;
+  const handleFiles = useCallback(async (files: FileList) => {
+    if (!token) return;
     for (let i = 0; i < files.length; i++) {
       const file = files[i]!;
       if (!file.name.endsWith('.apk') && !file.name.endsWith('.apks')) {
@@ -78,45 +76,57 @@ export default function APKsPage({ token, role }: APKsPageProps) {
         continue;
       }
       setIsUploading(true);
-      const guessPkg = file.name.replace(/\.apks?$/i, '').replace(/[_-]\d+.*$/, '').trim();
-      const result = await upload(token, file, {
-        packageName: guessPkg, appName: guessPkg, versionCode: 0, versionName: '',
-      });
+      const parsed = await parseAPK(file);
+      const metadata = parsed
+        ? {
+            packageName: parsed.packageName,
+            appName: parsed.packageName,
+            versionCode: parsed.versionCode,
+            versionName: parsed.versionName,
+          }
+        : {
+            packageName: file.name.replace(/\.apks?$/i, '').replace(/[_-]\d+.*$/, '').trim(),
+            appName: file.name.replace(/\.apks?$/i, '').replace(/[_-]\d+.*$/, '').trim(),
+            versionCode: 0,
+            versionName: '',
+          };
+      const result = await upload(token, file, metadata);
       if (result) {
-        enqueueSnackbar(`"${guessPkg}" uploaded`, { variant: 'success' });
+        enqueueSnackbar(`"${metadata.packageName}" uploaded`, { variant: 'success' });
       } else {
-        enqueueSnackbar(`"${guessPkg}" upload failed`, { variant: 'error' });
+        enqueueSnackbar(`"${metadata.packageName}" upload failed`, { variant: 'error' });
       }
       setIsUploading(false);
     }
     await fetchAll(token);
   }, [token, upload, fetchAll, enqueueSnackbar]);
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) setUploadFile(file);
+  const handleDropZoneFiles = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
     e.target.value = '';
-  }, []);
+    if (files && files.length > 0) await handleFiles(files);
+  }, [handleFiles]);
 
-  const handleUpload = useCallback(async () => {
-    if (!token || !uploadFile) return;
-    const guessPkg = uploadTarget?.packageName ?? uploadFile.name.replace(/\.apks?$/i, '').replace(/[_-]\d+.*$/, '').trim();
-    const result = await upload(token, uploadFile, {
-      packageName: guessPkg,
-      appName: uploadTarget?.appName ?? guessPkg,
-      versionCode: uploadTarget?.versionCode ?? 0,
-      versionName: uploadTarget?.versionName ?? '',
-    });
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (!file || !token) return;
+    if (!file.name.endsWith('.apk') && !file.name.endsWith('.apks')) {
+      enqueueSnackbar('Only .apk/.apks files are supported', { variant: 'error' });
+      return;
+    }
+    const parsed = await parseAPK(file);
+    const metadata = parsed
+      ? { packageName: parsed.packageName, appName: parsed.packageName, versionCode: parsed.versionCode, versionName: parsed.versionName }
+      : { packageName: file.name.replace(/\.apks?$/i, '').replace(/[_-]\d+.*$/, '').trim(), appName: file.name.replace(/\.apks?$/i, '').replace(/[_-]\d+.*$/, '').trim(), versionCode: 0, versionName: '' };
+    const result = await upload(token, file, metadata);
     if (result) {
-      enqueueSnackbar(uploadTarget ? `APK "${uploadTarget.packageName}" updated` : 'APK uploaded', { variant: 'success' });
-      setUploadOpen(false);
-      setUploadFile(null);
-      setUploadTarget(null);
+      enqueueSnackbar('APK uploaded', { variant: 'success' });
       await fetchAll(token);
     } else {
       enqueueSnackbar('Upload failed', { variant: 'error' });
     }
-  }, [token, uploadFile, uploadTarget, upload, fetchAll, enqueueSnackbar]);
+  }, [token, upload, fetchAll, enqueueSnackbar]);
 
   const handleDelete = useCallback(async () => {
     if (!token || !deleteTarget) return;
@@ -130,41 +140,52 @@ export default function APKsPage({ token, role }: APKsPageProps) {
     setDeleteTarget(null);
   }, [token, deleteTarget, remove, fetchAll, enqueueSnackbar]);
 
-  const apkUrl = useCallback((pkg: string) => `${window.location.origin}/apk/${pkg}`, []);
-
   const handleCopyUrl = useCallback(async (pkg: string) => {
     try {
-      await navigator.clipboard.writeText(apkUrl(pkg));
+      await navigator.clipboard.writeText(`${window.location.origin}/apk/${encodeURIComponent(pkg)}`);
       setCopiedId(pkg);
       enqueueSnackbar('Raw URL copied', { variant: 'info' });
       setTimeout(() => setCopiedId(null), 1500);
     } catch {
       enqueueSnackbar('Failed to copy', { variant: 'error' });
     }
-      }, [apkUrl, enqueueSnackbar]);
+  }, [enqueueSnackbar]);
 
-  const handleRename = useCallback(async () => {
-    if (!token || !renameTarget) return;
-    const name = renameName.trim();
-    if (!name) return;
+  const handleEditOpen = useCallback((apk: APK) => {
+    setEditTarget(apk);
+    setEditForm({
+      packageName: apk.packageName,
+      appName: apk.appName,
+      versionCode: apk.versionCode,
+      versionName: apk.versionName,
+      fileName: apk.fileName ?? `${apk.packageName}.apk`,
+    });
+  }, []);
+
+  const handleEditSave = useCallback(async () => {
+    if (!token || !editTarget) return;
+    const { packageName, appName, versionCode, versionName, fileName } = editForm;
+    if (!packageName.trim()) { enqueueSnackbar('Package name is required', { variant: 'error' }); return; }
+    setIsSavingEdit(true);
     try {
       const res = await fetch('/.netlify/functions/apks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ id: renameTarget.id, fileName: name }),
+        body: JSON.stringify({ id: editTarget.packageName, packageName, appName, versionCode, versionName, fileName }),
       });
       const data = await res.json() as Record<string, unknown>;
       if (data.error) {
         enqueueSnackbar(String(data.error), { variant: 'error' });
       } else {
-        enqueueSnackbar('File name updated', { variant: 'success' });
-        setRenameTarget(null);
+        enqueueSnackbar('APK metadata updated', { variant: 'success' });
+        setEditTarget(null);
         await fetchAll(token);
       }
     } catch {
-      enqueueSnackbar('Failed to rename', { variant: 'error' });
+      enqueueSnackbar('Failed to save', { variant: 'error' });
     }
-  }, [token, renameTarget, renameName, fetchAll, enqueueSnackbar]);
+    setIsSavingEdit(false);
+  }, [token, editTarget, editForm, fetchAll, enqueueSnackbar]);
 
   const handleBulkDelete = useCallback(async () => {
     if (!token || selectedIds.size === 0) return;
@@ -181,27 +202,6 @@ export default function APKsPage({ token, role }: APKsPageProps) {
     await fetchAll(token);
   }, [token, selectedIds, remove, fetchAll, enqueueSnackbar]);
 
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (!file || !token) return;
-    if (!file.name.endsWith('.apk') && !file.name.endsWith('.apks')) {
-      enqueueSnackbar('Only .apk/.apks files are supported', { variant: 'error' });
-      return;
-    }
-    const guessPkg = file.name.replace(/\.apks?$/i, '').replace(/[_-]\d+.*$/, '').trim();
-    const result = await upload(token, file, {
-      packageName: guessPkg, appName: guessPkg,
-      versionCode: 0, versionName: '',
-    });
-    if (result) {
-      enqueueSnackbar('APK uploaded', { variant: 'success' });
-      await fetchAll(token);
-    } else {
-      enqueueSnackbar('Upload failed', { variant: 'error' });
-    }
-  }, [token, upload, fetchAll, enqueueSnackbar]);
-
   return (
     <Box sx={{ p: 4, maxWidth: 800, display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}
       onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
@@ -217,26 +217,17 @@ export default function APKsPage({ token, role }: APKsPageProps) {
       </Stack>
 
       {role !== 'viewer' && (
-        <>
-          <Box sx={{
-            border: '2px dashed var(--mdui-color-outline, #8E9099)',
-            borderRadius: '12px', p: 2, mb: 2, textAlign: 'center', cursor: 'pointer',
-            transition: 'border-color 150ms, background 150ms',
-            '&:hover': { borderColor: 'primary.main' },
-            opacity: isUploading ? 0.6 : 1,
-          }} onClick={() => dropInputRef.current?.click()}>
-            <UploadFileIcon sx={{ fontSize: 28, color: 'text.secondary', mb: 0.5 }} />
-            <Typography variant="body2">{isUploading ? 'Uploading...' : 'Drop .apk/.apks files here or click to upload'}</Typography>
-            <input ref={dropInputRef} type="file" accept=".apk,.apks" multiple style={{ display: 'none' }} onChange={handleDropZoneFiles} />
-          </Box>
-
-          <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-            <Button variant="contained" startIcon={<CloudUploadIcon />} onClick={() => handleUploadClick()}
-              sx={{ textTransform: 'none' }}>
-              Upload APK
-            </Button>
-          </Stack>
-        </>
+        <Box sx={{
+          border: '2px dashed var(--mdui-color-outline, #8E9099)',
+          borderRadius: '12px', p: 2, mb: 2, textAlign: 'center', cursor: 'pointer',
+          transition: 'border-color 150ms, background 150ms',
+          '&:hover': { borderColor: 'primary.main' },
+          opacity: isUploading ? 0.6 : 1,
+        }} onClick={() => dropInputRef.current?.click()}>
+          <UploadFileIcon sx={{ fontSize: 28, color: 'text.secondary', mb: 0.5 }} />
+          <Typography variant="body2">{isUploading ? 'Uploading...' : 'Drop .apk/.apks files here or click to upload'}</Typography>
+          <input ref={dropInputRef} type="file" accept=".apk,.apks" multiple style={{ display: 'none' }} onChange={handleDropZoneFiles} />
+        </Box>
       )}
 
       <TextField variant="filled" fullWidth placeholder="Search by package name or app name..."
@@ -354,8 +345,8 @@ export default function APKsPage({ token, role }: APKsPageProps) {
                     <Typography variant="caption" color="text.secondary">{formatSize(apk.size)}</Typography>
                   </TableCell>
                   <TableCell align="right">
-                    <Tooltip title="Rename file">
-                      <IconButton size="small" onClick={() => { setRenameTarget(apk); setRenameName(apk.fileName ?? `${apk.packageName}.apk`); }} sx={{ color: 'text.secondary' }}>
+                    <Tooltip title="Edit metadata">
+                      <IconButton size="small" onClick={() => handleEditOpen(apk)} sx={{ color: 'text.secondary' }}>
                         <EditIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
@@ -365,14 +356,9 @@ export default function APKsPage({ token, role }: APKsPageProps) {
                       </IconButton>
                     </Tooltip>
                     {role !== 'viewer' && (
-                      <>
-                        <IconButton size="small" onClick={() => handleUploadClick(apk)} title="Update APK">
-                          <CloudUploadIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton size="small" onClick={() => setDeleteTarget(apk)} title="Delete" color="error">
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </>
+                      <IconButton size="small" onClick={() => setDeleteTarget(apk)} title="Delete" color="error">
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
                     )}
                   </TableCell>
                 </TableRow>
@@ -382,35 +368,6 @@ export default function APKsPage({ token, role }: APKsPageProps) {
           </Table>
         </TableContainer>
       )}
-
-      <Dialog open={uploadOpen} onClose={() => { setUploadOpen(false); setUploadFile(null); }} maxWidth="xs" fullWidth>
-        <DialogTitle>{uploadTarget ? `Update "${uploadTarget.packageName}"` : 'Upload APK'}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <Box sx={{
-              border: '1px dashed var(--mdui-color-outline, #8E9099)',
-              borderRadius: '8px', p: 2, textAlign: 'center', cursor: 'pointer',
-              bgcolor: uploadFile ? 'rgba(168,199,250,0.05)' : 'transparent',
-            }} onClick={() => fileInputRef.current?.click()}>
-              {uploadFile ? (
-                <Typography variant="body2" color="text.primary">{uploadFile.name}</Typography>
-              ) : (
-                <>
-                  <CloudUploadIcon sx={{ fontSize: 24, color: 'text.secondary', mb: 0.5 }} />
-                  <Typography variant="body2" color="text.secondary">Click to select .apk/.apks file</Typography>
-                </>
-              )}
-            </Box>
-            <input ref={fileInputRef} type="file" accept=".apk,.apks" style={{ display: 'none' }} onChange={handleFileSelect} />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => { setUploadOpen(false); setUploadFile(null); }}>Cancel</Button>
-          <Button variant="contained" onClick={handleUpload} disabled={!uploadFile}>
-            {uploadTarget ? 'Update' : 'Upload'}
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       <Dialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Delete APK &ldquo;{deleteTarget?.packageName}&rdquo;?</DialogTitle>
@@ -425,19 +382,38 @@ export default function APKsPage({ token, role }: APKsPageProps) {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={Boolean(renameTarget)} onClose={() => setRenameTarget(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Rename &ldquo;{renameTarget?.packageName}&rdquo;</DialogTitle>
+      <Dialog open={Boolean(editTarget)} onClose={() => setEditTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Edit &ldquo;{editTarget?.packageName}&rdquo;</DialogTitle>
         <DialogContent>
-          <TextField autoFocus fullWidth label="File name" size="small"
-            value={renameName} onChange={(e) => setRenameName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleRename(); }}
-            placeholder="e.g. detector.apk"
-            sx={{ mt: 1 }}
-          />
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField autoFocus fullWidth label="Package name" size="small"
+              value={editForm.packageName}
+              onChange={(e) => setEditForm(f => ({ ...f, packageName: e.target.value }))}
+            />
+            <TextField fullWidth label="App name" size="small"
+              value={editForm.appName}
+              onChange={(e) => setEditForm(f => ({ ...f, appName: e.target.value }))}
+            />
+            <TextField fullWidth label="Version code" size="small" type="number"
+              value={editForm.versionCode}
+              onChange={(e) => setEditForm(f => ({ ...f, versionCode: parseInt(e.target.value, 10) || 0 }))}
+            />
+            <TextField fullWidth label="Version name" size="small"
+              value={editForm.versionName}
+              onChange={(e) => setEditForm(f => ({ ...f, versionName: e.target.value }))}
+            />
+            <TextField fullWidth label="File name" size="small"
+              value={editForm.fileName}
+              onChange={(e) => setEditForm(f => ({ ...f, fileName: e.target.value }))}
+              placeholder="e.g. detector.apk"
+            />
+          </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRenameTarget(null)}>Cancel</Button>
-          <Button variant="contained" onClick={handleRename} disabled={!renameName.trim()}>Save</Button>
+          <Button onClick={() => setEditTarget(null)}>Cancel</Button>
+          <Button variant="contained" onClick={handleEditSave} disabled={isSavingEdit || !editForm.packageName.trim()}>
+            {isSavingEdit ? 'Saving...' : 'Save'}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

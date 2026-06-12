@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Typography, TextField, Button, IconButton, Tooltip, Chip, CircularProgress,
-  InputAdornment, Checkbox, Box, Stack, Dialog, DialogTitle,
+  InputAdornment, Box, Stack, Dialog, DialogTitle,
   DialogContent, DialogActions,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
@@ -36,8 +36,9 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [renameTarget, setRenameTarget] = useState<Module | null>(null);
-  const [renameName, setRenameName] = useState('');
+  const [editTarget, setEditTarget] = useState<Module | null>(null);
+  const [editForm, setEditForm] = useState({ moduleId: '', name: '', version: '', versionCode: 1, author: '', description: '', fileName: '' });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropInputRef = useRef<HTMLInputElement>(null);
 
@@ -121,41 +122,54 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
     setDeleteTarget(null);
   }, [token, deleteTarget, remove, fetchAll, enqueueSnackbar]);
 
-  const modUrl = useCallback((id: string) => `${window.location.origin}/mod/${id}`, []);
-
   const handleCopyUrl = useCallback(async (id: string) => {
     try {
-      await navigator.clipboard.writeText(modUrl(id));
+      await navigator.clipboard.writeText(`${window.location.origin}/mod/${encodeURIComponent(id)}`);
       setCopiedId(id);
       enqueueSnackbar('Raw URL copied', { variant: 'info' });
       setTimeout(() => setCopiedId(null), 1500);
     } catch {
       enqueueSnackbar('Failed to copy', { variant: 'error' });
     }
-      }, [modUrl, enqueueSnackbar]);
+      }, [enqueueSnackbar]);
 
-  const handleRename = useCallback(async () => {
-    if (!token || !renameTarget) return;
-    const name = renameName.trim();
-    if (!name) return;
+  const handleEditOpen = useCallback((mod: Module) => {
+    setEditTarget(mod);
+    setEditForm({
+      moduleId: mod.moduleId,
+      name: mod.name,
+      version: mod.version,
+      versionCode: mod.versionCode,
+      author: mod.author,
+      description: mod.description,
+      fileName: mod.fileName ?? `${mod.moduleId}.zip`,
+    });
+  }, []);
+
+  const handleEditSave = useCallback(async () => {
+    if (!token || !editTarget) return;
+    const { moduleId, name, version, versionCode, author, description, fileName } = editForm;
+    if (!moduleId.trim()) { enqueueSnackbar('Module ID is required', { variant: 'error' }); return; }
+    setIsSavingEdit(true);
     try {
       const res = await fetch('/.netlify/functions/modules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ id: renameTarget.id, fileName: name }),
+        body: JSON.stringify({ id: editTarget.moduleId, moduleId, name, version, versionCode, author, description, fileName }),
       });
       const data = await res.json() as Record<string, unknown>;
       if (data.error) {
         enqueueSnackbar(String(data.error), { variant: 'error' });
       } else {
-        enqueueSnackbar('File name updated', { variant: 'success' });
-        setRenameTarget(null);
+        enqueueSnackbar('Module metadata updated', { variant: 'success' });
+        setEditTarget(null);
         await fetchAll(token);
       }
     } catch {
-      enqueueSnackbar('Failed to rename', { variant: 'error' });
+      enqueueSnackbar('Failed to save', { variant: 'error' });
     }
-  }, [token, renameTarget, renameName, fetchAll, enqueueSnackbar]);
+    setIsSavingEdit(false);
+  }, [token, editTarget, editForm, fetchAll, enqueueSnackbar]);
 
   const handleBulkDelete = useCallback(async () => {
     if (!token || selectedIds.size === 0) return;
@@ -329,8 +343,8 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
                   <Typography variant="caption" color="text.secondary">{relativeTime(mod.updatedAt)}</Typography>
                 </Box>
               </Box>
-              <Tooltip title="Rename file">
-                <IconButton size="small" onClick={() => { setRenameTarget(mod); setRenameName(mod.fileName ?? `${mod.moduleId}.zip`); }} sx={{ color: 'text.secondary', flexShrink: 0 }}>
+              <Tooltip title="Edit metadata">
+                <IconButton size="small" onClick={() => handleEditOpen(mod)} sx={{ color: 'text.secondary', flexShrink: 0 }}>
                   <EditIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
@@ -398,19 +412,46 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={Boolean(renameTarget)} onClose={() => setRenameTarget(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Rename &ldquo;{renameTarget?.moduleId}&rdquo;</DialogTitle>
+      <Dialog open={Boolean(editTarget)} onClose={() => setEditTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Edit &ldquo;{editTarget?.moduleId}&rdquo;</DialogTitle>
         <DialogContent>
-          <TextField autoFocus fullWidth label="File name" size="small"
-            value={renameName} onChange={(e) => setRenameName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleRename(); }}
-            placeholder="e.g. zygisk_lsposed.zip"
-            sx={{ mt: 1 }}
-          />
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField autoFocus fullWidth label="Module ID" size="small"
+              value={editForm.moduleId}
+              onChange={(e) => setEditForm(f => ({ ...f, moduleId: e.target.value }))}
+            />
+            <TextField fullWidth label="Name" size="small"
+              value={editForm.name}
+              onChange={(e) => setEditForm(f => ({ ...f, name: e.target.value }))}
+            />
+            <TextField fullWidth label="Version" size="small"
+              value={editForm.version}
+              onChange={(e) => setEditForm(f => ({ ...f, version: e.target.value }))}
+            />
+            <TextField fullWidth label="Version code" size="small" type="number"
+              value={editForm.versionCode}
+              onChange={(e) => setEditForm(f => ({ ...f, versionCode: parseInt(e.target.value, 10) || 1 }))}
+            />
+            <TextField fullWidth label="Author" size="small"
+              value={editForm.author}
+              onChange={(e) => setEditForm(f => ({ ...f, author: e.target.value }))}
+            />
+            <TextField fullWidth label="Description" size="small" multiline maxRows={3}
+              value={editForm.description}
+              onChange={(e) => setEditForm(f => ({ ...f, description: e.target.value }))}
+            />
+            <TextField fullWidth label="File name" size="small"
+              value={editForm.fileName}
+              onChange={(e) => setEditForm(f => ({ ...f, fileName: e.target.value }))}
+              placeholder="e.g. module.zip"
+            />
+          </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRenameTarget(null)}>Cancel</Button>
-          <Button variant="contained" onClick={handleRename} disabled={!renameName.trim()}>Save</Button>
+          <Button onClick={() => setEditTarget(null)}>Cancel</Button>
+          <Button variant="contained" onClick={handleEditSave} disabled={isSavingEdit || !editForm.moduleId.trim()}>
+            {isSavingEdit ? 'Saving...' : 'Save'}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

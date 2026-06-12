@@ -159,18 +159,20 @@ export default async (req: Request) => {
 
         const b = body as Record<string, unknown>;
 
-        // Rename-only: id + fileName without blobId
-        if (b.id && b.fileName && !b.blobId) {
-          const renameId = String(b.id);
-          const newName = String(b.fileName).trim();
-          if (!newName) return fail("fileName is required");
+        // Metadata update: id without blobId — update any provided fields
+        if (b.id && !b.blobId) {
+          const updateId = String(b.id);
           const idx = await getIndex();
-          const item = idx.find((a) => a.id === renameId || a.packageName === renameId);
+          const item = idx.find((a) => a.id === updateId || a.packageName === updateId);
           if (!item) return fail("Not found");
-          item.fileName = newName;
+          if (typeof b.packageName === 'string') item.packageName = b.packageName.trim();
+          if (typeof b.appName === 'string') item.appName = b.appName.trim();
+          if (typeof b.versionCode === 'number') item.versionCode = b.versionCode;
+          if (typeof b.versionName === 'string') item.versionName = b.versionName.trim();
+          if (typeof b.fileName === 'string') item.fileName = b.fileName.trim();
           item.updatedAt = new Date().toISOString();
           await saveIndex(idx);
-          return ok({ id: renameId, fileName: newName });
+          return ok({ id: updateId });
         }
 
         if (

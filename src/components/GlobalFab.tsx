@@ -105,18 +105,30 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
     return () => window.removeEventListener('keydown', handler);
   }, [token]);
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
 
     const detectedType = detectFileType(file);
+    const apkFields = guessApkFields(file);
+
+    if (detectedType === 'apk') {
+      const { parseAPK } = await import('../utils/parseAPK');
+      const parsed = await parseAPK(file);
+      if (parsed) {
+        apkFields.packageName = parsed.packageName;
+        apkFields.versionCode = String(parsed.versionCode);
+        apkFields.versionName = parsed.versionName;
+      }
+    }
+
     setForm({
       file,
       detectedType,
       keybox: guessKeyboxFields(file),
       module: guessModuleFields(file),
-      apk: guessApkFields(file),
+      apk: apkFields,
     });
     setOpen(true);
   }, []);
