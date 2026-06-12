@@ -13,7 +13,8 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import InsertLinkIcon from '@mui/icons-material/InsertLink';
 import { useSnackbar } from 'notistack';
-import { fileToBase64 } from '../../utils/upload';
+
+const R2_WORKER = import.meta.env.VITE_R2_WORKER_URL ?? "http://localhost:8787";
 
 interface UploadDialogProps {
   open: boolean;
@@ -41,11 +42,12 @@ export default function UploadDialog({ open, token, currentFolderId, onClose, on
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (res.ok) {
+    const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+    if (data.error) {
+      enqueueSnackbar(String(data.error), { variant: 'error' });
+    } else {
       enqueueSnackbar('File uploaded from URL', { variant: 'success' });
       onUploaded();
-    } else {
-      enqueueSnackbar((await res.text()) || 'Upload failed', { variant: 'error' });
     }
     setIsUploading(false);
   }, [token, mode, url, fileName, currentFolderId, onUploaded, enqueueSnackbar]);
@@ -55,25 +57,39 @@ export default function UploadDialog({ open, token, currentFolderId, onClose, on
     if (!file || !token) return;
     setIsUploading(true);
     try {
-      const base64 = await fileToBase64(file);
-      const res = await fetch('/.netlify/functions/files', {
+      const fileRes = await fetch(`${R2_WORKER}/upload/files`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
+        body: file,
+      });
+      if (!fileRes.ok) {
+        const errText = await fileRes.text().catch(() => '');
+        enqueueSnackbar(errText || 'Storage upload failed', { variant: 'error' });
+        setIsUploading(false);
+        return;
+      }
+      const { id: blobId, size } = await fileRes.json() as { id: string; size: number };
+
+      const metaRes = await fetch('/.netlify/functions/files', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           name: file.name,
-          content: base64,
+          blobId, size,
           mimeType: file.type || 'application/octet-stream',
           parentId: currentFolderId,
         }),
       });
-      if (res.ok) {
+      const metaData = await metaRes.json().catch(() => ({})) as Record<string, unknown>;
+      if (metaData.error) {
+        enqueueSnackbar(String(metaData.error), { variant: 'error' });
+      } else {
         enqueueSnackbar('File uploaded', { variant: 'success' });
         onUploaded();
-      } else {
-        enqueueSnackbar('Upload failed', { variant: 'error' });
       }
-    } catch {
-      enqueueSnackbar('Upload failed', { variant: 'error' });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      enqueueSnackbar(msg || 'Upload failed', { variant: 'error' });
     }
     setIsUploading(false);
     e.target.value = '';

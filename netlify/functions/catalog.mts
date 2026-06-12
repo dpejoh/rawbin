@@ -4,7 +4,20 @@ import { X509Certificate } from "node:crypto";
 const SITE_URL = process.env.URL ?? `https://${process.env.SITE_NAME}.netlify.app`;
 const GOOGLE_REVOCATION_URL = "https://android.googleapis.com/attestation/status";
 const RE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
-const CORS = { "Access-Control-Allow-Origin": "*" };
+
+function ok(data: unknown) {
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function fail(msg: string) {
+  return new Response(JSON.stringify({ error: msg }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
 
 async function verifyToken(token: string): Promise<{ email: string; id: string } | null> {
   try {
@@ -198,268 +211,231 @@ async function findWorking(index: HistoryEntry[]): Promise<{ source: string; ver
 }
 
 export default async (req: Request) => {
-  const url = new URL(req.url);
-  const method = req.method;
+  try {
+    const url = new URL(req.url);
+    const method = req.method;
 
-  if (method === "GET") {
-    const versionQuery = url.searchParams.get("v");
-    const serialQuery = url.searchParams.get("serial");
-    const index = await getHistoryIndex();
-
-    let needsSave = false;
-    for (const entry of index) {
-      if (!entry.source) {
-        entry.source = "unknown";
-        needsSave = true;
-      }
-      if (!entry.text) {
-        entry.text = entry.version;
-        needsSave = true;
-      }
-    }
-    if (needsSave) await saveHistoryIndex(index);
-
-    const recheckQuery = url.searchParams.get("recheck");
-    if (recheckQuery) {
-      const colon = recheckQuery.indexOf(":");
-      const src = colon >= 0 ? recheckQuery.slice(0, colon) : "";
-      const ver = colon >= 0 ? recheckQuery.slice(colon + 1) : recheckQuery;
-      const entry = index.find(e => e.source === src && e.version === ver);
-      if (!entry) return new Response("Not found", { status: 404 });
-      const isRevoked = await checkGoogleRevocation(entry.serial);
-      entry.revoked = isRevoked;
-      entry.last_checked = new Date().toISOString();
-      await saveHistoryIndex(index);
-      return new Response(JSON.stringify(serializeEntry(entry)), {
-        status: 200,
-        headers: { "Content-Type": "application/json", ...CORS },
-      });
-    }
-
-    if (versionQuery) {
-      const store = getHistoryStore();
-      const content = await store.get(`content:${versionQuery}`);
-      if (!content) {
-        return new Response("Not found", { status: 404 });
-      }
-      const meta = await getContentMeta(versionQuery);
-      const decoded = meta?.useBase64 ? Buffer.from(content, "base64").toString() : content;
-      return new Response(decoded, {
-        status: 200,
-        headers: { "Content-Type": "text/plain", ...CORS },
-      });
-    }
-
-    if (serialQuery) {
-      const entry = index.find(e => e.serial === serialQuery);
-      if (!entry) {
-        return new Response("Not found", { status: 404 });
-      }
-      return new Response(JSON.stringify(serializeEntry(entry)), {
-        status: 200,
-        headers: { "Content-Type": "application/json", ...CORS },
-      });
-    }
-
-    const changed = await reCheckRevocations(index);
-    if (changed) await saveHistoryIndex(index);
-
-    const latest = computeLatestPerSource(index);
-    const working = await findWorking(index);
-    const autoOverride = await getAutoOverride();
-
-    return new Response(JSON.stringify({ entries: index.map(serializeEntry), latest, working, autoOverride }), {
-      status: 200,
-      headers: { "Content-Type": "application/json", ...CORS },
-    });
-  }
-
-  const auth = req.headers.get("Authorization") ?? "";
-  const token = auth.replace("Bearer ", "");
-  if (!token) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-
-  const user = await verifyToken(token);
-  if (!user) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-
-  if (method === "POST") {
-    const path = url.pathname;
-    const isSave = path.endsWith("/save");
-    const isSetStatus = path.endsWith("/set-status");
-    const isSetAutoOverride = path.endsWith("/set-auto-override");
-    const isClearAutoOverride = path.endsWith("/clear-auto-override");
-
-    if (isClearAutoOverride) {
-      await clearAutoOverride();
-      return new Response(JSON.stringify({ autoOverride: null }), {
-        status: 200,
-        headers: { "Content-Type": "application/json", ...CORS },
-      });
-    }
-
-    let body: unknown;
-    try {
-      body = (await req.json()) as unknown;
-    } catch {
-      return new Response("Invalid JSON", { status: 400 });
-    }
-
-    if (isSetAutoOverride) {
-      const { source, version } = body as { source?: string; version?: string };
-      if (!source) {
-        return new Response("Missing source", { status: 400 });
-      }
-      const override: AutoOverride = version ? { source, version } : { source };
-      await setAutoOverride(override);
-      return new Response(JSON.stringify({ autoOverride: override }), {
-        status: 200,
-        headers: { "Content-Type": "application/json", ...CORS },
-      });
-    }
-
-    if (isSetStatus) {
-      const { source, version, status } = body as { source?: string; version?: string; status?: string };
-      if (!source || !version || !status) {
-        return new Response("Missing source, version, or status", { status: 400 });
-      }
-      if (!["active", "softbanned", "revoked"].includes(status)) {
-        return new Response("Invalid status", { status: 400 });
-      }
+    if (method === "GET") {
+      const versionQuery = url.searchParams.get("v");
+      const serialQuery = url.searchParams.get("serial");
       const index = await getHistoryIndex();
-      const entry = index.find(e => e.source === source && e.version === version);
-      if (!entry) {
-        return new Response("Not found", { status: 404 });
+
+      let needsSave = false;
+      for (const entry of index) {
+        if (!entry.source) {
+          entry.source = "unknown";
+          needsSave = true;
+        }
+        if (!entry.text) {
+          entry.text = entry.version;
+          needsSave = true;
+        }
       }
-      if (status === "active" || status === "softbanned") {
+      if (needsSave) await saveHistoryIndex(index);
+
+      const recheckQuery = url.searchParams.get("recheck");
+      if (recheckQuery) {
+        const colon = recheckQuery.indexOf(":");
+        const src = colon >= 0 ? recheckQuery.slice(0, colon) : "";
+        const ver = colon >= 0 ? recheckQuery.slice(colon + 1) : recheckQuery;
+        const entry = index.find(e => e.source === src && e.version === ver);
+        if (!entry) return fail("Not found");
         const isRevoked = await checkGoogleRevocation(entry.serial);
-        if (isRevoked) {
+        entry.revoked = isRevoked;
+        entry.last_checked = new Date().toISOString();
+        await saveHistoryIndex(index);
+        return ok(serializeEntry(entry));
+      }
+
+      if (versionQuery) {
+        const store = getHistoryStore();
+        const content = await store.get(`content:${versionQuery}`);
+        if (!content) {
+          return fail("Not found");
+        }
+        const meta = await getContentMeta(versionQuery);
+        const decoded = meta?.useBase64 ? Buffer.from(content, "base64").toString() : content;
+        return new Response(decoded, {
+          status: 200,
+          headers: { "Content-Type": "text/plain" },
+        });
+      }
+
+      if (serialQuery) {
+        const entry = index.find(e => e.serial === serialQuery);
+        if (!entry) return fail("Not found");
+        return ok(serializeEntry(entry));
+      }
+
+      const changed = await reCheckRevocations(index);
+      if (changed) await saveHistoryIndex(index);
+
+      const latest = computeLatestPerSource(index);
+      const working = await findWorking(index);
+      const autoOverride = await getAutoOverride();
+
+      return ok({ entries: index.map(serializeEntry), latest, working, autoOverride });
+    }
+
+    const auth = req.headers.get("Authorization") ?? "";
+    const token = auth.replace("Bearer ", "");
+    if (!token) return fail("Unauthorized");
+
+    const user = await verifyToken(token);
+    if (!user) return fail("Unauthorized");
+
+    if (method === "POST") {
+      const path = url.pathname;
+      const isSave = path.endsWith("/save");
+      const isSetStatus = path.endsWith("/set-status");
+      const isSetAutoOverride = path.endsWith("/set-auto-override");
+      const isClearAutoOverride = path.endsWith("/clear-auto-override");
+
+      if (isClearAutoOverride) {
+        await clearAutoOverride();
+        return ok({ autoOverride: null });
+      }
+
+      let body: unknown;
+      try {
+        body = (await req.json()) as unknown;
+      } catch {
+        return fail("Invalid JSON");
+      }
+
+      if (isSetAutoOverride) {
+        const { source, version } = body as { source?: string; version?: string };
+        if (!source) return fail("Missing source");
+        const override: AutoOverride = version ? { source, version } : { source };
+        await setAutoOverride(override);
+        return ok({ autoOverride: override });
+      }
+
+      if (isSetStatus) {
+        const { source, version, status } = body as { source?: string; version?: string; status?: string };
+        if (!source || !version || !status) return fail("Missing source, version, or status");
+        if (!["active", "softbanned", "revoked"].includes(status)) return fail("Invalid status");
+        const index = await getHistoryIndex();
+        const entry = index.find(e => e.source === source && e.version === version);
+        if (!entry) return fail("Not found");
+        if (status === "active" || status === "softbanned") {
+          const isRevoked = await checkGoogleRevocation(entry.serial);
+          if (isRevoked) {
+            entry.revoked = true;
+            entry.softbanned = false;
+          } else {
+            entry.revoked = false;
+            entry.softbanned = status === "softbanned";
+          }
+        } else {
           entry.revoked = true;
           entry.softbanned = false;
-        } else {
-          entry.revoked = false;
-          entry.softbanned = status === "softbanned";
         }
-      } else {
-        entry.revoked = true;
-        entry.softbanned = false;
-      }
-      entry.last_checked = new Date().toISOString();
-      await saveHistoryIndex(index);
-      return new Response(JSON.stringify(serializeEntry(entry)), {
-        status: 200,
-        headers: { "Content-Type": "application/json", ...CORS },
-      });
-    }
-
-    if (isSave) {
-      const { content, version, source, text, useBase64 } = body as { content?: string; version?: string; source?: string; text?: string; useBase64?: boolean };
-      if (!content || !version || !source) {
-        return new Response("Missing content, version, or source", { status: 400 });
-      }
-      const serial = decodeCertSerial(content);
-      if (!serial) {
-        return new Response("Could not decode certificate", { status: 400 });
+        entry.last_checked = new Date().toISOString();
+        await saveHistoryIndex(index);
+        return ok(serializeEntry(entry));
       }
 
-      const src = source;
-      const txt = text ?? version;
-      const isRevoked = await checkGoogleRevocation(serial);
-      const now = new Date().toISOString();
+      if (isSave) {
+        const { content, version, source, text, useBase64 } = body as { content?: string; version?: string; source?: string; text?: string; useBase64?: boolean };
+        if (!content || !version || !source) return fail("Missing content, version, or source");
+        const serial = decodeCertSerial(content);
+        if (!serial) return fail("Could not decode certificate");
+
+        const src = source;
+        const txt = text ?? version;
+        const isRevoked = await checkGoogleRevocation(serial);
+        const now = new Date().toISOString();
+
+        const index = await getHistoryIndex();
+        const existing = index.find(e => e.source === src && e.version === version);
+        if (existing) {
+          existing.text = txt;
+          existing.serial = serial;
+          existing.revoked = isRevoked;
+          existing.last_checked = now;
+          existing.timestamp = now;
+        } else {
+          index.push({ source: src, version, text: txt, serial, revoked: isRevoked, softbanned: false, last_checked: now, timestamp: now });
+        }
+        await saveHistoryIndex(index);
+
+        const store = getHistoryStore();
+        const storedContent = useBase64 ? Buffer.from(content).toString("base64") : content;
+        await store.set(`content:${src}:${version}`, storedContent);
+        await setContentMeta(`${src}:${version}`, { useBase64: !!useBase64 });
+
+        return ok({ source: src, version, serial, revoked: isRevoked, softbanned: false });
+      }
+
+      const entries = body as Array<{ source?: string; version?: string; content?: string; text?: string; useBase64?: boolean }>;
+      if (!Array.isArray(entries)) return fail("Expected array");
 
       const index = await getHistoryIndex();
-      const existing = index.find(e => e.source === src && e.version === version);
-      if (existing) {
-        existing.text = txt;
-        existing.serial = serial;
-        existing.revoked = isRevoked;
-        existing.last_checked = now;
-        existing.timestamp = now;
-      } else {
-        index.push({ source: src, version, text: txt, serial, revoked: isRevoked, softbanned: false, last_checked: now, timestamp: now });
+      const store = getHistoryStore();
+      const results: Array<{ source: string; version: string; status: string }> = [];
+
+      for (const entry of entries) {
+        if (!entry.version || !entry.content || !entry.source) {
+          results.push({ source: entry.source ?? "?", version: entry.version ?? "?", status: "skipped: missing fields" });
+          continue;
+        }
+        const serial = decodeCertSerial(entry.content);
+        if (!serial) {
+          results.push({ source: entry.source, version: entry.version, status: "skipped: could not decode" });
+          continue;
+        }
+
+        const src = entry.source;
+        const txt = entry.text ?? entry.version;
+        const isRevoked = await checkGoogleRevocation(serial);
+        const now = new Date().toISOString();
+
+        const existing = index.find(e => e.source === src && e.version === entry.version);
+        if (!existing) {
+          index.push({ source: src, version: entry.version, text: txt, serial, revoked: isRevoked, softbanned: false, last_checked: now, timestamp: now });
+        } else {
+          existing.text = txt;
+        }
+        const storedContent = entry.useBase64 ? Buffer.from(entry.content).toString("base64") : entry.content;
+        await store.set(`content:${src}:${entry.version}`, storedContent);
+        await setContentMeta(`${src}:${entry.version}`, { useBase64: !!entry.useBase64 });
+        results.push({ source: src, version: entry.version, status: "ok" });
       }
+
+      await saveHistoryIndex(index);
+      return ok({ imported: results.length, results });
+    }
+
+    if (method === "DELETE") {
+      let body: unknown;
+      try {
+        body = (await req.json()) as unknown;
+      } catch {
+        return fail("Invalid JSON");
+      }
+
+      const { source, version } = body as { source?: string; version?: string };
+      if (!source || !version) return fail("Missing source or version");
+
+      const index = await getHistoryIndex();
+      const idx = index.findIndex(e => e.source === source && e.version === version);
+      if (idx === -1) return fail("Not found");
+
+      index.splice(idx, 1);
       await saveHistoryIndex(index);
 
       const store = getHistoryStore();
-      const storedContent = useBase64 ? Buffer.from(content).toString("base64") : content;
-      await store.set(`content:${src}:${version}`, storedContent);
-      await setContentMeta(`${src}:${version}`, { useBase64: !!useBase64 });
+      await store.delete(`content:${source}:${version}`);
 
-      return new Response(JSON.stringify({ source: src, version, serial, revoked: isRevoked, softbanned: false }), { status: 200 });
+      return ok({ deleted: true });
     }
 
-    const entries = body as Array<{ source?: string; version?: string; content?: string; text?: string; useBase64?: boolean }>;
-    if (!Array.isArray(entries)) {
-      return new Response("Expected array", { status: 400 });
-    }
-
-    const index = await getHistoryIndex();
-    const store = getHistoryStore();
-    const results: Array<{ source: string; version: string; status: string }> = [];
-
-    for (const entry of entries) {
-      if (!entry.version || !entry.content || !entry.source) {
-        results.push({ source: entry.source ?? "?", version: entry.version ?? "?", status: "skipped: missing fields" });
-        continue;
-      }
-      const serial = decodeCertSerial(entry.content);
-      if (!serial) {
-        results.push({ source: entry.source, version: entry.version, status: "skipped: could not decode" });
-        continue;
-      }
-
-      const src = entry.source;
-      const txt = entry.text ?? entry.version;
-      const isRevoked = await checkGoogleRevocation(serial);
-      const now = new Date().toISOString();
-
-      const existing = index.find(e => e.source === src && e.version === entry.version);
-      if (!existing) {
-        index.push({ source: src, version: entry.version, text: txt, serial, revoked: isRevoked, softbanned: false, last_checked: now, timestamp: now });
-      } else {
-        existing.text = txt;
-      }
-      const storedContent = entry.useBase64 ? Buffer.from(entry.content).toString("base64") : entry.content;
-      await store.set(`content:${src}:${entry.version}`, storedContent);
-      await setContentMeta(`${src}:${entry.version}`, { useBase64: !!entry.useBase64 });
-      results.push({ source: src, version: entry.version, status: "ok" });
-    }
-
-    await saveHistoryIndex(index);
-    return new Response(JSON.stringify({ imported: results.length, results }), { status: 200 });
+    return fail("Method Not Allowed");
+  } catch (err) {
+    const msg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
+    return fail(msg);
   }
-
-  if (method === "DELETE") {
-    let body: unknown;
-    try {
-      body = (await req.json()) as unknown;
-    } catch {
-      return new Response("Invalid JSON", { status: 400 });
-    }
-
-    const { source, version } = body as { source?: string; version?: string };
-    if (!source || !version) {
-      return new Response("Missing source or version", { status: 400 });
-    }
-
-    const index = await getHistoryIndex();
-    const idx = index.findIndex(e => e.source === source && e.version === version);
-    if (idx === -1) {
-      return new Response("Not found", { status: 404 });
-    }
-
-    index.splice(idx, 1);
-    await saveHistoryIndex(index);
-
-    const store = getHistoryStore();
-    await store.delete(`content:${source}:${version}`);
-
-    return new Response("Deleted", { status: 200 });
-  }
-
-  return new Response("Method Not Allowed", { status: 405 });
 };
 
 function serializeEntry(e: HistoryEntry): Record<string, unknown> {

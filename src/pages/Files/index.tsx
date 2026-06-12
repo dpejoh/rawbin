@@ -26,7 +26,6 @@ import ArchiveIcon from '@mui/icons-material/Archive';
 import DataObjectIcon from '@mui/icons-material/DataObject';
 import { useSnackbar } from 'notistack';
 import { relativeTime, formatSize } from '../../utils/time';
-import { fileToBase64 } from '../../utils/upload';
 import UploadDialog from './UploadDialog';
 import CreateFolderDialog from './CreateFolderDialog';
 
@@ -166,20 +165,27 @@ export default function FilesPage({ token }: FilesPageProps) {
 
   const uploadFile = useCallback(async (file: File): Promise<string> => {
     if (!token) throw new Error('No token');
-    const base64 = await fileToBase64(file);
+    const r2Worker = import.meta.env.VITE_R2_WORKER_URL ?? "http://localhost:8787";
+    const fileRes = await fetch(`${r2Worker}/upload/files`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}` },
+      body: file,
+    });
+    if (!fileRes.ok) throw new Error('Storage upload failed');
+    const { id: blobId, size } = await fileRes.json() as { id: string; size: number };
     const res = await fetch('/.netlify/functions/files', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         name: file.name,
-        content: base64,
+        blobId, size,
         mimeType: file.type || 'application/octet-stream',
         parentId: currentFolderId,
       }),
     });
-    if (!res.ok) throw new Error('Upload failed');
-    const { id } = await res.json() as { id: string };
-    return id;
+    const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+    if (data.error) throw new Error(String(data.error));
+    return data.id as string;
   }, [token, currentFolderId]);
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {

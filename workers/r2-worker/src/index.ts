@@ -53,7 +53,7 @@ export default {
       if (request.method === "DELETE" && path === "raw" && action) {
         const key = url.pathname.slice(`/raw/${action}/`.length);
         if (!key) return respond("Not found", 404);
-        return handleDelete(env, action, key);
+        return handleDelete(request, env, action, key);
       }
 
       return respond("Not found", 404);
@@ -110,7 +110,13 @@ async function handleUpload(request: Request, env: Env, bucket: string): Promise
   return json({ id: blobId, size: blob.size, key });
 }
 
-async function handleDelete(env: Env, bucket: string, key: string): Promise<Response> {
+async function handleDelete(request: Request, env: Env, bucket: string, key: string): Promise<Response> {
+  const auth = request.headers.get("Authorization") ?? "";
+  const token = auth.replace("Bearer ", "");
+  if (!token) return respond("Unauthorized", 401);
+  const isValid = await verifyToken(token, env);
+  if (!isValid) return respond("Unauthorized", 401);
+
   const fullKey = `${bucket}/${key}`;
   await env.RAW_BIN.delete(fullKey);
   return respond("Deleted", 200);

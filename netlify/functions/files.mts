@@ -2,6 +2,22 @@ import { getStore } from "@netlify/blobs";
 import { randomUUID } from "node:crypto";
 
 const SITE_URL = process.env.URL ?? `https://${process.env.SITE_NAME}.netlify.app`;
+const R2_WORKER = process.env.R2_WORKER_URL ?? "http://localhost:8787";
+const STORAGE_R2 = "r2";
+
+function ok(data: unknown) {
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function fail(msg: string) {
+  return new Response(JSON.stringify({ error: msg }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
 
 async function verifyToken(token: string): Promise<{ email: string; id: string } | null> {
   try {
@@ -25,6 +41,7 @@ interface FileMeta {
   isFolder?: boolean;
   createdAt: string;
   updatedAt: string;
+  storage?: string;
 }
 
 function getStoreInstance() {
@@ -48,6 +65,10 @@ async function deleteContent(id: string): Promise<void> {
   await store.delete(id);
 }
 
+async function deleteFromR2(blobId: string): Promise<void> {
+  await fetch(`${R2_WORKER}/raw/files/${blobId}`, { method: "DELETE" });
+}
+
 function collectDescendants(index: FileMeta[], parentId: string): string[] {
   const ids: string[] = [];
   const children = index.filter((f) => f.parentId === parentId);
@@ -61,234 +82,212 @@ function collectDescendants(index: FileMeta[], parentId: string): string[] {
 }
 
 export default async (req: Request) => {
-  const method = req.method;
-  const url = new URL(req.url);
-  const path = url.pathname;
-  const segments = path.split("/").filter(Boolean);
-  const rawId = segments[segments.length - 1];
+  try {
+    const method = req.method;
+    const url = new URL(req.url);
+    const path = url.pathname;
+    const segments = path.split("/").filter(Boolean);
+    const rawId = segments[segments.length - 1];
 
-  const isRawRequest = method === "GET" && !!rawId && (
-    (segments[0] === "file" && segments.length >= 2) ||
-    (segments[segments.length - 2] === "files")
-  );
+    const isRawRequest = method === "GET" && !!rawId && (
+      (segments[0] === "file" && segments.length >= 2) ||
+      (segments[segments.length - 2] === "files")
+    );
 
-  if (isRawRequest && rawId) {
-    const index = await getIndex();
+    if (isRawRequest && rawId) {
+      const index = await getIndex();
 
-    let item: FileMeta | undefined;
+      let item: FileMeta | undefined;
 
-    if (rawId.length === 36) {
-      item = index.find((f) => f.id === rawId);
-    }
+      if (rawId.length === 36) {
+        item = index.find((f) => f.id === rawId);
+      }
 
-    if (!item) {
-      const pathParts = segments.slice(1);
-      let parentId = "";
-      for (let i = 0; i < pathParts.length; i++) {
-        const part = pathParts[i]!;
-        const candidates = index.filter((f) => f.parentId === parentId && f.name === part);
-        if (i === pathParts.length - 1) {
-          item = candidates.find((f) => !f.isFolder);
-        } else {
-          const folder = candidates.find((f) => f.isFolder);
-          if (!folder) break;
-          parentId = folder.id;
+      if (!item) {
+        const pathParts = segments.slice(1);
+        let parentId = "";
+        for (let i = 0; i < pathParts.length; i++) {
+          const part = pathParts[i]!;
+          const candidates = index.filter((f) => f.parentId === parentId && f.name === part);
+          if (i === pathParts.length - 1) {
+            item = candidates.find((f) => !f.isFolder);
+          } else {
+            const folder = candidates.find((f) => f.isFolder);
+            if (!folder) break;
+            parentId = folder.id;
+          }
         }
       }
-    }
 
-    if (!item || item.isFolder) {
-      return new Response("Not found", { status: 404 });
-    }
+      if (!item || item.isFolder) {
+        return new Response("Not found", { status: 404 });
+      }
 
-    const store = getStoreInstance();
-    const content = await store.get(item.id, { type: "arrayBuffer" });
-    if (!content) {
-      return new Response("Not found", { status: 404 });
-    }
+      if (item.storage === STORAGE_R2) {
+        return Response.redirect(`${R2_WORKER}/raw/files/${item.id}`, 302);
+      }
 
-    return new Response(content, {
-      status: 200,
-      headers: { "Content-Type": item.mimeType },
-    });
-  }
+      const store = getStoreInstance();
+      const content = await store.get(item.id, { type: "arrayBuffer" });
+      if (!content) {
+        return new Response("Not found", { status: 404 });
+      }
 
-  const auth = req.headers.get("Authorization") ?? "";
-  const token = auth.replace("Bearer ", "");
-  if (!token) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-
-  const user = await verifyToken(token);
-  if (!user) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-
-  const store = getStoreInstance();
-
-  switch (method) {
-    case "GET": {
-      const index = await getIndex();
-      const parentId = url.searchParams.get("parentId") ?? "";
-      const filtered = parentId
-        ? index.filter((f) => f.parentId === parentId)
-        : index;
-      const result = filtered.map(({ id, name, mimeType, size, parentId, isFolder, createdAt, updatedAt }) => ({
-        id, name, mimeType, size, parentId, isFolder, createdAt, updatedAt,
-      }));
-      return new Response(JSON.stringify(result), {
+      return new Response(content, {
         status: 200,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": item.mimeType },
       });
     }
 
-    case "POST": {
-      const contentType = req.headers.get("content-type") ?? "";
-      const isFolderEndpoint = url.searchParams.has("folder");
+    const auth = req.headers.get("Authorization") ?? "";
+    const token = auth.replace("Bearer ", "");
+    if (!token) return fail("Unauthorized");
 
-      if (isFolderEndpoint) {
+    const user = await verifyToken(token);
+    if (!user) return fail("Unauthorized");
+
+    const store = getStoreInstance();
+
+    switch (method) {
+      case "GET": {
+        const index = await getIndex();
+        const parentId = url.searchParams.get("parentId") ?? "";
+        const filtered = parentId
+          ? index.filter((f) => f.parentId === parentId)
+          : index;
+        const result = filtered.map(({ id, name, mimeType, size, parentId, isFolder, createdAt, updatedAt }) => ({
+          id, name, mimeType, size, parentId, isFolder, createdAt, updatedAt,
+        }));
+        return ok(result);
+      }
+
+      case "POST": {
+        const contentType = req.headers.get("content-type") ?? "";
+        const isFolderEndpoint = url.searchParams.has("folder");
+
+        if (isFolderEndpoint) {
+          let body: unknown;
+          try {
+            body = (await req.json()) as unknown;
+          } catch {
+            return fail("Invalid JSON");
+          }
+          if (
+            typeof body !== "object" || body === null ||
+            !("name" in body) || typeof (body as Record<string, unknown>).name !== "string"
+          ) {
+            return fail("Invalid body. Required: name");
+          }
+          const { name, parentId } = body as { name: string; parentId?: string };
+          if (!name.trim()) {
+            return fail("Name is required");
+          }
+          const id = randomUUID();
+          const now = new Date().toISOString();
+          const meta: FileMeta = {
+            id, name: name.trim(), mimeType: "inode/directory", size: 0,
+            parentId: parentId ?? "", isFolder: true, createdAt: now, updatedAt: now,
+          };
+          const index = await getIndex();
+          index.push(meta);
+          await saveIndex(index);
+          return ok({ id });
+        }
+
         let body: unknown;
         try {
           body = (await req.json()) as unknown;
         } catch {
-          return new Response("Invalid JSON", { status: 400 });
+          return fail("Invalid JSON");
         }
+
         if (
           typeof body !== "object" || body === null ||
           !("name" in body) || typeof (body as Record<string, unknown>).name !== "string"
         ) {
-          return new Response("Invalid body. Required: name", { status: 400 });
+          return fail("Invalid body. Required: name");
         }
-        const { name, parentId } = body as { name: string; parentId?: string };
-        if (!name.trim()) {
-          return new Response("Name is required", { status: 400 });
-        }
-        const id = randomUUID();
-        const now = new Date().toISOString();
-        const meta: FileMeta = {
-          id, name: name.trim(), mimeType: "inode/directory", size: 0,
-          parentId: parentId ?? "", isFolder: true, createdAt: now, updatedAt: now,
+
+        const { name, blobId, size: bodySize, mimeType, content, parentId: bodyParentId } = body as {
+          name: string; blobId?: string; size?: number; mimeType?: string; content?: string; parentId?: string;
         };
-        const index = await getIndex();
-        index.push(meta);
-        await saveIndex(index);
-        return new Response(JSON.stringify({ id }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
 
-      if (contentType.includes("application/json")) {
-        let body: unknown;
-        try {
-          body = (await req.json()) as unknown;
-        } catch {
-          return new Response("Invalid JSON", { status: 400 });
+        if (blobId) {
+          // R2-stored file: accept blobId + metadata only
+          const id = blobId;
+          const now = new Date().toISOString();
+          const meta: FileMeta = {
+            id, name, mimeType: mimeType ?? "application/octet-stream",
+            size: bodySize ?? 0, parentId: bodyParentId ?? "",
+            createdAt: now, updatedAt: now, storage: STORAGE_R2,
+          };
+
+          const index = await getIndex();
+          index.push(meta);
+          await saveIndex(index);
+          return ok({ id });
         }
 
-        if (
-          typeof body !== "object" || body === null ||
-          !("name" in body) || typeof (body as Record<string, unknown>).name !== "string" ||
-          !("content" in body) || typeof (body as Record<string, unknown>).content !== "string" ||
-          !("mimeType" in body) || typeof (body as Record<string, unknown>).mimeType !== "string"
-        ) {
-          return new Response("Invalid body. Required: name, content (base64), mimeType", { status: 400 });
+        // Legacy base64 upload
+        if (!content || !mimeType) {
+          return fail("Missing content (base64) and mimeType, or blobId");
         }
-
-        const { name, content, mimeType, parentId } = body as { name: string; content: string; mimeType: string; parentId?: string };
 
         const buf = Buffer.from(content, "base64");
         const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-        const size = buf.byteLength;
+        const fileSize = buf.byteLength;
 
         const id = randomUUID();
         const now = new Date().toISOString();
-        const meta: FileMeta = { id, name, mimeType, size, parentId: parentId ?? "", createdAt: now, updatedAt: now };
-
+        const meta: FileMeta = { id, name, mimeType, size: fileSize, parentId: bodyParentId ?? "", createdAt: now, updatedAt: now };
         const index = await getIndex();
         index.push(meta);
         await saveIndex(index);
         await store.set(id, ab);
 
-        return new Response(JSON.stringify({ id }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
+        return ok({ id });
       }
 
-      if (url.searchParams.has("url")) {
-        const name = url.searchParams.get("name") ?? "unnamed";
-        const fileUrl = url.searchParams.get("url") ?? "";
-        const parentId = url.searchParams.get("parentId") ?? "";
-        if (!fileUrl) {
-          return new Response("url query param is required", { status: 400 });
-        }
-
-        let fileRes: Response;
+      case "DELETE": {
+        let body: unknown;
         try {
-          fileRes = await fetch(fileUrl);
+          body = (await req.json()) as unknown;
         } catch {
-          return new Response("Failed to fetch URL", { status: 400 });
-        }
-        if (!fileRes.ok) {
-          return new Response(`Remote returned ${fileRes.status}`, { status: 400 });
+          return fail("Invalid JSON");
         }
 
-        const mimeType = fileRes.headers.get("content-type") ?? "application/octet-stream";
-        const arrayBuffer = await fileRes.arrayBuffer();
-        const size = arrayBuffer.byteLength;
+        if (
+          typeof body !== "object" || body === null ||
+          !("id" in body) || typeof (body as Record<string, unknown>).id !== "string"
+        ) {
+          return fail("Invalid body");
+        }
 
-        const id = randomUUID();
-        const now = new Date().toISOString();
-        const meta: FileMeta = { id, name, mimeType, size, parentId, createdAt: now, updatedAt: now };
-
+        const delId = (body as { id: string }).id;
         const index = await getIndex();
-        index.push(meta);
-        await saveIndex(index);
-        await store.set(id, arrayBuffer);
+        const item = index.find((f) => f.id === delId);
+        if (!item) return fail("Not found");
 
-        return new Response(JSON.stringify({ id }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
+        const idsToDelete = [delId, ...collectDescendants(index, delId)];
+        const newIndex = index.filter((f) => !idsToDelete.includes(f.id));
+        await saveIndex(newIndex);
+        for (const id of idsToDelete) {
+          const f = index.find((f) => f.id === id);
+          if (f?.storage === STORAGE_R2) {
+            deleteFromR2(id).catch(() => {});
+          } else {
+            await deleteContent(id);
+          }
+        }
+
+        return ok({ deleted: true });
       }
 
-      return new Response("Send JSON body or use ?url&name= query params", { status: 400 });
+      default:
+        return fail("Method Not Allowed");
     }
-
-    case "DELETE": {
-      let body: unknown;
-      try {
-        body = (await req.json()) as unknown;
-      } catch {
-        return new Response("Invalid JSON", { status: 400 });
-      }
-
-      if (
-        typeof body !== "object" || body === null ||
-        !("id" in body) || typeof (body as Record<string, unknown>).id !== "string"
-      ) {
-        return new Response("Invalid body", { status: 400 });
-      }
-
-      const delId = (body as { id: string }).id;
-      const index = await getIndex();
-      const item = index.find((f) => f.id === delId);
-      if (!item) {
-        return new Response("Not found", { status: 404 });
-      }
-
-      const idsToDelete = [delId, ...collectDescendants(index, delId)];
-      const newIndex = index.filter((f) => !idsToDelete.includes(f.id));
-      await saveIndex(newIndex);
-      for (const id of idsToDelete) {
-        await deleteContent(id);
-      }
-
-      return new Response("Deleted", { status: 200 });
-    }
-
-    default:
-      return new Response("Method Not Allowed", { status: 405 });
+  } catch (err) {
+    const msg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
+    return fail(msg);
   }
 };

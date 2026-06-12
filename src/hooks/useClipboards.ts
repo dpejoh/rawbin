@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 
 export interface Clipboard {
   id: string;
@@ -13,6 +13,7 @@ export interface Clipboard {
 interface UseClipboardsReturn {
   clipboards: Clipboard[];
   selected: Clipboard | null;
+  selectedId: string | null;
   isLoading: boolean;
   isSaving: boolean;
   fetchAll: (token: string) => Promise<Clipboard[]>;
@@ -24,9 +25,13 @@ interface UseClipboardsReturn {
 
 export default function useClipboards(): UseClipboardsReturn {
   const [clipboards, setClipboards] = useState<Clipboard[]>([]);
-  const [selected, setSelected] = useState<Clipboard | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const clipboardsRef = useRef(clipboards);
+  clipboardsRef.current = clipboards;
+
+  const selected = selectedId ? clipboards.find((c) => c.id === selectedId) ?? null : null;
 
   const fetchAll = useCallback(async (token: string): Promise<Clipboard[]> => {
     setIsLoading(true);
@@ -49,10 +54,9 @@ export default function useClipboards(): UseClipboardsReturn {
 
   const select = useCallback(
     (id: string | null) => {
-      const cb = id ? clipboards.find((c) => c.id === id) ?? null : null;
-      setSelected(cb);
+      setSelectedId(id);
     },
-    [clipboards]
+    []
   );
 
   const create = useCallback(
@@ -67,11 +71,11 @@ export default function useClipboards(): UseClipboardsReturn {
           },
           body: JSON.stringify({ name, slug: slug || undefined, useBase64: useBase64 !== false }),
         });
-        if (res.ok) {
-          const { id } = await res.json() as { id: string };
-          const data = await fetchAll(token);
-          const created = data.find((c) => c.id === id);
-          if (created) setSelected(created);
+        const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+        if (!data.error) {
+          const id = data.id as string;
+          await fetchAll(token);
+          setSelectedId(id);
           return id;
         }
         return null;
@@ -96,10 +100,9 @@ export default function useClipboards(): UseClipboardsReturn {
           },
           body: JSON.stringify({ id, ...data }),
         });
-        if (res.ok) {
-          const data = await fetchAll(token);
-          const updated = data.find((c) => c.id === id);
-          if (updated) setSelected(updated);
+        const resData = await res.json().catch(() => ({})) as Record<string, unknown>;
+        if (!resData.error) {
+          await fetchAll(token);
           return true;
         }
         return false;
@@ -124,8 +127,9 @@ export default function useClipboards(): UseClipboardsReturn {
           },
           body: JSON.stringify({ id }),
         });
-        if (res.ok) {
-          setSelected((prev) => (prev?.id === id ? null : prev));
+        const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+        if (!data.error) {
+          setSelectedId((prev) => (prev === id ? null : prev));
           await fetchAll(token);
           return true;
         }
@@ -142,6 +146,7 @@ export default function useClipboards(): UseClipboardsReturn {
   return {
     clipboards,
     selected,
+    selectedId,
     isLoading,
     isSaving,
     fetchAll,

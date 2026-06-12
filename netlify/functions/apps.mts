@@ -1,7 +1,20 @@
 import { getStore } from "@netlify/blobs";
 
 const SITE_URL = process.env.URL ?? `https://${process.env.SITE_NAME}.netlify.app`;
-const CORS = { "Access-Control-Allow-Origin": "*" };
+
+function ok(data: unknown) {
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function fail(msg: string) {
+  return new Response(JSON.stringify({ error: msg }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
 
 async function verifyToken(token: string): Promise<{ email: string; id: string } | null> {
   try {
@@ -47,111 +60,97 @@ function filterCatalog(catalog: AppCatalog, query: string): AppCatalog {
 }
 
 export default async (req: Request) => {
-  const url = new URL(req.url);
-  const method = req.method;
+  try {
+    const url = new URL(req.url);
+    const method = req.method;
 
-  if (method === "GET") {
-    // /apps/save → handled by POST below
-    if (url.pathname.endsWith("/save")) {
-      return new Response("Method Not Allowed", { status: 405 });
-    }
-
-    const catalog = await getCatalog();
-    const searchQuery = url.searchParams.get("q");
-    const result = searchQuery ? filterCatalog(catalog, searchQuery) : catalog;
-    return new Response(JSON.stringify(result), {
-      status: 200,
-      headers: { "Content-Type": "application/json", ...CORS },
-    });
-  }
-
-  const auth = req.headers.get("Authorization") ?? "";
-  const token = auth.replace("Bearer ", "");
-  if (!token) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-
-  const user = await verifyToken(token);
-  if (!user) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-
-  if (method === "POST") {
-    const path = url.pathname;
-    const isSave = path.endsWith("/save");
-
-    let body: unknown;
-    try {
-      body = (await req.json()) as unknown;
-    } catch {
-      return new Response("Invalid JSON", { status: 400 });
-    }
-
-    if (isSave) {
-      const { packageName, appName } = body as { packageName?: string; appName?: string };
-      if (!packageName || !appName) {
-        return new Response("Missing packageName or appName", { status: 400 });
+    if (method === "GET") {
+      if (url.pathname.endsWith("/save")) {
+        return fail("Method Not Allowed");
       }
+
       const catalog = await getCatalog();
-      catalog[packageName] = appName;
-      await saveCatalog(catalog);
-      return new Response(JSON.stringify({ packageName, appName }), {
-        status: 200,
-        headers: { "Content-Type": "application/json", ...CORS },
-      });
+      const searchQuery = url.searchParams.get("q");
+      const result = searchQuery ? filterCatalog(catalog, searchQuery) : catalog;
+      return ok(result);
     }
 
-    const entries = body as Array<{ packageName?: string; appName?: string }>;
-    if (!Array.isArray(entries)) {
-      return new Response("Expected array of entries", { status: 400 });
-    }
+    const auth = req.headers.get("Authorization") ?? "";
+    const token = auth.replace("Bearer ", "");
+    if (!token) return fail("Unauthorized");
 
-    const catalog = await getCatalog();
-    let imported = 0;
-    for (const entry of entries) {
-      if (!entry.packageName || !entry.appName) continue;
-      catalog[entry.packageName] = entry.appName;
-      imported++;
-    }
-    await saveCatalog(catalog);
+    const user = await verifyToken(token);
+    if (!user) return fail("Unauthorized");
 
-    return new Response(JSON.stringify({ imported, total: Object.keys(catalog).length }), {
-      status: 200,
-      headers: { "Content-Type": "application/json", ...CORS },
-    });
-  }
+    if (method === "POST") {
+      const path = url.pathname;
+      const isSave = path.endsWith("/save");
 
-  if (method === "DELETE") {
-    let body: unknown;
-    try {
-      body = (await req.json()) as unknown;
-    } catch {
-      return new Response("Invalid JSON", { status: 400 });
-    }
-
-    const { packageName } = body as { packageName?: string };
-    if (!packageName) {
-      return new Response("Missing packageName", { status: 400 });
-    }
-
-    const packages = Array.isArray(packageName) ? packageName : [packageName];
-    const catalog = await getCatalog();
-    let deleted = 0;
-    for (const pkg of packages) {
-      if (catalog[pkg]) {
-        delete catalog[pkg];
-        deleted++;
+      let body: unknown;
+      try {
+        body = (await req.json()) as unknown;
+      } catch {
+        return fail("Invalid JSON");
       }
+
+      if (isSave) {
+        const { packageName, appName } = body as { packageName?: string; appName?: string };
+        if (!packageName || !appName) {
+          return fail("Missing packageName or appName");
+        }
+        const catalog = await getCatalog();
+        catalog[packageName] = appName;
+        await saveCatalog(catalog);
+        return ok({ packageName, appName });
+      }
+
+      const entries = body as Array<{ packageName?: string; appName?: string }>;
+      if (!Array.isArray(entries)) {
+        return fail("Expected array of entries");
+      }
+
+      const catalog = await getCatalog();
+      let imported = 0;
+      for (const entry of entries) {
+        if (!entry.packageName || !entry.appName) continue;
+        catalog[entry.packageName] = entry.appName;
+        imported++;
+      }
+      await saveCatalog(catalog);
+
+      return ok({ imported, total: Object.keys(catalog).length });
     }
-    await saveCatalog(catalog);
 
-    return new Response(JSON.stringify({ deleted }), {
-      status: 200,
-      headers: { "Content-Type": "application/json", ...CORS },
-    });
+    if (method === "DELETE") {
+      let body: unknown;
+      try {
+        body = (await req.json()) as unknown;
+      } catch {
+        return fail("Invalid JSON");
+      }
+
+      const { packageName } = body as { packageName?: string };
+      if (!packageName) {
+        return fail("Missing packageName");
+      }
+
+      const packages = Array.isArray(packageName) ? packageName : [packageName];
+      const catalog = await getCatalog();
+      let deleted = 0;
+      for (const pkg of packages) {
+        if (catalog[pkg]) {
+          delete catalog[pkg];
+          deleted++;
+        }
+      }
+      await saveCatalog(catalog);
+
+      return ok({ deleted });
+    }
+
+    return fail("Method Not Allowed");
+  } catch (err) {
+    const msg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
+    return fail(msg);
   }
-
-  return new Response("Method Not Allowed", { status: 405 });
 };
-
-
