@@ -45,19 +45,19 @@ async function getAllRoles(): Promise<Record<string, string>> {
 async function saveAllRoles(roles: Record<string, string>): Promise<void> {
   const store = getStore("user-roles");
   await store.set("index", JSON.stringify(roles));
+  await store.get("index");
 }
 
 function validRole(role: string): boolean {
   return role === "viewer" || role === "editor" || role === "admin";
 }
 
-// Helper shared by all functions that need role checks
-export async function getUserRole(email: string): Promise<string> {
+async function getUserRole(email: string): Promise<string> {
   const roles = await getAllRoles();
   return roles[email] ?? "viewer";
 }
 
-export async function requireRole(email: string, minRole: string): Promise<boolean> {
+async function requireRole(email: string, minRole: string): Promise<boolean> {
   const role = await getUserRole(email);
   return (ROLE_HIERARCHY[role] ?? 0) >= (ROLE_HIERARCHY[minRole] ?? 0);
 }
