@@ -10,10 +10,13 @@ import {
   ListItemText,
   Typography,
 } from '@mui/material';
+import DataObjectIcon from '@mui/icons-material/DataObject';
 import KeyIcon from '@mui/icons-material/Key';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import FolderIcon from '@mui/icons-material/Folder';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
+import ExtensionIcon from '@mui/icons-material/Extension';
+import SmartphoneIcon from '@mui/icons-material/Smartphone';
 import LogoutIcon from '@mui/icons-material/Logout';
 import type { Page } from '../App';
 
@@ -29,6 +32,8 @@ const navItems: { id: Page; icon: React.ReactNode; label: string }[] = [
   { id: 'clipboards', icon: <ContentPasteIcon />, label: 'Boards' },
   { id: 'files', icon: <FolderIcon />, label: 'Files' },
   { id: 'apps', icon: <PlaylistAddCheckIcon />, label: 'Apps' },
+  { id: 'modules', icon: <ExtensionIcon />, label: 'Modules' },
+  { id: 'apks', icon: <SmartphoneIcon />, label: 'APKs' },
 ];
 
 export default function NavRail({
@@ -52,9 +57,9 @@ export default function NavRail({
       }}
     >
       <Stack alignItems="center" spacing={0.5}>
-        <KeyIcon sx={{ fontSize: 22, color: 'primary.main', mb: 0.5 }} />
+        <DataObjectIcon sx={{ fontSize: 22, color: 'primary.main', mb: 0.5 }} />
         <Typography sx={{ fontSize: 10, color: 'text.secondary', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-          keybox
+          rawbin
         </Typography>
       </Stack>
 

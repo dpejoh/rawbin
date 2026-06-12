@@ -3,6 +3,8 @@ import KeyIcon from "@mui/icons-material/Key";
 import ContentPasteIcon from "@mui/icons-material/ContentPaste";
 import FolderIcon from "@mui/icons-material/Folder";
 import PlaylistAddCheckIcon from "@mui/icons-material/PlaylistAddCheck";
+import ExtensionIcon from "@mui/icons-material/Extension";
+import SmartphoneIcon from "@mui/icons-material/Smartphone";
 import type { Page } from "../App";
 
 interface BottomNavProps {
@@ -43,6 +45,18 @@ export default function BottomNav({ activePage, onNavigate }: BottomNavProps) {
           value="apps"
           label="Apps"
           icon={<PlaylistAddCheckIcon />}
+          sx={{ color: "text.secondary", "&.Mui-selected": { color: "primary.main" } }}
+        />
+        <BottomNavigationAction
+          value="modules"
+          label="Modules"
+          icon={<ExtensionIcon />}
+          sx={{ color: "text.secondary", "&.Mui-selected": { color: "primary.main" } }}
+        />
+        <BottomNavigationAction
+          value="apks"
+          label="APKs"
+          icon={<SmartphoneIcon />}
           sx={{ color: "text.secondary", "&.Mui-selected": { color: "primary.main" } }}
         />
       </BottomNavigation>

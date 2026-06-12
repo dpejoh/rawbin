@@ -48,6 +48,26 @@ from = "/apps/*"
 to = "/.netlify/functions/apps/:splat"
 status = 200
 
+[[redirects]]
+from = "/mod"
+to = "/.netlify/functions/modules"
+status = 200
+
+[[redirects]]
+from = "/mod/*"
+to = "/.netlify/functions/modules/:splat"
+status = 200
+
+[[redirects]]
+from = "/apk"
+to = "/.netlify/functions/apks"
+status = 200
+
+[[redirects]]
+from = "/apk/*"
+to = "/.netlify/functions/apks/:splat"
+status = 200
+
 [[headers]]
   for = "/*"
   [headers.values]

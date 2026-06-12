@@ -15,18 +15,21 @@ import NavRail from './components/NavRail';
 import BottomNav from './components/BottomNav';
 import SnackbarProvider from './components/SnackbarProvider';
 import CommandPalette from './components/CommandPalette';
+import GlobalFab from './components/GlobalFab';
 import useAuth from './hooks/useAuth';
 
 const KeyboxManager = lazy(() => import('./pages/KeyboxManager'));
 const ClipboardsPage = lazy(() => import('./pages/Clipboards'));
 const FilesPage = lazy(() => import('./pages/Files'));
 const AppCatalog = lazy(() => import('./pages/AppCatalog'));
+const ModulesPage = lazy(() => import('./pages/Modules'));
+const APKsPage = lazy(() => import('./pages/APKs'));
 
-export type Page = 'keybox' | 'clipboards' | 'files' | 'apps';
+export type Page = 'keybox' | 'clipboards' | 'files' | 'apps' | 'modules' | 'apks';
 
 function getInitialPage(): Page {
   const stored = localStorage.getItem('keybox:page');
-  if (stored === 'keybox' || stored === 'clipboards' || stored === 'files') return stored;
+  if (stored === 'keybox' || stored === 'clipboards' || stored === 'files' || stored === 'modules' || stored === 'apks') return stored;
   return 'keybox';
 }
 
@@ -60,7 +63,7 @@ export default function App() {
         <CssBaseline />
         <Stack alignItems="center" justifyContent="center" sx={{ height: '100vh', bgcolor: 'background.default', gap: 2, px: 3 }}>
           <LockOpenIcon sx={{ fontSize: 48, color: 'outline.main' }} />
-          <Typography variant="h5" sx={{ color: 'text.primary' }}>Sign in to Keybox</Typography>
+          <Typography variant="h5" sx={{ color: 'text.primary' }}>Sign in to rawbin</Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center' }}>
             Authenticate with your Netlify Identity account to continue.
           </Typography>
@@ -89,11 +92,14 @@ export default function App() {
               {page === 'clipboards' && <ClipboardsPage token={token} />}
               {page === 'files' && <FilesPage token={token} />}
               {page === 'apps' && <AppCatalog token={token} />}
+              {page === 'modules' && <ModulesPage token={token} />}
+              {page === 'apks' && <APKsPage token={token} />}
             </Suspense>
           </Box>
         </Box>
 
         {token && <CommandPalette token={token} onNavigate={handleNavigate} />}
+        {token && <GlobalFab token={token} onNavigate={handleNavigate} />}
       </SnackbarProvider>
     </ThemeProvider>
   );

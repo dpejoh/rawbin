@@ -28,6 +28,14 @@ export default defineConfig({
         target: "https://rawbin.netlify.app",
         changeOrigin: true,
       },
+      "/mod": {
+        target: "https://rawbin.netlify.app",
+        changeOrigin: true,
+      },
+      "/apk": {
+        target: "https://rawbin.netlify.app",
+        changeOrigin: true,
+      },
     },
   },
 });
