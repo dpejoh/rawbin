@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Typography, TextField, Button, IconButton, Chip, CircularProgress,
-  InputAdornment, Box, Stack, Dialog, DialogTitle,
+  InputAdornment, Checkbox, Box, Stack, Dialog, DialogTitle,
   DialogContent, DialogActions, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, TableSortLabel,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import SmartphoneIcon from '@mui/icons-material/Smartphone';
@@ -31,6 +32,9 @@ export default function APKsPage({ token, role }: APKsPageProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [sortBy, setSortBy] = useState<'packageName' | 'appName' | 'versionCode' | 'updatedAt'>('updatedAt');
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropInputRef = useRef<HTMLInputElement>(null);
 
@@ -120,6 +124,21 @@ export default function APKsPage({ token, role }: APKsPageProps) {
     setDeleteTarget(null);
   }, [token, deleteTarget, remove, fetchAll, enqueueSnackbar]);
 
+  const handleBulkDelete = useCallback(async () => {
+    if (!token || selectedIds.size === 0) return;
+    setIsBatchDeleting(true);
+    let ok = 0; let fail = 0;
+    for (const pkg of selectedIds) {
+      const res = await remove(token, pkg);
+      if (res) ok++; else fail++;
+    }
+    enqueueSnackbar(`Deleted ${ok} APK${ok !== 1 ? 's' : ''}${fail > 0 ? ` (${fail} failed)` : ''}`, { variant: fail === 0 ? 'success' : 'error' });
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    setIsBatchDeleting(false);
+    await fetchAll(token);
+  }, [token, selectedIds, remove, fetchAll, enqueueSnackbar]);
+
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
@@ -190,6 +209,34 @@ export default function APKsPage({ token, role }: APKsPageProps) {
         }}
       />
 
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
+        <Chip
+          label={selectMode ? `${selectedIds.size} selected` : 'Select'}
+          size="small"
+          variant={selectMode ? 'filled' : 'outlined'}
+          color={selectMode ? 'primary' : 'default'}
+          onClick={() => {
+            if (selectMode) { setSelectMode(false); setSelectedIds(new Set()); }
+            else setSelectMode(true);
+          }}
+          sx={{ cursor: 'pointer' }}
+        />
+        {selectMode && (
+          <Button variant="text" size="small"
+            onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}
+            sx={{ textTransform: 'none', minWidth: 'auto', fontSize: 12, height: 24 }}>
+            Cancel
+          </Button>
+        )}
+        {role !== 'viewer' && selectMode && selectedIds.size > 0 && (
+          <Button variant="contained" color="error" size="small" startIcon={<DeleteSweepIcon />}
+            onClick={handleBulkDelete} disabled={isBatchDeleting}
+            sx={{ textTransform: 'none', height: 24 }}>
+            {isBatchDeleting ? 'Deleting...' : `Delete (${selectedIds.size})`}
+          </Button>
+        )}
+      </Stack>
+
       {isLoading ? (
         <Stack spacing={1.5}>
           {[1, 2, 3].map(i => <Box key={i} className="skeleton" sx={{ height: 52, borderRadius: '8px' }} />)}
@@ -207,6 +254,7 @@ export default function APKsPage({ token, role }: APKsPageProps) {
           <Table size="small" stickyHeader>
             <TableHead>
               <TableRow>
+                {selectMode && <TableCell padding="checkbox" sx={{ width: 40 }} />}
                 <TableCell sx={{ fontWeight: 600 }}>
                   <TableSortLabel active={sortBy === 'packageName'} direction={sortBy === 'packageName' ? sortOrder : 'asc'}
                     onClick={() => { if (sortBy === 'packageName') setSortOrder(o => o === 'asc' ? 'desc' : 'asc'); else { setSortBy('packageName'); setSortOrder('asc'); } }}>
@@ -230,8 +278,24 @@ export default function APKsPage({ token, role }: APKsPageProps) {
               </TableRow>
             </TableHead>
             <TableBody>
-              {displayEntries.map(apk => (
-                <TableRow key={apk.id} hover sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
+              {displayEntries.map(apk => {
+                const isSelected = selectedIds.has(apk.packageName);
+                return (
+                <TableRow key={apk.id} hover selected={isSelected} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
+                  {selectMode && (
+                    <TableCell padding="checkbox" onClick={() => {
+                      setSelectedIds(prev => {
+                        const next = new Set(prev);
+                        if (next.has(apk.packageName)) next.delete(apk.packageName);
+                        else next.add(apk.packageName);
+                        return next;
+                      });
+                    }} sx={{ cursor: 'pointer' }}>
+                      <Box sx={{ width: 18, height: 18, borderRadius: '4px', border: '2px solid', borderColor: isSelected ? 'primary.main' : 'outline.main', bgcolor: isSelected ? 'primary.main' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {isSelected && <Box sx={{ width: 6, height: 6, borderRadius: '1px', bgcolor: 'white', transform: 'rotate(45deg)' }} />}
+                      </Box>
+                    </TableCell>
+                  )}
                   <TableCell sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 13 }}>{apk.packageName}</TableCell>
                   <TableCell sx={{ fontSize: 13 }}>{apk.appName}</TableCell>
                   <TableCell>
@@ -260,7 +324,8 @@ export default function APKsPage({ token, role }: APKsPageProps) {
                     )}
                   </TableCell>
                 </TableRow>
-              ))}
+              );
+            })}
             </TableBody>
           </Table>
         </TableContainer>

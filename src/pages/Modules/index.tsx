@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Typography, TextField, Button, IconButton, Chip, CircularProgress,
-  InputAdornment, Box, Stack, Dialog, DialogTitle,
+  InputAdornment, Checkbox, Box, Stack, Dialog, DialogTitle,
   DialogContent, DialogActions,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ExtensionIcon from '@mui/icons-material/Extension';
@@ -28,6 +29,9 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropInputRef = useRef<HTMLInputElement>(null);
 
@@ -111,6 +115,21 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
     setDeleteTarget(null);
   }, [token, deleteTarget, remove, fetchAll, enqueueSnackbar]);
 
+  const handleBulkDelete = useCallback(async () => {
+    if (!token || selectedIds.size === 0) return;
+    setIsBatchDeleting(true);
+    let ok = 0; let fail = 0;
+    for (const id of selectedIds) {
+      const res = await remove(token, id);
+      if (res) ok++; else fail++;
+    }
+    enqueueSnackbar(`Deleted ${ok} module${ok !== 1 ? 's' : ''}${fail > 0 ? ` (${fail} failed)` : ''}`, { variant: fail === 0 ? 'success' : 'error' });
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    setIsBatchDeleting(false);
+    await fetchAll(token);
+  }, [token, selectedIds, remove, fetchAll, enqueueSnackbar]);
+
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
@@ -181,6 +200,34 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
         }}
       />
 
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
+        <Chip
+          label={selectMode ? `${selectedIds.size} selected` : 'Select'}
+          size="small"
+          variant={selectMode ? 'filled' : 'outlined'}
+          color={selectMode ? 'primary' : 'default'}
+          onClick={() => {
+            if (selectMode) { setSelectMode(false); setSelectedIds(new Set()); }
+            else setSelectMode(true);
+          }}
+          sx={{ cursor: 'pointer' }}
+        />
+        {selectMode && (
+          <Button variant="text" size="small"
+            onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}
+            sx={{ textTransform: 'none', minWidth: 'auto', fontSize: 12, height: 24 }}>
+            Cancel
+          </Button>
+        )}
+        {role !== 'viewer' && selectMode && selectedIds.size > 0 && (
+          <Button variant="contained" color="error" size="small" startIcon={<DeleteSweepIcon />}
+            onClick={handleBulkDelete} disabled={isBatchDeleting}
+            sx={{ textTransform: 'none', height: 24 }}>
+            {isBatchDeleting ? 'Deleting...' : `Delete (${selectedIds.size})`}
+          </Button>
+        )}
+      </Stack>
+
       {isLoading ? (
         <Stack spacing={1.5}>
           {[1, 2, 3].map(i => <Box key={i} className="skeleton" sx={{ height: 80, borderRadius: '8px' }} />)}
@@ -195,14 +242,30 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
         </Box>
       ) : (
         <Box sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {filtered.map(mod => (
+          {filtered.map(mod => {
+            const isSelected = selectedIds.has(mod.moduleId);
+            return (
             <Box key={mod.id} sx={{
               display: 'flex', alignItems: 'center', gap: '12px',
               p: '12px 16px', borderRadius: '8px',
-              bgcolor: 'surfaceContainer.main',
+              bgcolor: isSelected ? 'rgba(168,199,250,0.12)' : 'surfaceContainer.main',
               transition: 'background 150ms',
-              '&:hover': { bgcolor: 'surfaceContainerHigh.main' },
+              '&:hover': { bgcolor: isSelected ? 'rgba(168,199,250,0.12)' : 'surfaceContainerHigh.main' },
             }}>
+              {selectMode && (
+                <Box onClick={(e) => { e.stopPropagation();
+                  setSelectedIds(prev => {
+                    const next = new Set(prev);
+                    if (next.has(mod.moduleId)) next.delete(mod.moduleId);
+                    else next.add(mod.moduleId);
+                    return next;
+                  });
+                }} sx={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                  <Box sx={{ width: 18, height: 18, borderRadius: '4px', border: '2px solid', borderColor: isSelected ? 'primary.main' : 'outline.main', bgcolor: isSelected ? 'primary.main' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {isSelected && <Box sx={{ width: 6, height: 6, borderRadius: '1px', bgcolor: 'white', transform: 'rotate(45deg)' }} />}
+                  </Box>
+                </Box>
+              )}
               <ExtensionIcon sx={{ fontSize: 24, color: 'primary.main', flexShrink: 0 }} />
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="subtitle2" sx={{ color: 'text.primary' }}>{mod.name}</Typography>
@@ -236,7 +299,8 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
                 </>
               )}
             </Box>
-          ))}
+            );
+          })}
         </Box>
       )}
 
