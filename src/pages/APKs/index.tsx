@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  Typography, TextField, Button, IconButton, Chip, CircularProgress,
+  Typography, TextField, Button, IconButton, Tooltip, Chip, CircularProgress,
   InputAdornment, Checkbox, Box, Stack, Dialog, DialogTitle,
   DialogContent, DialogActions, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, TableSortLabel,
@@ -10,6 +10,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CheckIcon from '@mui/icons-material/Check';
 import SmartphoneIcon from '@mui/icons-material/Smartphone';
 import { useSnackbar } from 'notistack';
 import useAPKs from '../../hooks/useAPKs';
@@ -35,6 +37,7 @@ export default function APKsPage({ token, role }: APKsPageProps) {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropInputRef = useRef<HTMLInputElement>(null);
 
@@ -123,6 +126,19 @@ export default function APKsPage({ token, role }: APKsPageProps) {
     }
     setDeleteTarget(null);
   }, [token, deleteTarget, remove, fetchAll, enqueueSnackbar]);
+
+  const apkUrl = useCallback((pkg: string) => `${window.location.origin}/apk/${pkg}`, []);
+
+  const handleCopyUrl = useCallback(async (pkg: string) => {
+    try {
+      await navigator.clipboard.writeText(apkUrl(pkg));
+      setCopiedId(pkg);
+      enqueueSnackbar('Raw URL copied', { variant: 'info' });
+      setTimeout(() => setCopiedId(null), 1500);
+    } catch {
+      enqueueSnackbar('Failed to copy', { variant: 'error' });
+    }
+  }, [apkUrl, enqueueSnackbar]);
 
   const handleBulkDelete = useCallback(async () => {
     if (!token || selectedIds.size === 0) return;
@@ -312,6 +328,11 @@ export default function APKsPage({ token, role }: APKsPageProps) {
                     <Typography variant="caption" color="text.secondary">{formatSize(apk.size)}</Typography>
                   </TableCell>
                   <TableCell align="right">
+                    <Tooltip title="Copy raw URL">
+                      <IconButton size="small" onClick={() => handleCopyUrl(apk.packageName)} sx={{ color: 'text.secondary' }}>
+                        {copiedId === apk.packageName ? <CheckIcon fontSize="small" sx={{ color: 'success.main' }} /> : <ContentCopyIcon fontSize="small" />}
+                      </IconButton>
+                    </Tooltip>
                     {role !== 'viewer' && (
                       <>
                         <IconButton size="small" onClick={() => handleUploadClick(apk)} title="Update APK">

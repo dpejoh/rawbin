@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  Typography, TextField, Button, IconButton, Chip, CircularProgress,
+  Typography, TextField, Button, IconButton, Tooltip, Chip, CircularProgress,
   InputAdornment, Checkbox, Box, Stack, Dialog, DialogTitle,
   DialogContent, DialogActions,
 } from '@mui/material';
@@ -9,6 +9,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CheckIcon from '@mui/icons-material/Check';
 import ExtensionIcon from '@mui/icons-material/Extension';
 import { useSnackbar } from 'notistack';
 import useModules from '../../hooks/useModules';
@@ -32,6 +34,7 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropInputRef = useRef<HTMLInputElement>(null);
 
@@ -114,6 +117,19 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
     }
     setDeleteTarget(null);
   }, [token, deleteTarget, remove, fetchAll, enqueueSnackbar]);
+
+  const modUrl = useCallback((id: string) => `${window.location.origin}/mod/${id}`, []);
+
+  const handleCopyUrl = useCallback(async (id: string) => {
+    try {
+      await navigator.clipboard.writeText(modUrl(id));
+      setCopiedId(id);
+      enqueueSnackbar('Raw URL copied', { variant: 'info' });
+      setTimeout(() => setCopiedId(null), 1500);
+    } catch {
+      enqueueSnackbar('Failed to copy', { variant: 'error' });
+    }
+  }, [modUrl, enqueueSnackbar]);
 
   const handleBulkDelete = useCallback(async () => {
     if (!token || selectedIds.size === 0) return;
@@ -287,6 +303,11 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
                   <Typography variant="caption" color="text.secondary">{relativeTime(mod.updatedAt)}</Typography>
                 </Box>
               </Box>
+              <Tooltip title="Copy raw URL">
+                <IconButton size="small" onClick={() => handleCopyUrl(mod.moduleId)} sx={{ color: 'text.secondary', flexShrink: 0 }}>
+                  {copiedId === mod.moduleId ? <CheckIcon fontSize="small" sx={{ color: 'success.main' }} /> : <ContentCopyIcon fontSize="small" />}
+                </IconButton>
+              </Tooltip>
               {role !== 'viewer' && (
                 <>
                   <Button variant="outlined" size="small" startIcon={<CloudUploadIcon />}
