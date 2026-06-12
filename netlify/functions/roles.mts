@@ -1,6 +1,7 @@
 import { getStore } from "@netlify/blobs";
 
 const SITE_URL = process.env.URL ?? `https://${process.env.SITE_NAME}.netlify.app`;
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 
 const ROLE_HIERARCHY: Record<string, number> = { viewer: 0, editor: 1, admin: 2 };
 
@@ -76,18 +77,23 @@ export default async (req: Request) => {
 
     const callerRole = await getUserRole(user.email);
 
+    // Bootstrap: if store is empty and caller matches ADMIN_EMAIL, auto-promote
+    const allRoles = await getAllRoles();
+    if (Object.keys(allRoles).length === 0 && method === "GET" && user.email === ADMIN_EMAIL) {
+      allRoles[user.email] = "admin";
+      await saveAllRoles(allRoles);
+      return ok({ email: user.email, role: "admin", bootstrap: true });
+    }
+
     if (method === "GET") {
       const result: Record<string, unknown> = { email: user.email, role: callerRole };
       if (callerRole === "admin") {
-        result.roles = await getAllRoles();
+        result.roles = allRoles;
       }
       return ok(result);
     }
 
-    // POST/DELETE — admin only (bootstrap: if no roles exist, first user can set any role)
-    const allRoles = await getAllRoles();
-    const isBootstrap = Object.keys(allRoles).length === 0;
-    if (!isBootstrap && !await requireRole(user.email, "admin")) return fail("Forbidden");
+    if (!await requireRole(user.email, "admin")) return fail("Forbidden");
 
     if (method === "POST") {
       let body: unknown;
@@ -128,7 +134,7 @@ export default async (req: Request) => {
 
     return fail("Method Not Allowed");
   } catch (err) {
-    const msg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
+    const msg = err instanceof Error ? err.message : String(err);
     return fail(msg);
   }
 };

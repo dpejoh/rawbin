@@ -82,6 +82,7 @@ export default async (req: Request) => {
       }
 
       await rateStore.set(rateKey, JSON.stringify(record));
+      await rateStore.get(rateKey);
     } catch {
     }
 
@@ -136,7 +137,6 @@ export default async (req: Request) => {
       headers: { "Content-Type": "text/plain", "Access-Control-Allow-Origin": "*" },
     });
   } catch (err) {
-    const msg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
-    return new Response(msg, { status: 200 });
+    return new Response("Internal error", { status: 200 });
   }
 };

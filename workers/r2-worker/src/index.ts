@@ -4,13 +4,13 @@ interface Env {
 }
 
 const ALLOWED_BUCKETS = ["apks", "modules", "files", "clipboards"] as const;
+const MAX_UPLOAD_SIZE = 100 * 1024 * 1024;
 
 const CORS = {
   "access-control-allow-origin": "*",
-  "access-control-allow-methods": "PUT, POST, GET, OPTIONS",
+  "access-control-allow-methods": "PUT, GET, DELETE, OPTIONS",
   "access-control-allow-headers": "Content-Type, Authorization",
   "access-control-max-age": "86400",
-  "vary": "origin",
 } as const;
 
 function respond(body: string, status: number) {
@@ -27,46 +27,57 @@ function json(data: unknown, status = 200) {
   });
 }
 
+function extractBearer(request: Request): string | null {
+  const auth = request.headers.get("Authorization");
+  if (!auth) return null;
+  const match = auth.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1]!.trim() : null;
+}
+
+function validateKey(key: string): boolean {
+  return !key.includes("..");
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
       const url = new URL(request.url);
-      const [path, action] = url.pathname.slice(1).split("/");
+      const segments = url.pathname.slice(1).split("/");
+      const path = segments[0];
+      const action = segments[1];
 
       if (request.method === "OPTIONS") {
         return new Response(null, { headers: CORS });
       }
 
-      // ── Upload: PUT /upload/:bucket ────────────────────────────────
       if (request.method === "PUT" && path === "upload" && action && ALLOWED_BUCKETS.includes(action as typeof ALLOWED_BUCKETS[number])) {
         return handleUpload(request, env, action);
       }
 
-      // ── Raw download: GET /raw/:bucket/:key ─────────────────────────
-      if (request.method === "GET" && path === "raw" && action) {
-        const key = url.pathname.slice(`/raw/${action}/`.length);
-        if (!key) return respond("Not found", 404);
+      if (request.method === "GET" && path === "raw" && action && ALLOWED_BUCKETS.includes(action as typeof ALLOWED_BUCKETS[number])) {
+        const key = segments.slice(2).join("/");
+        if (!key || !validateKey(key)) return respond("Not found", 404);
         return handleDownload(env, action, key);
       }
 
-      // ── Delete: DELETE /raw/:bucket/:key ────────────────────────────
-      if (request.method === "DELETE" && path === "raw" && action) {
-        const key = url.pathname.slice(`/raw/${action}/`.length);
-        if (!key) return respond("Not found", 404);
+      if (request.method === "DELETE" && path === "raw" && action && ALLOWED_BUCKETS.includes(action as typeof ALLOWED_BUCKETS[number])) {
+        const key = segments.slice(2).join("/");
+        if (!key || !validateKey(key)) return respond("Not found", 404);
         return handleDelete(request, env, action, key);
       }
 
       return respond("Not found", 404);
     } catch (err) {
-      const msg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
-      return respond(msg, 500);
+      return respond("Internal Server Error", 500);
     }
   },
 };
 
 async function verifyToken(token: string, env: Env): Promise<boolean> {
   try {
-    const res = await fetch(`${env.NETLIFY_SITE_URL}/.netlify/identity/user`, {
+    const baseUrl = env.NETLIFY_SITE_URL;
+    if (!baseUrl.startsWith("https://")) return false;
+    const res = await fetch(`${baseUrl}/.netlify/identity/user`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return res.ok;
@@ -77,28 +88,29 @@ async function verifyToken(token: string, env: Env): Promise<boolean> {
 
 async function handleUpload(request: Request, env: Env, bucket: string): Promise<Response> {
   const auth = request.headers.get("Authorization") ?? "";
-  const token = auth.replace("Bearer ", "");
+  const token = auth.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
   if (!token) return respond("Unauthorized", 401);
 
   const isValid = await verifyToken(token, env);
   if (!isValid) return respond("Unauthorized", 401);
 
+  const contentLength = request.headers.get("content-length");
+  if (contentLength && parseInt(contentLength, 10) > MAX_UPLOAD_SIZE) {
+    return respond("Payload too large", 413);
+  }
+
+  let blob: Blob;
+  try {
+    blob = await request.blob();
+  } catch {
+    return respond("Failed to read body", 400);
+  }
+
+  if (blob.size === 0) return respond("Empty file", 400);
+  if (blob.size > MAX_UPLOAD_SIZE) return respond("Payload too large", 413);
+
   const blobId = `blob_${crypto.randomUUID()}`;
   const key = `${bucket}/${blobId}`;
-
-  const contentLength = request.headers.get("content-length");
-  const size = contentLength ? parseInt(contentLength, 10) : null;
-
-  // Validate ZIP magic bytes
-  const blob = await request.blob();
-  if (blob.size === 0) {
-    return respond("Empty file", 400);
-  }
-  const header = await blob.slice(0, 4).arrayBuffer();
-  const magic = new Uint8Array(header);
-  if (magic[0] !== 0x50 || magic[1] !== 0x4B || magic[2] !== 0x03 || magic[3] !== 0x04) {
-    return respond("Not a valid ZIP file", 400);
-  }
 
   await env.RAW_BIN.put(key, blob, {
     customMetadata: {
@@ -111,15 +123,15 @@ async function handleUpload(request: Request, env: Env, bucket: string): Promise
 }
 
 async function handleDelete(request: Request, env: Env, bucket: string, key: string): Promise<Response> {
-  const auth = request.headers.get("Authorization") ?? "";
-  const token = auth.replace("Bearer ", "");
+  const token = extractBearer(request);
   if (!token) return respond("Unauthorized", 401);
+
   const isValid = await verifyToken(token, env);
   if (!isValid) return respond("Unauthorized", 401);
 
   const fullKey = `${bucket}/${key}`;
   await env.RAW_BIN.delete(fullKey);
-  return respond("Deleted", 200);
+  return json({ deleted: true });
 }
 
 async function handleDownload(env: Env, bucket: string, key: string): Promise<Response> {

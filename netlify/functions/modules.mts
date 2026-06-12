@@ -85,8 +85,11 @@ async function saveIndex(index: ModuleMeta[]): Promise<void> {
   await flush(store);
 }
 
-async function deleteFromR2(blobId: string): Promise<void> {
-  await fetch(`${R2_WORKER}/raw/modules/${blobId}`, { method: "DELETE" });
+async function deleteFromR2(blobId: string, token: string): Promise<void> {
+  await fetch(`${R2_WORKER}/raw/modules/${blobId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
 }
 
 export default async (req: Request) => {
@@ -184,7 +187,7 @@ export default async (req: Request) => {
           if (existing !== -1) idx.splice(existing, 1);
           idx.push(meta);
           if (oldEntry && oldEntry.id !== id) {
-            if (oldEntry.storage === STORAGE_R2) deleteFromR2(oldEntry.id).catch(() => {});
+            if (oldEntry.storage === STORAGE_R2) deleteFromR2(oldEntry.id, token).catch(() => {});
             else await store.delete(oldEntry.id);
           }
           await saveIndex(idx);
@@ -218,7 +221,7 @@ export default async (req: Request) => {
         index.splice(idx, 1);
         await saveIndex(index);
         if (removed.storage === STORAGE_R2) {
-          deleteFromR2(removed.id).catch(() => {});
+          deleteFromR2(removed.id, token).catch(() => {});
         } else {
           await store.delete(removed.id);
         }
@@ -231,7 +234,7 @@ export default async (req: Request) => {
         return fail("Method Not Allowed");
     }
   } catch (err) {
-    const msg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
+    const msg = err instanceof Error ? err.message : String(err);
     return fail(msg);
   }
 };

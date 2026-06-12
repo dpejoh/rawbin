@@ -84,8 +84,11 @@ async function deleteContent(id: string): Promise<void> {
   await store.delete(id);
 }
 
-async function deleteFromR2(blobId: string): Promise<void> {
-  await fetch(`${R2_WORKER}/raw/files/${blobId}`, { method: "DELETE" });
+async function deleteFromR2(blobId: string, token: string): Promise<void> {
+  await fetch(`${R2_WORKER}/raw/files/${blobId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
 }
 
 function collectDescendants(index: FileMeta[], parentId: string): string[] {
@@ -295,7 +298,7 @@ export default async (req: Request) => {
         for (const id of idsToDelete) {
           const f = index.find((f) => f.id === id);
           if (f?.storage === STORAGE_R2) {
-            deleteFromR2(id).catch(() => {});
+            deleteFromR2(id, token).catch(() => {});
           } else {
             await deleteContent(id);
           }
@@ -308,7 +311,7 @@ export default async (req: Request) => {
         return fail("Method Not Allowed");
     }
   } catch (err) {
-    const msg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
+    const msg = err instanceof Error ? err.message : String(err);
     return fail(msg);
   }
 };

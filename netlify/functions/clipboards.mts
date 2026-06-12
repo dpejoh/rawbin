@@ -291,7 +291,7 @@ export default async (req: Request) => {
         return fail("Method Not Allowed");
     }
   } catch (err) {
-    const msg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
+    const msg = err instanceof Error ? err.message : String(err);
     return fail(msg);
   }
 };
