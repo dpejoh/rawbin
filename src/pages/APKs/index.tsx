@@ -44,7 +44,7 @@ export default function APKsPage({ token }: APKsPageProps) {
     .sort((a, b) => {
       const dir = sortOrder === 'asc' ? 1 : -1;
       if (sortBy === 'versionCode') return (a.versionCode - b.versionCode) * dir;
-      if (sortBy === 'updatedAt') return a.updatedAt.localeCompare(b.updatedAt) * dir;
+      if (sortBy === 'updatedAt') return (a.updatedAt ?? '').localeCompare(b.updatedAt ?? '') * dir;
       return a[sortBy].localeCompare(b[sortBy]) * dir;
     });
 

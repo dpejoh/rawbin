@@ -6,7 +6,7 @@ export interface Clipboard {
   slug?: string;
   useBase64?: boolean;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
   content: string;
 }
 

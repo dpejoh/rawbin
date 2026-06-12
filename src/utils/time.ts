@@ -1,4 +1,5 @@
-export function relativeTime(dateStr: string): string {
+export function relativeTime(dateStr?: string): string {
+  if (!dateStr) return 'unknown';
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60_000);
   if (mins < 1) return 'just now';
