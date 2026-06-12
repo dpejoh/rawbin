@@ -9,6 +9,7 @@ export interface Module {
   author: string;
   description: string;
   size: number;
+  fileName?: string;
   createdAt: string;
   updatedAt?: string;
 }

@@ -57,7 +57,7 @@ export default {
       if (request.method === "GET" && path === "raw" && action && ALLOWED_BUCKETS.includes(action as typeof ALLOWED_BUCKETS[number])) {
         const key = segments.slice(2).join("/");
         if (!key || !validateKey(key)) return respond("Not found", 404);
-        return handleDownload(env, action, key);
+        return handleDownload(env, action, key, url);
       }
 
       if (request.method === "DELETE" && path === "raw" && action && ALLOWED_BUCKETS.includes(action as typeof ALLOWED_BUCKETS[number])) {
@@ -134,7 +134,7 @@ async function handleDelete(request: Request, env: Env, bucket: string, key: str
   return json({ deleted: true });
 }
 
-async function handleDownload(env: Env, bucket: string, key: string): Promise<Response> {
+async function handleDownload(env: Env, bucket: string, key: string, url: URL): Promise<Response> {
   const fullKey = `${bucket}/${key}`;
   const object = await env.RAW_BIN.get(fullKey);
   if (!object) return respond("Not found", 404);
@@ -152,6 +152,11 @@ async function handleDownload(env: Env, bucket: string, key: string): Promise<Re
     : object.httpMetadata?.contentType ?? "application/octet-stream";
 
   headers.set("content-type", contentType);
+
+  const name = url.searchParams.get("name");
+  if (name) {
+    headers.set("content-disposition", `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
+  }
 
   return new Response(object.body, { headers });
 }

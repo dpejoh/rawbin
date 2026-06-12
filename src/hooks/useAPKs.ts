@@ -9,6 +9,7 @@ export interface APK {
   minSdk: number;
   targetSdk: number;
   size: number;
+  fileName?: string;
   createdAt: string;
   updatedAt?: string;
 }

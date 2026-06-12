@@ -7,6 +7,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
+import EditIcon from '@mui/icons-material/Edit';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -35,6 +36,8 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<Module | null>(null);
+  const [renameName, setRenameName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropInputRef = useRef<HTMLInputElement>(null);
 
@@ -129,7 +132,30 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
     } catch {
       enqueueSnackbar('Failed to copy', { variant: 'error' });
     }
-  }, [modUrl, enqueueSnackbar]);
+      }, [modUrl, enqueueSnackbar]);
+
+  const handleRename = useCallback(async () => {
+    if (!token || !renameTarget) return;
+    const name = renameName.trim();
+    if (!name) return;
+    try {
+      const res = await fetch('/.netlify/functions/modules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id: renameTarget.id, fileName: name }),
+      });
+      const data = await res.json() as Record<string, unknown>;
+      if (data.error) {
+        enqueueSnackbar(String(data.error), { variant: 'error' });
+      } else {
+        enqueueSnackbar('File name updated', { variant: 'success' });
+        setRenameTarget(null);
+        await fetchAll(token);
+      }
+    } catch {
+      enqueueSnackbar('Failed to rename', { variant: 'error' });
+    }
+  }, [token, renameTarget, renameName, fetchAll, enqueueSnackbar]);
 
   const handleBulkDelete = useCallback(async () => {
     if (!token || selectedIds.size === 0) return;
@@ -303,6 +329,11 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
                   <Typography variant="caption" color="text.secondary">{relativeTime(mod.updatedAt)}</Typography>
                 </Box>
               </Box>
+              <Tooltip title="Rename file">
+                <IconButton size="small" onClick={() => { setRenameTarget(mod); setRenameName(mod.fileName ?? `${mod.moduleId}.zip`); }} sx={{ color: 'text.secondary', flexShrink: 0 }}>
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
               <Tooltip title="Copy raw URL">
                 <IconButton size="small" onClick={() => handleCopyUrl(mod.moduleId)} sx={{ color: 'text.secondary', flexShrink: 0 }}>
                   {copiedId === mod.moduleId ? <CheckIcon fontSize="small" sx={{ color: 'success.main' }} /> : <ContentCopyIcon fontSize="small" />}
@@ -364,6 +395,22 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
         <DialogActions>
           <Button onClick={() => setDeleteTarget(null)}>Cancel</Button>
           <Button onClick={handleDelete} variant="contained" color="error">Delete</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(renameTarget)} onClose={() => setRenameTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Rename &ldquo;{renameTarget?.moduleId}&rdquo;</DialogTitle>
+        <DialogContent>
+          <TextField autoFocus fullWidth label="File name" size="small"
+            value={renameName} onChange={(e) => setRenameName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleRename(); }}
+            placeholder="e.g. zygisk_lsposed.zip"
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRenameTarget(null)}>Cancel</Button>
+          <Button variant="contained" onClick={handleRename} disabled={!renameName.trim()}>Save</Button>
         </DialogActions>
       </Dialog>
     </Box>

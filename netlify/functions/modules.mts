@@ -59,6 +59,7 @@ interface ModuleMeta {
   author: string;
   description: string;
   size: number;
+  fileName?: string;
   createdAt: string;
   updatedAt: string;
   storage?: string;
@@ -111,7 +112,8 @@ export default async (req: Request) => {
       if (!item) return new Response("Not found", { status: 404 });
 
       if (item.storage === STORAGE_R2) {
-        return Response.redirect(`${R2_WORKER}/raw/modules/${item.id}`, 302);
+        const nameParam = item.fileName ? `?name=${encodeURIComponent(item.fileName)}` : '';
+        return Response.redirect(`${R2_WORKER}/raw/modules/${item.id}${nameParam}`, 302);
       }
 
       const store = getStoreInstance();
@@ -138,8 +140,8 @@ export default async (req: Request) => {
     switch (method) {
       case "GET": {
         const index = await getIndex();
-        const result = index.map(({ id, moduleId, name, version, versionCode, author, description, size, createdAt, updatedAt }) => ({
-          id, moduleId, name, version, versionCode, author, description, size, createdAt, updatedAt,
+        const result = index.map(({ id, moduleId, name, version, versionCode, author, description, size, fileName, createdAt, updatedAt }) => ({
+          id, moduleId, name, version, versionCode, author, description, size, fileName, createdAt, updatedAt,
         }));
         return ok(result);
       }
@@ -152,20 +154,39 @@ export default async (req: Request) => {
         } catch {
           return fail("Invalid JSON");
         }
+        if (typeof body !== "object" || body === null) {
+          return fail("Invalid body");
+        }
+
+        const b = body as Record<string, unknown>;
+
+        // Rename-only: id + fileName without blobId
+        if (b.id && b.fileName && !b.blobId) {
+          const renameId = String(b.id);
+          const newName = String(b.fileName).trim();
+          if (!newName) return fail("fileName is required");
+          const idx = await getIndex();
+          const item = idx.find((m) => m.id === renameId || m.moduleId === renameId);
+          if (!item) return fail("Not found");
+          item.fileName = newName;
+          item.updatedAt = new Date().toISOString();
+          await saveIndex(idx);
+          return ok({ id: renameId, fileName: newName });
+        }
+
         if (
-          typeof body !== "object" || body === null ||
-          !("moduleId" in body) || typeof (body as Record<string, unknown>).moduleId !== "string" ||
-          !("name" in body) || typeof (body as Record<string, unknown>).name !== "string"
+          !("moduleId" in b) || typeof b.moduleId !== "string" ||
+          !("name" in b) || typeof b.name !== "string"
         ) {
           return fail("Invalid body. Required: moduleId, name");
         }
 
         const {
           moduleId, name, version, versionCode, author, description,
-          blobId, size,
+          blobId, size, fileName,
         } = body as {
           moduleId: string; name: string; version?: string; versionCode?: number;
-          author?: string; description?: string; blobId?: string; size?: number;
+          author?: string; description?: string; blobId?: string; size?: number; fileName?: string;
         };
 
         if (!blobId) return fail("Missing blobId");
@@ -176,7 +197,7 @@ export default async (req: Request) => {
           id, moduleId: moduleId.trim(), name: name.trim(),
           version: version ?? "1.0", versionCode: versionCode ?? 1,
           author: author ?? "", description: description ?? "",
-          size: size ?? 0, createdAt: now, updatedAt: now,
+          size: size ?? 0, fileName, createdAt: now, updatedAt: now,
           storage: STORAGE_R2,
         };
 
@@ -185,11 +206,14 @@ export default async (req: Request) => {
           const existing = idx.findIndex((m) => m.moduleId === meta.moduleId);
           const oldEntry = existing !== -1 ? idx[existing] : null;
           if (existing !== -1) idx.splice(existing, 1);
-          idx.push(meta);
-          if (oldEntry && oldEntry.id !== id) {
-            if (oldEntry.storage === STORAGE_R2) deleteFromR2(oldEntry.id, token).catch(() => {});
-            else await store.delete(oldEntry.id);
+          if (oldEntry) {
+            if (!fileName && oldEntry.fileName) meta.fileName = oldEntry.fileName;
+            if (oldEntry.id !== id) {
+              if (oldEntry.storage === STORAGE_R2) deleteFromR2(oldEntry.id, token).catch(() => {});
+              else await store.delete(oldEntry.id);
+            }
           }
+          idx.push(meta);
           await saveIndex(idx);
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);

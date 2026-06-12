@@ -59,6 +59,7 @@ interface ApkMeta {
   minSdk: number;
   targetSdk: number;
   size: number;
+  fileName?: string;
   createdAt: string;
   updatedAt: string;
   storage?: string;
@@ -111,7 +112,8 @@ export default async (req: Request) => {
       if (!item) return new Response("Not found", { status: 404 });
 
       if (item.storage === STORAGE_R2) {
-        return Response.redirect(`${R2_WORKER}/raw/apks/${item.id}`, 302);
+        const nameParam = item.fileName ? `?name=${encodeURIComponent(item.fileName)}` : '';
+        return Response.redirect(`${R2_WORKER}/raw/apks/${item.id}${nameParam}`, 302);
       }
 
       const store = getStoreInstance();
@@ -138,8 +140,8 @@ export default async (req: Request) => {
     switch (method) {
       case "GET": {
         const index = await getIndex();
-        const result = index.map(({ id, packageName, appName, versionCode, versionName, minSdk, targetSdk, size, createdAt, updatedAt }) => ({
-          id, packageName, appName, versionCode, versionName, minSdk, targetSdk, size, createdAt, updatedAt,
+        const result = index.map(({ id, packageName, appName, versionCode, versionName, minSdk, targetSdk, size, fileName, createdAt, updatedAt }) => ({
+          id, packageName, appName, versionCode, versionName, minSdk, targetSdk, size, fileName, createdAt, updatedAt,
         }));
         return ok(result);
       }
@@ -152,19 +154,38 @@ export default async (req: Request) => {
         } catch {
           return fail("Invalid JSON");
         }
+        if (typeof body !== "object" || body === null) {
+          return fail("Invalid body");
+        }
+
+        const b = body as Record<string, unknown>;
+
+        // Rename-only: id + fileName without blobId
+        if (b.id && b.fileName && !b.blobId) {
+          const renameId = String(b.id);
+          const newName = String(b.fileName).trim();
+          if (!newName) return fail("fileName is required");
+          const idx = await getIndex();
+          const item = idx.find((a) => a.id === renameId || a.packageName === renameId);
+          if (!item) return fail("Not found");
+          item.fileName = newName;
+          item.updatedAt = new Date().toISOString();
+          await saveIndex(idx);
+          return ok({ id: renameId, fileName: newName });
+        }
+
         if (
-          typeof body !== "object" || body === null ||
-          !("packageName" in body) || typeof (body as Record<string, unknown>).packageName !== "string"
+          !("packageName" in b) || typeof (b as Record<string, unknown>).packageName !== "string"
         ) {
           return fail("Invalid body. Required: packageName");
         }
 
         const {
           packageName, appName, versionCode, versionName, minSdk, targetSdk,
-          blobId, size,
+          blobId, size, fileName,
         } = body as {
           packageName: string; appName?: string; versionCode?: number; versionName?: string;
-          minSdk?: number; targetSdk?: number; blobId?: string; size?: number;
+          minSdk?: number; targetSdk?: number; blobId?: string; size?: number; fileName?: string;
         };
 
         if (!blobId) {
@@ -178,7 +199,7 @@ export default async (req: Request) => {
           appName: appName ?? packageName.trim(),
           versionCode: versionCode ?? 0, versionName: versionName ?? "",
           minSdk: minSdk ?? 0, targetSdk: targetSdk ?? 0,
-          size: size ?? 0, createdAt: now, updatedAt: now,
+          size: size ?? 0, fileName, createdAt: now, updatedAt: now,
           storage: STORAGE_R2,
         };
 
@@ -187,11 +208,14 @@ export default async (req: Request) => {
           const existing = idx.findIndex((a) => a.packageName === meta.packageName);
           const oldEntry = existing !== -1 ? idx[existing] : null;
           if (existing !== -1) idx.splice(existing, 1);
-          idx.push(meta);
-          if (oldEntry && oldEntry.id !== id) {
-            if (oldEntry.storage === STORAGE_R2) deleteFromR2(oldEntry.id, token).catch(() => {});
-            else await store.delete(oldEntry.id);
+          if (oldEntry) {
+            if (!fileName && oldEntry.fileName) meta.fileName = oldEntry.fileName;
+            if (oldEntry.id !== id) {
+              if (oldEntry.storage === STORAGE_R2) deleteFromR2(oldEntry.id, token).catch(() => {});
+              else await store.delete(oldEntry.id);
+            }
           }
+          idx.push(meta);
           await saveIndex(idx);
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);

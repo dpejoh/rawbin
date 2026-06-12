@@ -146,7 +146,7 @@ export default async (req: Request) => {
       }
 
       if (item.storage === STORAGE_R2) {
-        return Response.redirect(`${R2_WORKER}/raw/files/${item.id}`, 302);
+        return Response.redirect(`${R2_WORKER}/raw/files/${item.id}?name=${encodeURIComponent(item.name)}`, 302);
       }
 
       const store = getStoreInstance();
