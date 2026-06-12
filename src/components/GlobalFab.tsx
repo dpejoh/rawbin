@@ -51,7 +51,7 @@ interface GlobalFabProps {
 function detectFileType(file: File): DetectedType {
   const name = file.name.toLowerCase();
   if (name.endsWith('.xml')) return 'keybox';
-  if (name.endsWith('.apk')) return 'apk';
+  if (name.endsWith('.apk') || name.endsWith('.apks')) return 'apk';
   if (name.endsWith('.zip')) return 'module';
   return 'keybox';
 }
@@ -72,7 +72,7 @@ function guessModuleFields(file: File): ModuleFields {
 }
 
 function guessApkFields(file: File): ApkFields {
-  const name = file.name.replace(/\.apk$/i, '');
+  const name = file.name.replace(/\.apks?$/i, '');
   const parts = name.split(/[-_]/);
   const packageName = parts[0] ?? name;
   return { packageName, appName: packageName, versionCode: '0', versionName: '' };
@@ -192,8 +192,8 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
             }
           : {
               blobId, size,
-              packageName: form.apk.packageName.trim() || form.file.name.replace(/\.apk$/i, '').trim(),
-              appName: form.apk.appName.trim() || form.file.name.replace(/\.apk$/i, '').trim(),
+              packageName: form.apk.packageName.trim() || form.file.name.replace(/\.apks?$/i, '').trim(),
+              appName: form.apk.appName.trim() || form.file.name.replace(/\.apks?$/i, '').trim(),
               versionCode: parseInt(form.apk.versionCode, 10) || 0,
               versionName: form.apk.versionName.trim(),
             };
@@ -243,7 +243,7 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
 
   return (
     <>
-      <input ref={fileInputRef} type="file" accept=".xml,.zip,.apk" style={{ display: 'none' }} onChange={handleFileSelect} />
+      <input ref={fileInputRef} type="file" accept=".xml,.zip,.apk,.apks" style={{ display: 'none' }} onChange={handleFileSelect} />
       <Fab
         color="primary"
         onClick={() => fileInputRef.current?.click()}

@@ -73,12 +73,12 @@ export default function APKsPage({ token, role }: APKsPageProps) {
     if (!files || !token) return;
     for (let i = 0; i < files.length; i++) {
       const file = files[i]!;
-      if (!file.name.endsWith('.apk')) {
-        enqueueSnackbar(`Skipped "${file.name}" — only .apk files are supported`, { variant: 'warning' });
+      if (!file.name.endsWith('.apk') && !file.name.endsWith('.apks')) {
+        enqueueSnackbar(`Skipped "${file.name}" — only .apk/.apks files are supported`, { variant: 'warning' });
         continue;
       }
       setIsUploading(true);
-      const guessPkg = file.name.replace(/\.apk$/i, '').replace(/[_-]\d+.*$/, '').trim();
+      const guessPkg = file.name.replace(/\.apks?$/i, '').replace(/[_-]\d+.*$/, '').trim();
       const result = await upload(token, file, {
         packageName: guessPkg, appName: guessPkg, versionCode: 0, versionName: '',
       });
@@ -100,7 +100,7 @@ export default function APKsPage({ token, role }: APKsPageProps) {
 
   const handleUpload = useCallback(async () => {
     if (!token || !uploadFile) return;
-    const guessPkg = uploadTarget?.packageName ?? uploadFile.name.replace(/\.apk$/i, '').replace(/[_-]\d+.*$/, '').trim();
+    const guessPkg = uploadTarget?.packageName ?? uploadFile.name.replace(/\.apks?$/i, '').replace(/[_-]\d+.*$/, '').trim();
     const result = await upload(token, uploadFile, {
       packageName: guessPkg,
       appName: uploadTarget?.appName ?? guessPkg,
@@ -185,11 +185,11 @@ export default function APKsPage({ token, role }: APKsPageProps) {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
     if (!file || !token) return;
-    if (!file.name.endsWith('.apk')) {
-      enqueueSnackbar('Only .apk files are supported', { variant: 'error' });
+    if (!file.name.endsWith('.apk') && !file.name.endsWith('.apks')) {
+      enqueueSnackbar('Only .apk/.apks files are supported', { variant: 'error' });
       return;
     }
-    const guessPkg = file.name.replace(/\.apk$/i, '').replace(/[_-]\d+.*$/, '').trim();
+    const guessPkg = file.name.replace(/\.apks?$/i, '').replace(/[_-]\d+.*$/, '').trim();
     const result = await upload(token, file, {
       packageName: guessPkg, appName: guessPkg,
       versionCode: 0, versionName: '',
@@ -226,8 +226,8 @@ export default function APKsPage({ token, role }: APKsPageProps) {
             opacity: isUploading ? 0.6 : 1,
           }} onClick={() => dropInputRef.current?.click()}>
             <UploadFileIcon sx={{ fontSize: 28, color: 'text.secondary', mb: 0.5 }} />
-            <Typography variant="body2">{isUploading ? 'Uploading...' : 'Drop .apk files here or click to upload'}</Typography>
-            <input ref={dropInputRef} type="file" accept=".apk" multiple style={{ display: 'none' }} onChange={handleDropZoneFiles} />
+            <Typography variant="body2">{isUploading ? 'Uploading...' : 'Drop .apk/.apks files here or click to upload'}</Typography>
+            <input ref={dropInputRef} type="file" accept=".apk,.apks" multiple style={{ display: 'none' }} onChange={handleDropZoneFiles} />
           </Box>
 
           <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
@@ -397,11 +397,11 @@ export default function APKsPage({ token, role }: APKsPageProps) {
               ) : (
                 <>
                   <CloudUploadIcon sx={{ fontSize: 24, color: 'text.secondary', mb: 0.5 }} />
-                  <Typography variant="body2" color="text.secondary">Click to select .apk file</Typography>
+                  <Typography variant="body2" color="text.secondary">Click to select .apk/.apks file</Typography>
                 </>
               )}
             </Box>
-            <input ref={fileInputRef} type="file" accept=".apk" style={{ display: 'none' }} onChange={handleFileSelect} />
+            <input ref={fileInputRef} type="file" accept=".apk,.apks" style={{ display: 'none' }} onChange={handleFileSelect} />
           </Stack>
         </DialogContent>
         <DialogActions>
