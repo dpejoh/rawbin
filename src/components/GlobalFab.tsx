@@ -7,6 +7,7 @@ import AddIcon from '@mui/icons-material/Add';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { useSnackbar } from 'notistack';
 import { guessAppName } from '../utils/guessAppName';
+import { parseModule } from '../utils/parseModule';
 import type { Page } from '../App';
 import type { UserRole } from '../hooks/useAuth';
 
@@ -113,6 +114,7 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
 
     const detectedType = detectFileType(file);
     const apkFields = guessApkFields(file);
+    const moduleFields = guessModuleFields(file);
 
     if (detectedType === 'apk') {
       const { parseAPK } = await import('../utils/parseAPK');
@@ -123,13 +125,23 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
         apkFields.versionCode = String(parsed.versionCode);
         apkFields.versionName = parsed.versionName;
       }
+    } else if (detectedType === 'module') {
+      const parsed = await parseModule(file);
+      if (parsed) {
+        moduleFields.moduleId = parsed.moduleId;
+        moduleFields.name = parsed.name;
+        moduleFields.version = parsed.version;
+        moduleFields.versionCode = String(parsed.versionCode);
+        moduleFields.author = parsed.author;
+        moduleFields.description = parsed.description;
+      }
     }
 
     setForm({
       file,
       detectedType,
       keybox: guessKeyboxFields(file),
-      module: guessModuleFields(file),
+      module: moduleFields,
       apk: apkFields,
     });
     setOpen(true);

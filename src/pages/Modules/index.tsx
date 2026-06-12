@@ -16,6 +16,7 @@ import ExtensionIcon from '@mui/icons-material/Extension';
 import { useSnackbar } from 'notistack';
 import useModules from '../../hooks/useModules';
 import { relativeTime, formatSize } from '../../utils/time';
+import { parseModule } from '../../utils/parseModule';
 import type { Module } from '../../hooks/useModules';
 
 interface ModulesPageProps {
@@ -69,14 +70,17 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
         continue;
       }
       setIsUploading(true);
-      const guessId = file.name.replace(/\.zip$/i, '').trim();
-      const result = await upload(token, file, {
-        moduleId: guessId, name: guessId, version: '1.0', versionCode: 1, author: '', description: '',
-      });
+      const parsed = await parseModule(file);
+      const metadata = parsed ?? {
+        moduleId: file.name.replace(/\.zip$/i, '').trim(),
+        name: file.name.replace(/\.zip$/i, '').trim(),
+        version: '1.0', versionCode: 1, author: '', description: '',
+      };
+      const result = await upload(token, file, metadata);
       if (result) {
-        enqueueSnackbar(`"${guessId}" uploaded`, { variant: 'success' });
+        enqueueSnackbar(`"${metadata.moduleId}" uploaded`, { variant: 'success' });
       } else {
-        enqueueSnackbar(`"${guessId}" upload failed`, { variant: 'error' });
+        enqueueSnackbar(`"${metadata.moduleId}" upload failed`, { variant: 'error' });
       }
       setIsUploading(false);
     }
@@ -91,14 +95,22 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
 
   const handleUpload = useCallback(async () => {
     if (!token || !uploadFile) return;
-    const result = await upload(token, uploadFile, {
-      moduleId: uploadTarget?.moduleId ?? uploadFile.name.replace(/\.zip$/i, '').trim(),
-      name: uploadTarget?.name ?? uploadFile.name.replace(/\.zip$/i, '').trim(),
-      version: uploadTarget?.version ?? '1.0',
-      versionCode: uploadTarget?.versionCode ?? 1,
-      author: uploadTarget?.author ?? '',
-      description: uploadTarget?.description ?? '',
-    });
+    const parsed = uploadTarget ? null : await parseModule(uploadFile);
+    const metadata = uploadTarget
+      ? {
+          moduleId: uploadTarget.moduleId,
+          name: uploadTarget.name,
+          version: uploadTarget.version,
+          versionCode: uploadTarget.versionCode,
+          author: uploadTarget.author,
+          description: uploadTarget.description,
+        }
+      : parsed ?? {
+          moduleId: uploadFile.name.replace(/\.zip$/i, '').trim(),
+          name: uploadFile.name.replace(/\.zip$/i, '').trim(),
+          version: '1.0', versionCode: 1, author: '', description: '',
+        };
+    const result = await upload(token, uploadFile, metadata);
     if (result) {
       enqueueSnackbar(uploadTarget ? `Module "${uploadTarget.moduleId}" updated` : 'Module uploaded', { variant: 'success' });
       setUploadOpen(false);
@@ -195,13 +207,15 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
       enqueueSnackbar('Only .zip files are supported', { variant: 'error' });
       return;
     }
-    const result = await upload(token, file, {
+    const parsed = await parseModule(file);
+    const metadata = parsed ?? {
       moduleId: file.name.replace(/\.zip$/i, '').trim(),
       name: file.name.replace(/\.zip$/i, '').trim(),
       version: '1.0', versionCode: 1, author: '', description: '',
-    });
+    };
+    const result = await upload(token, file, metadata);
     if (result) {
-      enqueueSnackbar('Module uploaded', { variant: 'success' });
+      enqueueSnackbar(`"${metadata.moduleId}" uploaded`, { variant: 'success' });
       await fetchAll(token);
     } else {
       enqueueSnackbar('Upload failed', { variant: 'error' });
