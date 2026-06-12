@@ -189,7 +189,6 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
               versionCode: parseInt(form.module.versionCode, 10) || 1,
               author: form.module.author.trim(),
               description: form.module.description.trim(),
-              fileName: form.file.name,
             }
           : {
               blobId, size,
@@ -197,7 +196,6 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
               appName: form.apk.appName.trim() || form.file.name.replace(/\.apks?$/i, '').trim(),
               versionCode: parseInt(form.apk.versionCode, 10) || 0,
               versionName: form.apk.versionName.trim(),
-              fileName: form.file.name,
             };
 
         const metaRes = await fetch(endpoint, {

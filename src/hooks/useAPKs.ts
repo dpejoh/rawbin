@@ -79,7 +79,6 @@ export default function useAPKs(): UseAPKsReturn {
           appName: metadata.appName,
           versionCode: metadata.versionCode,
           versionName: metadata.versionName,
-          fileName: file.name,
         }),
       });
       const metaData = await metaRes.json().catch(() => ({})) as Record<string, unknown>;

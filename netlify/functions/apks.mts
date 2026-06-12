@@ -112,8 +112,7 @@ export default async (req: Request) => {
       if (!item) return new Response("Not found", { status: 404 });
 
       if (item.storage === STORAGE_R2) {
-        const dlName = item.fileName || `${item.packageName}.apk`;
-        return Response.redirect(`${R2_WORKER}/raw/apks/${item.id}?name=${encodeURIComponent(dlName)}`, 302);
+        return Response.redirect(`${R2_WORKER}/raw/apks/${item.id}?name=${encodeURIComponent(`${item.packageName}.apk`)}`, 302);
       }
 
       const store = getStoreInstance();

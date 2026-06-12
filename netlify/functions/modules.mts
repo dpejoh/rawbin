@@ -112,8 +112,7 @@ export default async (req: Request) => {
       if (!item) return new Response("Not found", { status: 404 });
 
       if (item.storage === STORAGE_R2) {
-        const dlName = item.fileName || `${item.moduleId}.zip`;
-        return Response.redirect(`${R2_WORKER}/raw/modules/${item.id}?name=${encodeURIComponent(dlName)}`, 302);
+        return Response.redirect(`${R2_WORKER}/raw/modules/${item.id}?name=${encodeURIComponent(`${item.moduleId}.zip`)}`, 302);
       }
 
       const store = getStoreInstance();
