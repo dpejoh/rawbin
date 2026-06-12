@@ -30,7 +30,6 @@ interface EditForm {
   appName: string;
   versionCode: number;
   versionName: string;
-  fileName: string;
 }
 
 export default function APKsPage({ token, role }: APKsPageProps) {
@@ -46,7 +45,7 @@ export default function APKsPage({ token, role }: APKsPageProps) {
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<APK | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({ packageName: '', appName: '', versionCode: 0, versionName: '', fileName: '' });
+  const [editForm, setEditForm] = useState<EditForm>({ packageName: '', appName: '', versionCode: 0, versionName: '' });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const dropInputRef = useRef<HTMLInputElement>(null);
 
@@ -142,7 +141,7 @@ export default function APKsPage({ token, role }: APKsPageProps) {
 
   const handleCopyUrl = useCallback(async (apk: APK) => {
     const r2Worker = import.meta.env.VITE_R2_WORKER_URL ?? "http://localhost:8787";
-    const url = `${r2Worker}/raw/apks/${apk.id}?name=${encodeURIComponent(`${apk.packageName}.apk`)}`;
+    const url = `${r2Worker}/raw/apks/${encodeURIComponent(`${apk.packageName}.apk`)}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopiedId(apk.packageName);
@@ -160,20 +159,19 @@ export default function APKsPage({ token, role }: APKsPageProps) {
       appName: apk.appName,
       versionCode: apk.versionCode,
       versionName: apk.versionName,
-      fileName: apk.fileName ?? `${apk.packageName}.apk`,
     });
   }, []);
 
   const handleEditSave = useCallback(async () => {
     if (!token || !editTarget) return;
-    const { packageName, appName, versionCode, versionName, fileName } = editForm;
+    const { packageName, appName, versionCode, versionName } = editForm;
     if (!packageName.trim()) { enqueueSnackbar('Package name is required', { variant: 'error' }); return; }
     setIsSavingEdit(true);
     try {
       const res = await fetch('/.netlify/functions/apks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ id: editTarget.packageName, packageName, appName, versionCode, versionName, fileName }),
+        body: JSON.stringify({ id: editTarget.packageName, packageName, appName, versionCode, versionName }),
       });
       const data = await res.json() as Record<string, unknown>;
       if (data.error) {
@@ -403,11 +401,6 @@ export default function APKsPage({ token, role }: APKsPageProps) {
             <TextField fullWidth label="Version name" size="small"
               value={editForm.versionName}
               onChange={(e) => setEditForm(f => ({ ...f, versionName: e.target.value }))}
-            />
-            <TextField fullWidth label="File name" size="small"
-              value={editForm.fileName}
-              onChange={(e) => setEditForm(f => ({ ...f, fileName: e.target.value }))}
-              placeholder="e.g. detector.apk"
             />
           </Stack>
         </DialogContent>

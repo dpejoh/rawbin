@@ -169,7 +169,10 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
         const r2Worker = import.meta.env.VITE_R2_WORKER_URL ?? "http://localhost:8787";
 
         const bucket = form.detectedType === 'module' ? 'modules' : 'apks';
-        const fileRes = await fetch(`${r2Worker}/upload/${bucket}`, {
+        const uploadKey = form.detectedType === 'module'
+          ? `${form.module.moduleId.trim() || form.file.name.replace(/\.zip$/i, '').trim()}.zip`
+          : `${form.apk.packageName.trim() || form.file.name.replace(/\.apks?$/i, '').trim()}.apk`;
+        const fileRes = await fetch(`${r2Worker}/upload/${bucket}?key=${encodeURIComponent(uploadKey)}`, {
           method: 'PUT',
           headers: { Authorization: `Bearer ${token}` },
           body: form.file,

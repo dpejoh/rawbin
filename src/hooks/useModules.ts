@@ -9,7 +9,6 @@ export interface Module {
   author: string;
   description: string;
   size: number;
-  fileName?: string;
   createdAt: string;
   updatedAt?: string;
 }
@@ -58,7 +57,8 @@ export default function useModules(): UseModulesReturn {
     try {
       if (!R2_WORKER) return null;
 
-      const fileRes = await fetch(`${R2_WORKER}/upload/modules`, {
+      const key = `${metadata.moduleId}.zip`;
+      const fileRes = await fetch(`${R2_WORKER}/upload/modules?key=${encodeURIComponent(key)}`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}` },
         body: file,

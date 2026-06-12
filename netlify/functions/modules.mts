@@ -59,7 +59,6 @@ interface ModuleMeta {
   author: string;
   description: string;
   size: number;
-  fileName?: string;
   createdAt: string;
   updatedAt: string;
   storage?: string;
@@ -112,7 +111,7 @@ export default async (req: Request) => {
       if (!item) return new Response("Not found", { status: 404 });
 
       if (item.storage === STORAGE_R2) {
-        return Response.redirect(`${R2_WORKER}/raw/modules/${item.id}?name=${encodeURIComponent(`${item.moduleId}.zip`)}`, 302);
+        return Response.redirect(`${R2_WORKER}/raw/modules/${encodeURIComponent(`${item.moduleId}.zip`)}`, 302);
       }
 
       const store = getStoreInstance();
@@ -139,8 +138,8 @@ export default async (req: Request) => {
     switch (method) {
       case "GET": {
         const index = await getIndex();
-        const result = index.map(({ id, moduleId, name, version, versionCode, author, description, size, fileName, createdAt, updatedAt }) => ({
-          id, moduleId, name, version, versionCode, author, description, size, fileName, createdAt, updatedAt,
+        const result = index.map(({ id, moduleId, name, version, versionCode, author, description, size, createdAt, updatedAt }) => ({
+          id, moduleId, name, version, versionCode, author, description, size, createdAt, updatedAt,
         }));
         return ok(result);
       }
@@ -171,7 +170,6 @@ export default async (req: Request) => {
           if (typeof b.versionCode === 'number') item.versionCode = b.versionCode;
           if (typeof b.author === 'string') item.author = b.author.trim();
           if (typeof b.description === 'string') item.description = b.description.trim();
-          if (typeof b.fileName === 'string') item.fileName = b.fileName.trim();
           item.updatedAt = new Date().toISOString();
           await saveIndex(idx);
           return ok({ id: updateId });
@@ -186,10 +184,10 @@ export default async (req: Request) => {
 
         const {
           moduleId, name, version, versionCode, author, description,
-          blobId, size, fileName,
+          blobId, size,
         } = body as {
           moduleId: string; name: string; version?: string; versionCode?: number;
-          author?: string; description?: string; blobId?: string; size?: number; fileName?: string;
+          author?: string; description?: string; blobId?: string; size?: number;
         };
 
         if (!blobId) return fail("Missing blobId");
@@ -200,7 +198,7 @@ export default async (req: Request) => {
           id, moduleId: moduleId.trim(), name: name.trim(),
           version: version ?? "1.0", versionCode: versionCode ?? 1,
           author: author ?? "", description: description ?? "",
-          size: size ?? 0, fileName, createdAt: now, updatedAt: now,
+          size: size ?? 0, createdAt: now, updatedAt: now,
           storage: STORAGE_R2,
         };
 
@@ -210,7 +208,6 @@ export default async (req: Request) => {
           const oldEntry = existing !== -1 ? idx[existing] : null;
           if (existing !== -1) idx.splice(existing, 1);
           if (oldEntry) {
-            if (!fileName && oldEntry.fileName) meta.fileName = oldEntry.fileName;
             if (oldEntry.id !== id) {
               if (oldEntry.storage === STORAGE_R2) deleteFromR2(oldEntry.id, token).catch(() => {});
               else await store.delete(oldEntry.id);

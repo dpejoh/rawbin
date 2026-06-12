@@ -9,7 +9,6 @@ export interface APK {
   minSdk: number;
   targetSdk: number;
   size: number;
-  fileName?: string;
   createdAt: string;
   updatedAt?: string;
 }
@@ -58,7 +57,8 @@ export default function useAPKs(): UseAPKsReturn {
     try {
       if (!R2_WORKER) return null;
 
-      const fileRes = await fetch(`${R2_WORKER}/upload/apks`, {
+      const key = `${metadata.packageName}.apk`;
+      const fileRes = await fetch(`${R2_WORKER}/upload/apks?key=${encodeURIComponent(key)}`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}` },
         body: file,

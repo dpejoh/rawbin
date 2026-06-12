@@ -51,13 +51,13 @@ export default {
       }
 
       if (request.method === "PUT" && path === "upload" && action && ALLOWED_BUCKETS.includes(action as typeof ALLOWED_BUCKETS[number])) {
-        return handleUpload(request, env, action);
+        return handleUpload(request, env, action, url);
       }
 
       if (request.method === "GET" && path === "raw" && action && ALLOWED_BUCKETS.includes(action as typeof ALLOWED_BUCKETS[number])) {
         const key = segments.slice(2).join("/");
         if (!key || !validateKey(key)) return respond("Not found", 404);
-        return handleDownload(env, action, key, url);
+        return handleDownload(env, action, key);
       }
 
       if (request.method === "DELETE" && path === "raw" && action && ALLOWED_BUCKETS.includes(action as typeof ALLOWED_BUCKETS[number])) {
@@ -86,7 +86,7 @@ async function verifyToken(token: string, env: Env): Promise<boolean> {
   }
 }
 
-async function handleUpload(request: Request, env: Env, bucket: string): Promise<Response> {
+async function handleUpload(request: Request, env: Env, bucket: string, url: URL): Promise<Response> {
   const auth = request.headers.get("Authorization") ?? "";
   const token = auth.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
   if (!token) return respond("Unauthorized", 401);
@@ -109,8 +109,14 @@ async function handleUpload(request: Request, env: Env, bucket: string): Promise
   if (blob.size === 0) return respond("Empty file", 400);
   if (blob.size > MAX_UPLOAD_SIZE) return respond("Payload too large", 413);
 
-  const blobId = `blob_${crypto.randomUUID()}`;
-  const key = `${bucket}/${blobId}`;
+  const customKey = url.searchParams.get("key");
+  const finalId = customKey ?? `blob_${crypto.randomUUID()}`;
+
+  if (customKey && !/^[a-zA-Z0-9._\-\u0080-\uFFFF]+$/.test(customKey)) {
+    return respond("Invalid key", 400);
+  }
+
+  const key = `${bucket}/${finalId}`;
 
   await env.RAW_BIN.put(key, blob, {
     customMetadata: {
@@ -119,7 +125,7 @@ async function handleUpload(request: Request, env: Env, bucket: string): Promise
     },
   });
 
-  return json({ id: blobId, size: blob.size, key });
+  return json({ id: finalId, size: blob.size, key });
 }
 
 async function handleDelete(request: Request, env: Env, bucket: string, key: string): Promise<Response> {
@@ -134,7 +140,7 @@ async function handleDelete(request: Request, env: Env, bucket: string, key: str
   return json({ deleted: true });
 }
 
-async function handleDownload(env: Env, bucket: string, key: string, url: URL): Promise<Response> {
+async function handleDownload(env: Env, bucket: string, key: string): Promise<Response> {
   const fullKey = `${bucket}/${key}`;
   const object = await env.RAW_BIN.get(fullKey);
   if (!object) return respond("Not found", 404);
@@ -153,10 +159,8 @@ async function handleDownload(env: Env, bucket: string, key: string, url: URL): 
 
   headers.set("content-type", contentType);
 
-  const name = url.searchParams.get("name");
-  if (name) {
-    headers.set("content-disposition", `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
-  }
+  const fileName = key.split("/").pop() || key;
+  headers.set("content-disposition", `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
 
   return new Response(object.body, { headers });
 }

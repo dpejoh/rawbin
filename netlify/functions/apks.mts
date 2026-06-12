@@ -59,7 +59,6 @@ interface ApkMeta {
   minSdk: number;
   targetSdk: number;
   size: number;
-  fileName?: string;
   createdAt: string;
   updatedAt: string;
   storage?: string;
@@ -112,7 +111,7 @@ export default async (req: Request) => {
       if (!item) return new Response("Not found", { status: 404 });
 
       if (item.storage === STORAGE_R2) {
-        return Response.redirect(`${R2_WORKER}/raw/apks/${item.id}?name=${encodeURIComponent(`${item.packageName}.apk`)}`, 302);
+        return Response.redirect(`${R2_WORKER}/raw/apks/${encodeURIComponent(`${item.packageName}.apk`)}`, 302);
       }
 
       const store = getStoreInstance();
@@ -125,7 +124,6 @@ export default async (req: Request) => {
         status: 200,
         headers: {
           "Content-Type": "application/vnd.android.package-archive",
-          "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(`${item.packageName}.apk`)}`,
         },
       });
     }
@@ -142,8 +140,8 @@ export default async (req: Request) => {
     switch (method) {
       case "GET": {
         const index = await getIndex();
-        const result = index.map(({ id, packageName, appName, versionCode, versionName, minSdk, targetSdk, size, fileName, createdAt, updatedAt }) => ({
-          id, packageName, appName, versionCode, versionName, minSdk, targetSdk, size, fileName, createdAt, updatedAt,
+        const result = index.map(({ id, packageName, appName, versionCode, versionName, minSdk, targetSdk, size, createdAt, updatedAt }) => ({
+          id, packageName, appName, versionCode, versionName, minSdk, targetSdk, size, createdAt, updatedAt,
         }));
         return ok(result);
       }
@@ -172,7 +170,6 @@ export default async (req: Request) => {
           if (typeof b.appName === 'string') item.appName = b.appName.trim();
           if (typeof b.versionCode === 'number') item.versionCode = b.versionCode;
           if (typeof b.versionName === 'string') item.versionName = b.versionName.trim();
-          if (typeof b.fileName === 'string') item.fileName = b.fileName.trim();
           item.updatedAt = new Date().toISOString();
           await saveIndex(idx);
           return ok({ id: updateId });
@@ -186,10 +183,10 @@ export default async (req: Request) => {
 
         const {
           packageName, appName, versionCode, versionName, minSdk, targetSdk,
-          blobId, size, fileName,
+          blobId, size,
         } = body as {
           packageName: string; appName?: string; versionCode?: number; versionName?: string;
-          minSdk?: number; targetSdk?: number; blobId?: string; size?: number; fileName?: string;
+          minSdk?: number; targetSdk?: number; blobId?: string; size?: number;
         };
 
         if (!blobId) {
@@ -203,7 +200,7 @@ export default async (req: Request) => {
           appName: appName ?? packageName.trim(),
           versionCode: versionCode ?? 0, versionName: versionName ?? "",
           minSdk: minSdk ?? 0, targetSdk: targetSdk ?? 0,
-          size: size ?? 0, fileName, createdAt: now, updatedAt: now,
+          size: size ?? 0, createdAt: now, updatedAt: now,
           storage: STORAGE_R2,
         };
 
@@ -213,7 +210,6 @@ export default async (req: Request) => {
           const oldEntry = existing !== -1 ? idx[existing] : null;
           if (existing !== -1) idx.splice(existing, 1);
           if (oldEntry) {
-            if (!fileName && oldEntry.fileName) meta.fileName = oldEntry.fileName;
             if (oldEntry.id !== id) {
               if (oldEntry.storage === STORAGE_R2) deleteFromR2(oldEntry.id, token).catch(() => {});
               else await store.delete(oldEntry.id);

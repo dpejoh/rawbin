@@ -37,7 +37,7 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<Module | null>(null);
-  const [editForm, setEditForm] = useState({ moduleId: '', name: '', version: '', versionCode: 1, author: '', description: '', fileName: '' });
+  const [editForm, setEditForm] = useState({ moduleId: '', name: '', version: '', versionCode: 1, author: '', description: '' });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropInputRef = useRef<HTMLInputElement>(null);
@@ -124,7 +124,7 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
 
   const handleCopyUrl = useCallback(async (mod: Module) => {
     const r2Worker = import.meta.env.VITE_R2_WORKER_URL ?? "http://localhost:8787";
-    const url = `${r2Worker}/raw/modules/${mod.id}?name=${encodeURIComponent(`${mod.moduleId}.zip`)}`;
+    const url = `${r2Worker}/raw/modules/${encodeURIComponent(`${mod.moduleId}.zip`)}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopiedId(mod.moduleId);
@@ -144,20 +144,19 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
       versionCode: mod.versionCode,
       author: mod.author,
       description: mod.description,
-      fileName: mod.fileName ?? `${mod.moduleId}.zip`,
     });
   }, []);
 
   const handleEditSave = useCallback(async () => {
     if (!token || !editTarget) return;
-    const { moduleId, name, version, versionCode, author, description, fileName } = editForm;
+    const { moduleId, name, version, versionCode, author, description } = editForm;
     if (!moduleId.trim()) { enqueueSnackbar('Module ID is required', { variant: 'error' }); return; }
     setIsSavingEdit(true);
     try {
       const res = await fetch('/.netlify/functions/modules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ id: editTarget.moduleId, moduleId, name, version, versionCode, author, description, fileName }),
+        body: JSON.stringify({ id: editTarget.moduleId, moduleId, name, version, versionCode, author, description }),
       });
       const data = await res.json() as Record<string, unknown>;
       if (data.error) {
@@ -441,11 +440,6 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
             <TextField fullWidth label="Description" size="small" multiline maxRows={3}
               value={editForm.description}
               onChange={(e) => setEditForm(f => ({ ...f, description: e.target.value }))}
-            />
-            <TextField fullWidth label="File name" size="small"
-              value={editForm.fileName}
-              onChange={(e) => setEditForm(f => ({ ...f, fileName: e.target.value }))}
-              placeholder="e.g. module.zip"
             />
           </Stack>
         </DialogContent>
