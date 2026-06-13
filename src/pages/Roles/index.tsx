@@ -37,7 +37,7 @@ export default function RolesPage({ token }: RolesPageProps) {
   const fetchRoles = useCallback(async () => {
     if (!token) return;
     try {
-      const res = await fetch('/.netlify/functions/roles', {
+      const res = await fetch('/api/roles', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -53,7 +53,7 @@ export default function RolesPage({ token }: RolesPageProps) {
   const handleAdd = useCallback(async () => {
     if (!token || !newEmail.trim()) return;
     try {
-      const res = await fetch('/.netlify/functions/roles', {
+      const res = await fetch('/api/roles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ email: newEmail.trim(), role: newRole }),
@@ -72,7 +72,7 @@ export default function RolesPage({ token }: RolesPageProps) {
   const handleDelete = useCallback(async (email: string) => {
     if (!token) return;
     try {
-      const res = await fetch('/.netlify/functions/roles', {
+      const res = await fetch('/api/roles', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ email }),

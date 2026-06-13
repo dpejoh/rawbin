@@ -96,7 +96,7 @@ export default function FilesPage({ token, role }: FilesPageProps) {
     if (!token) return;
     setIsLoading(true);
     try {
-      const res = await fetch('/.netlify/functions/files', {
+      const res = await fetch('/api/files', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) setAllItems(await res.json() as FileItem[]);
@@ -133,7 +133,7 @@ export default function FilesPage({ token, role }: FilesPageProps) {
 
   const handleDelete = useCallback(async () => {
     if (!token || !deleteTarget) return;
-    const res = await fetch('/.netlify/functions/files', {
+    const res = await fetch('/api/files', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ id: deleteTarget.id }),
@@ -149,7 +149,7 @@ export default function FilesPage({ token, role }: FilesPageProps) {
 
   const handleCreateFolder = useCallback(async (name: string) => {
     if (!token) return;
-    const res = await fetch('/.netlify/functions/files?folder=1', {
+    const res = await fetch('/api/files?folder=1', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ name, parentId: currentFolderId }),
@@ -169,16 +169,16 @@ export default function FilesPage({ token, role }: FilesPageProps) {
 
   const uploadFile = useCallback(async (file: File): Promise<string> => {
     if (!token) throw new Error('No token');
-    const r2Worker = import.meta.env.VITE_R2_WORKER_URL ?? "http://localhost:8787";
     const uploadForm = new FormData();
     uploadForm.append('file', file);
-    const fileRes = await fetch(`${r2Worker}/upload/files?token=${encodeURIComponent(token)}`, {
+    const fileRes = await fetch(`/upload/files?key=${encodeURIComponent(file.name)}`, {
       method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
       body: uploadForm,
     });
     if (!fileRes.ok) throw new Error('Storage upload failed');
     const { id: blobId, size } = await fileRes.json() as { id: string; size: number };
-    const res = await fetch('/.netlify/functions/files', {
+    const res = await fetch('/api/files', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
@@ -302,7 +302,7 @@ export default function FilesPage({ token, role }: FilesPageProps) {
                     let ok = 0; let fail = 0;
                     for (const id of selectedIds) {
                       try {
-                        const res = await fetch('/.netlify/functions/files', {
+                        const res = await fetch('/api/files', {
                           method: 'DELETE',
                           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                           body: JSON.stringify({ id }),

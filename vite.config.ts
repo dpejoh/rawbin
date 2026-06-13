@@ -15,32 +15,20 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/.netlify/identity": {
-        target: "https://rawbin.netlify.app",
+      "/api": {
+        target: "http://localhost:8787",
         changeOrigin: true,
       },
-      "/.netlify/functions": {
-        target: "https://rawbin.netlify.app",
+      "/upload": {
+        target: "http://localhost:8787",
         changeOrigin: true,
       },
-      "/key": {
-        target: "https://rawbin.netlify.app",
+      "/raw": {
+        target: "http://localhost:8787",
         changeOrigin: true,
       },
       "/clips": {
-        target: "https://rawbin.netlify.app",
-        changeOrigin: true,
-      },
-      "/file": {
-        target: "https://rawbin.netlify.app",
-        changeOrigin: true,
-      },
-      "/mod": {
-        target: "https://rawbin.netlify.app",
-        changeOrigin: true,
-      },
-      "/apk": {
-        target: "https://rawbin.netlify.app",
+        target: "http://localhost:8787",
         changeOrigin: true,
       },
     },

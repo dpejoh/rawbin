@@ -11,8 +11,6 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 
-const R2_WORKER = import.meta.env.VITE_R2_WORKER_URL ?? "http://localhost:8787";
-
 interface UploadDialogProps {
   open: boolean;
   token: string | null;
@@ -34,7 +32,7 @@ export default function UploadDialog({ open, token, currentFolderId, onClose, on
     setIsUploading(true);
     const name = fileName.trim() || `from-url-${Date.now()}`;
     const params = new URLSearchParams({ name, url, parentId: currentFolderId });
-    const res = await fetch(`/.netlify/functions/files?${params}`, {
+    const res = await fetch(`/api/files?${params}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -55,8 +53,9 @@ export default function UploadDialog({ open, token, currentFolderId, onClose, on
     try {
       const uploadForm = new FormData();
       uploadForm.append('file', file);
-      const fileRes = await fetch(`${R2_WORKER}/upload/files?token=${encodeURIComponent(token)}`, {
+      const fileRes = await fetch(`/upload/files?key=${encodeURIComponent(file.name)}`, {
         method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
         body: uploadForm,
       });
       if (!fileRes.ok) {
@@ -67,7 +66,7 @@ export default function UploadDialog({ open, token, currentFolderId, onClose, on
       }
       const { id: blobId, size } = await fileRes.json() as { id: string; size: number };
 
-      const metaRes = await fetch('/.netlify/functions/files', {
+      const metaRes = await fetch('/api/files', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({

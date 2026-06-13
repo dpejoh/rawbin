@@ -122,8 +122,7 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
   }, [token, deleteTarget, remove, fetchAll]);
 
   const handleCopyUrl = useCallback(async (mod: Module) => {
-    const r2Worker = import.meta.env.VITE_R2_WORKER_URL ?? "http://localhost:8787";
-    const url = `${r2Worker}/raw/modules/${encodeURIComponent(`${mod.moduleId}.zip`)}`;
+    const url = `https://rawbin.dpejoh.com/raw/modules/${encodeURIComponent(`${mod.moduleId}.zip`)}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopiedId(mod.moduleId);
@@ -146,7 +145,7 @@ export default function ModulesPage({ token, role }: ModulesPageProps) {
     if (!moduleId.trim()) { toast.error('Module ID is required'); return; }
     setIsSavingEdit(true);
     try {
-      const res = await fetch('/.netlify/functions/modules', {
+      const res = await fetch('/api/modules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ id: editTarget.moduleId, moduleId, name, version, versionCode, author, description }),

@@ -22,8 +22,6 @@ interface UseModulesReturn {
   remove: (token: string, id: string) => Promise<boolean>;
 }
 
-const R2_WORKER = import.meta.env.VITE_R2_WORKER_URL ?? "http://localhost:8787";
-
 export default function useModules(): UseModulesReturn {
   const [modules, setModules] = useState<Module[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -32,7 +30,7 @@ export default function useModules(): UseModulesReturn {
   const fetchAll = useCallback(async (token: string): Promise<Module[]> => {
     setIsLoading(true);
     try {
-      const res = await fetch("/.netlify/functions/modules", {
+      const res = await fetch("/api/modules", {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -55,13 +53,14 @@ export default function useModules(): UseModulesReturn {
   ): Promise<{ id: string } | null> => {
     setIsUploading(true);
     try {
-      if (!R2_WORKER) return null;
+      if (false) return null;
 
       const key = `${metadata.moduleId}.zip`;
       const form = new FormData();
       form.append("file", file);
-      const fileRes = await fetch(`${R2_WORKER}/upload/modules?key=${encodeURIComponent(key)}&token=${encodeURIComponent(token)}`, {
+      const fileRes = await fetch(`/upload/modules?key=${encodeURIComponent(key)}`, {
         method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
         body: form,
       });
       if (!fileRes.ok) {
@@ -71,7 +70,7 @@ export default function useModules(): UseModulesReturn {
       }
       const { id: blobId, size } = await fileRes.json() as { id: string; size: number };
 
-      const metaRes = await fetch("/.netlify/functions/modules", {
+      const metaRes = await fetch("/api/modules", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -100,7 +99,7 @@ export default function useModules(): UseModulesReturn {
 
   const remove = useCallback(async (token: string, id: string): Promise<boolean> => {
     try {
-      const res = await fetch("/.netlify/functions/modules", {
+      const res = await fetch("/api/modules", {
         method: "DELETE",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ id }),

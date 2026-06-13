@@ -7,6 +7,10 @@ import clipboards from "./handlers/clipboards";
 import r2 from "./handlers/r2";
 import apks from "./handlers/apks";
 import modules from "./handlers/modules";
+import files from "./handlers/files";
+import apps from "./handlers/apps";
+import roles from "./handlers/roles";
+import catalog from "./handlers/catalog";
 
 interface Env {
   DB: D1Database;
@@ -159,6 +163,10 @@ app.route("/", clipboards);
 app.route("/", r2);
 app.route("/", apks);
 app.route("/", modules);
+app.route("/", files);
+app.route("/", apps);
+app.route("/", roles);
+app.route("/", catalog);
 
 // ── Backward compat: /raw/clips/:slug redirects to /clips/:slug ─
 

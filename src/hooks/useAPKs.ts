@@ -22,8 +22,6 @@ interface UseAPKsReturn {
   remove: (token: string, id: string) => Promise<boolean>;
 }
 
-const R2_WORKER = import.meta.env.VITE_R2_WORKER_URL ?? "http://localhost:8787";
-
 export default function useAPKs(): UseAPKsReturn {
   const [apks, setApks] = useState<APK[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -32,7 +30,7 @@ export default function useAPKs(): UseAPKsReturn {
   const fetchAll = useCallback(async (token: string): Promise<APK[]> => {
     setIsLoading(true);
     try {
-      const res = await fetch("/.netlify/functions/apks", {
+      const res = await fetch("/api/apks", {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -55,13 +53,14 @@ export default function useAPKs(): UseAPKsReturn {
   ): Promise<{ id: string } | null> => {
     setIsUploading(true);
     try {
-      if (!R2_WORKER) return null;
+      if (false) return null;
 
       const key = `${metadata.packageName}.apk`;
       const form = new FormData();
       form.append("file", file);
-      const fileRes = await fetch(`${R2_WORKER}/upload/apks?key=${encodeURIComponent(key)}&token=${encodeURIComponent(token)}`, {
+      const fileRes = await fetch(`/upload/apks?key=${encodeURIComponent(key)}`, {
         method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
         body: form,
       });
       if (!fileRes.ok) {
@@ -71,7 +70,7 @@ export default function useAPKs(): UseAPKsReturn {
       }
       const { id: blobId, size } = await fileRes.json() as { id: string; size: number };
 
-      const metaRes = await fetch("/.netlify/functions/apks", {
+      const metaRes = await fetch("/api/apks", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -98,7 +97,7 @@ export default function useAPKs(): UseAPKsReturn {
 
   const remove = useCallback(async (token: string, id: string): Promise<boolean> => {
     try {
-      const res = await fetch("/.netlify/functions/apks", {
+      const res = await fetch("/api/apks", {
         method: "DELETE",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ id }),

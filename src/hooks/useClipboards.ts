@@ -37,7 +37,7 @@ export default function useClipboards(): UseClipboardsReturn {
   const fetchAll = useCallback(async (token: string): Promise<ClipboardItem[]> => {
     setIsLoading(true);
     try {
-      const res = await fetch("/.netlify/functions/clipboards", {
+      const res = await fetch("/api/clipboards", {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -61,7 +61,7 @@ export default function useClipboards(): UseClipboardsReturn {
     async (token: string, name: string, slug?: string, useBase64?: boolean, useShuffle?: boolean): Promise<string | null> => {
       setIsSaving(true);
       try {
-        const res = await fetch("/.netlify/functions/clipboards", {
+        const res = await fetch("/api/clipboards", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ name, slug, useBase64, useShuffle }),
@@ -83,7 +83,7 @@ export default function useClipboards(): UseClipboardsReturn {
     async (token: string, id: string, data: { name?: string; content?: string; slug?: string; useBase64?: boolean; useShuffle?: boolean }): Promise<boolean> => {
       setIsSaving(true);
       try {
-        const res = await fetch("/.netlify/functions/clipboards", {
+        const res = await fetch("/api/clipboards", {
           method: "PUT",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ id, ...data }),
@@ -104,7 +104,7 @@ export default function useClipboards(): UseClipboardsReturn {
     async (token: string, id: string): Promise<boolean> => {
       setIsSaving(true);
       try {
-        const res = await fetch("/.netlify/functions/clipboards", {
+        const res = await fetch("/api/clipboards", {
           method: "DELETE",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ id }),

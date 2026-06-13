@@ -166,8 +166,7 @@ export default function APKsPage({ token, role }: APKsPageProps) {
   }, [token, deleteTarget, remove, fetchAll]);
 
   const handleCopyUrl = useCallback(async (apk: APK) => {
-    const r2Worker = import.meta.env.VITE_R2_WORKER_URL ?? "http://localhost:8787";
-    const url = `${r2Worker}/raw/apks/${encodeURIComponent(`${apk.packageName}.apk`)}`;
+    const url = `https://rawbin.dpejoh.com/raw/apks/${encodeURIComponent(`${apk.packageName}.apk`)}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopiedId(apk.packageName);
@@ -190,7 +189,7 @@ export default function APKsPage({ token, role }: APKsPageProps) {
     if (!packageName.trim()) { toast.error('Package name is required'); return; }
     setIsSavingEdit(true);
     try {
-      const res = await fetch('/.netlify/functions/apks', {
+      const res = await fetch('/api/apks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ id: editTarget.packageName, packageName, appName, versionCode, versionName }),

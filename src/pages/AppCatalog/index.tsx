@@ -52,7 +52,7 @@ export default function AppCatalog({ token, role }: AppCatalogProps) {
 
   const fetchCatalog = useCallback(async () => {
     try {
-      const res = await fetch('/.netlify/functions/apps');
+      const res = await fetch('/api/apps');
       if (res.ok) {
         const data = (await res.json()) as Record<string, string>;
         const list = Object.entries(data).map(([packageName, appName]) => ({ packageName, appName }));
@@ -87,7 +87,7 @@ export default function AppCatalog({ token, role }: AppCatalogProps) {
   const handleAdd = useCallback(async () => {
     if (!token || !addPackageName.trim() || !addAppName.trim()) return;
     try {
-      const res = await fetch('/.netlify/functions/apps/save', {
+      const res = await fetch('/api/apps/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ packageName: addPackageName.trim(), appName: addAppName.trim() }),
@@ -108,13 +108,13 @@ export default function AppCatalog({ token, role }: AppCatalogProps) {
     if (!token || !editPackageName.trim() || !editAppName.trim()) return;
     try {
       if (editOriginalPkg !== editPackageName.trim()) {
-        await fetch('/.netlify/functions/apps', {
+        await fetch('/api/apps', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ packageName: editOriginalPkg }),
         });
       }
-      const res = await fetch('/.netlify/functions/apps/save', {
+      const res = await fetch('/api/apps/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ packageName: editPackageName.trim(), appName: editAppName.trim() }),
@@ -132,7 +132,7 @@ export default function AppCatalog({ token, role }: AppCatalogProps) {
   const handleDelete = useCallback(async (pkg: string) => {
     if (!token) return;
     try {
-      const res = await fetch('/.netlify/functions/apps', {
+      const res = await fetch('/api/apps', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ packageName: pkg }),
@@ -148,7 +148,7 @@ export default function AppCatalog({ token, role }: AppCatalogProps) {
     if (!token || selectedIds.size === 0) return;
     setIsDeleting(true);
     try {
-      const res = await fetch('/.netlify/functions/apps', {
+      const res = await fetch('/api/apps', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ packageName: Array.from(selectedIds) }),
@@ -196,7 +196,7 @@ export default function AppCatalog({ token, role }: AppCatalogProps) {
       return;
     }
     try {
-      const res = await fetch('/.netlify/functions/apps', {
+      const res = await fetch('/api/apps', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(entriesToImport),

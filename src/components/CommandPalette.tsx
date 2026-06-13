@@ -78,11 +78,11 @@ export default function CommandPalette({ token, onNavigate }: CommandPaletteProp
       ];
       try {
         const [clipRes, fileRes] = await Promise.all([
-          fetch('/.netlify/functions/clipboards', {
+          fetch('/api/clipboards', {
             signal: abortController.signal,
             headers: { Authorization: `Bearer ${token}` },
           }),
-          fetch('/.netlify/functions/files', {
+          fetch('/api/files', {
             signal: abortController.signal,
             headers: { Authorization: `Bearer ${token}` },
           }),

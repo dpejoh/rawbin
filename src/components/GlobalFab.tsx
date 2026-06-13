@@ -181,7 +181,7 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
           content: form.file ? await form.file.text() : '',
           useBase64: form.keybox.useBase64,
         };
-        const res = await fetch('/.netlify/functions/catalog/save', {
+        const res = await fetch('/api/catalog/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify(body),
@@ -194,16 +194,15 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
           return;
         }
       } else {
-        const r2Worker = import.meta.env.VITE_R2_WORKER_URL ?? "http://localhost:8787";
-
         const bucket = form.detectedType === 'module' ? 'modules' : 'apks';
         const uploadKey = form.detectedType === 'module'
           ? `${form.module.moduleId.trim() || form.file.name.replace(/\.zip$/i, '').trim()}.zip`
           : `${form.apk.packageName.trim() || form.file.name.replace(/\.apks?$/i, '').trim()}.apk`;
         const uploadForm = new FormData();
         uploadForm.append('file', form.file!);
-        const fileRes = await fetch(`${r2Worker}/upload/${bucket}?key=${encodeURIComponent(uploadKey)}&token=${encodeURIComponent(token!)}`, {
+        const fileRes = await fetch(`/upload/${bucket}?key=${encodeURIComponent(uploadKey)}`, {
           method: 'POST',
+          headers: { Authorization: `Bearer ${token!}` },
           body: uploadForm,
         });
         if (!fileRes.ok) {
@@ -223,7 +222,7 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
           return;
         }
 
-        const endpoint = form.detectedType === 'module' ? '/.netlify/functions/modules' : '/.netlify/functions/apks';
+        const endpoint = form.detectedType === 'module' ? '/api/modules' : '/api/apks';
         const metadata = form.detectedType === 'module'
           ? {
               blobId, size,

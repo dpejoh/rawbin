@@ -75,7 +75,7 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
 
   const fetchHistory = useCallback(async () => {
     try {
-      const res = await fetch('/.netlify/functions/catalog');
+      const res = await fetch('/api/catalog');
       if (res.ok) {
         const data = await res.json() as { entries: HistoryEntry[]; latest: Record<string, string>; autoOverride?: { source: string; version?: string } | null };
         const list = Array.isArray(data) ? data as HistoryEntry[] : data.entries;
@@ -95,7 +95,7 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
     if (contentCache[key] || loadingContent[key]) return;
     setLoadingContent(prev => ({ ...prev, [key]: true }));
     try {
-      const res = await fetch(`/.netlify/functions/catalog?v=${key}`);
+      const res = await fetch(`/api/catalog?v=${key}`);
       if (res.ok) {
         const text = await res.text();
         setContentCache(prev => ({ ...prev, [key]: text }));
@@ -138,7 +138,7 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
     let imported = 0;
     if (jsonImportData.length > 0) {
       try {
-        const res = await fetch('/.netlify/functions/catalog', {
+        const res = await fetch('/api/catalog', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify(jsonImportData),
@@ -175,7 +175,7 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
       return;
     }
     try {
-      const res = await fetch('/.netlify/functions/catalog', {
+      const res = await fetch('/api/catalog', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(valid.map(item => ({ source: item.source, version: item.version, text: item.text, content: item.content }))),
@@ -230,7 +230,7 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
   const handleDelete = useCallback(async (entry: HistoryEntry) => {
     if (!token) return;
     try {
-      const res = await fetch('/.netlify/functions/catalog', {
+      const res = await fetch('/api/catalog', {
         method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ source: entry.source, version: entry.version }),
       });
@@ -251,7 +251,7 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
     let ok = 0; let fail = 0;
     for (const entry of entries.filter(e => selectedIds.has(entryKey(e)))) {
       try {
-        const res = await fetch('/.netlify/functions/catalog', {
+        const res = await fetch('/api/catalog', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ source: entry.source, version: entry.version }),
@@ -272,7 +272,7 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
     const key = entryKey(entry);
     setRecheckingKey(key);
     try {
-      const res = await fetch(`/.netlify/functions/catalog?recheck=${key}`, {
+      const res = await fetch(`/api/catalog?recheck=${key}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -289,7 +289,7 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
     const key = entryKey(entry);
     setSettingStatusKey(key);
     try {
-      const res = await fetch('/.netlify/functions/catalog/set-status', {
+      const res = await fetch('/api/catalog/set-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ serial: entry.serial, status }),
@@ -310,7 +310,7 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
   const handleAddKeybox = useCallback(async (data: { source: string; version: string; text: string; content: string; useBase64: boolean }) => {
     if (!token) return;
     try {
-      const res = await fetch('/.netlify/functions/catalog/save', {
+      const res = await fetch('/api/catalog/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ ...data, version: data.version || '1' }),
@@ -331,14 +331,14 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
     const srcChanged = data.source !== entry.source;
     try {
       if (srcChanged) {
-        const delRes = await fetch('/.netlify/functions/catalog', {
+        const delRes = await fetch('/api/catalog', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ source: entry.source, version: entry.version }),
         });
         if (!delRes.ok) { toast.error('Failed to replace old entry'); return; }
       }
-      const saveRes = await fetch('/.netlify/functions/catalog/save', {
+      const saveRes = await fetch('/api/catalog/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(data),
@@ -359,7 +359,7 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
   const handleSetAutoOverride = useCallback(async () => {
     if (!token || !overrideSource) return;
     try {
-      const res = await fetch('/.netlify/functions/catalog/set-auto-override', {
+      const res = await fetch('/api/catalog/set-auto-override', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ source: overrideSource, version: overrideVersion || undefined }),
@@ -376,7 +376,7 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
   const handleClearAutoOverride = useCallback(async () => {
     if (!token) return;
     try {
-      const res = await fetch('/.netlify/functions/catalog/clear-auto-override', {
+      const res = await fetch('/api/catalog/clear-auto-override', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
