@@ -1,55 +1,9 @@
 import { getStore } from "@netlify/blobs";
 import { randomUUID } from "node:crypto";
+import { ok, fail, extractToken, verifyRequest, requireRole } from "./_auth.mjs";
 
-const SITE_URL = process.env.URL ?? `https://${process.env.SITE_NAME}.netlify.app`;
 const R2_WORKER = process.env.R2_WORKER_URL ?? "http://localhost:8787";
 const STORAGE_R2 = "r2";
-
-function ok(data: unknown) {
-  return new Response(JSON.stringify(data), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-function fail(msg: string) {
-  return new Response(JSON.stringify({ error: msg }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-async function verifyToken(token: string): Promise<{ email: string; id: string } | null> {
-  try {
-    const res = await fetch(`${SITE_URL}/.netlify/identity/user`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { email?: string; id: string; sub?: string };
-    return { email: data.email ?? "", id: data.id ?? data.sub ?? "" };
-  } catch {
-    return null;
-  }
-}
-
-const HIERARCHY: Record<string, number> = { viewer: 0, editor: 1, admin: 2 };
-
-async function getUserRole(email: string): Promise<string> {
-  try {
-    const store = getStore("user-roles");
-    const raw = await store.get("index");
-    if (!raw) return "viewer";
-    const roles = JSON.parse(raw) as Record<string, string>;
-    return roles[email] ?? "viewer";
-  } catch {
-    return "viewer";
-  }
-}
-
-async function requireRole(email: string, minRole: string): Promise<boolean> {
-  const role = await getUserRole(email);
-  return (HIERARCHY[role] ?? 0) >= (HIERARCHY[minRole] ?? 0);
-}
 
 interface FileMeta {
   id: string;
@@ -67,6 +21,10 @@ function getStoreInstance() {
   return getStore("files");
 }
 
+async function flush(store: ReturnType<typeof getStoreInstance>): Promise<void> {
+  await store.get("index");
+}
+
 async function getIndex(): Promise<FileMeta[]> {
   const store = getStoreInstance();
   const raw = await store.get("index");
@@ -77,6 +35,7 @@ async function getIndex(): Promise<FileMeta[]> {
 async function saveIndex(index: FileMeta[]): Promise<void> {
   const store = getStoreInstance();
   await store.set("index", JSON.stringify(index));
+  await flush(store);
 }
 
 async function deleteContent(id: string): Promise<void> {
@@ -85,10 +44,15 @@ async function deleteContent(id: string): Promise<void> {
 }
 
 async function deleteFromR2(blobId: string, token: string): Promise<void> {
-  await fetch(`${R2_WORKER}/raw/files/${blobId}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  try {
+    const res = await fetch(`${R2_WORKER}/raw/files/${blobId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) console.error("R2 delete failed:", blobId, res.status);
+  } catch (err) {
+    console.error("R2 delete error:", blobId, err);
+  }
 }
 
 function collectDescendants(index: FileMeta[], parentId: string): string[] {
@@ -161,11 +125,9 @@ export default async (req: Request) => {
       });
     }
 
-    const auth = req.headers.get("Authorization") ?? "";
-    const token = auth.replace("Bearer ", "");
+    const token = extractToken(req);
     if (!token) return fail("Unauthorized");
-
-    const user = await verifyToken(token);
+    const user = await verifyRequest();
     if (!user) return fail("Unauthorized");
 
     const store = getStoreInstance();
@@ -298,7 +260,7 @@ export default async (req: Request) => {
         for (const id of idsToDelete) {
           const f = index.find((f) => f.id === id);
           if (f?.storage === STORAGE_R2) {
-            deleteFromR2(id, token).catch(() => {});
+            deleteFromR2(id, token);
           } else {
             await deleteContent(id);
           }

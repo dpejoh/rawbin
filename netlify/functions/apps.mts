@@ -1,52 +1,5 @@
 import { getStore } from "@netlify/blobs";
-
-const SITE_URL = process.env.URL ?? `https://${process.env.SITE_NAME}.netlify.app`;
-
-function ok(data: unknown) {
-  return new Response(JSON.stringify(data), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-function fail(msg: string) {
-  return new Response(JSON.stringify({ error: msg }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-async function verifyToken(token: string): Promise<{ email: string; id: string } | null> {
-  try {
-    const res = await fetch(`${SITE_URL}/.netlify/identity/user`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { email?: string; id: string; sub?: string };
-    return { email: data.email ?? "", id: data.id ?? data.sub ?? "" };
-  } catch {
-    return null;
-  }
-}
-
-const HIERARCHY: Record<string, number> = { viewer: 0, editor: 1, admin: 2 };
-
-async function getUserRole(email: string): Promise<string> {
-  try {
-    const store = getStore("user-roles");
-    const raw = await store.get("index");
-    if (!raw) return "viewer";
-    const roles = JSON.parse(raw) as Record<string, string>;
-    return roles[email] ?? "viewer";
-  } catch {
-    return "viewer";
-  }
-}
-
-async function requireRole(email: string, minRole: string): Promise<boolean> {
-  const role = await getUserRole(email);
-  return (HIERARCHY[role] ?? 0) >= (HIERARCHY[minRole] ?? 0);
-}
+import { ok, fail, extractToken, verifyRequest, requireRole } from "./_auth.mjs";
 
 interface AppCatalog {
   [packageName: string]: string;
@@ -54,6 +7,10 @@ interface AppCatalog {
 
 function getStoreInstance() {
   return getStore("app-catalog");
+}
+
+async function flush(store: ReturnType<typeof getStoreInstance>): Promise<void> {
+  await store.get("data");
 }
 
 async function getCatalog(): Promise<AppCatalog> {
@@ -65,6 +22,7 @@ async function getCatalog(): Promise<AppCatalog> {
 async function saveCatalog(data: AppCatalog): Promise<void> {
   const store = getStoreInstance();
   await store.set("data", JSON.stringify(data, null, 2));
+  await flush(store);
 }
 
 function filterCatalog(catalog: AppCatalog, query: string): AppCatalog {
@@ -94,11 +52,9 @@ export default async (req: Request) => {
       return ok(result);
     }
 
-    const auth = req.headers.get("Authorization") ?? "";
-    const token = auth.replace("Bearer ", "");
+    const token = extractToken(req);
     if (!token) return fail("Unauthorized");
-
-    const user = await verifyToken(token);
+    const user = await verifyRequest();
     if (!user) return fail("Unauthorized");
 
     if (!await requireRole(user.email, "admin")) return fail("Forbidden");

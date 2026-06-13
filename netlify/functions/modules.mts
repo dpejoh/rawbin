@@ -1,54 +1,8 @@
 import { getStore } from "@netlify/blobs";
+import { ok, fail, extractToken, verifyRequest, requireRole } from "./_auth.mjs";
 
-const SITE_URL = process.env.URL ?? `https://${process.env.SITE_NAME}.netlify.app`;
 const R2_WORKER = process.env.R2_WORKER_URL ?? "http://localhost:8787";
 const STORAGE_R2 = "r2";
-
-function ok(data: unknown) {
-  return new Response(JSON.stringify(data), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-function fail(msg: string) {
-  return new Response(JSON.stringify({ error: msg }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-async function verifyToken(token: string): Promise<{ email: string; id: string } | null> {
-  try {
-    const res = await fetch(`${SITE_URL}/.netlify/identity/user`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { email?: string; id: string; sub?: string };
-    return { email: data.email ?? "", id: data.id ?? data.sub ?? "" };
-  } catch {
-    return null;
-  }
-}
-
-const HIERARCHY: Record<string, number> = { viewer: 0, editor: 1, admin: 2 };
-
-async function getUserRole(email: string): Promise<string> {
-  try {
-    const store = getStore("user-roles");
-    const raw = await store.get("index");
-    if (!raw) return "viewer";
-    const roles = JSON.parse(raw) as Record<string, string>;
-    return roles[email] ?? "viewer";
-  } catch {
-    return "viewer";
-  }
-}
-
-async function requireRole(email: string, minRole: string): Promise<boolean> {
-  const role = await getUserRole(email);
-  return (HIERARCHY[role] ?? 0) >= (HIERARCHY[minRole] ?? 0);
-}
 
 interface ModuleMeta {
   id: string;
@@ -86,10 +40,15 @@ async function saveIndex(index: ModuleMeta[]): Promise<void> {
 }
 
 async function deleteFromR2(blobId: string, token: string): Promise<void> {
-  await fetch(`${R2_WORKER}/raw/modules/${blobId}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  try {
+    const res = await fetch(`${R2_WORKER}/raw/modules/${blobId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) console.error("R2 delete failed:", blobId, res.status);
+  } catch (err) {
+    console.error("R2 delete error:", blobId, err);
+  }
 }
 
 export default async (req: Request) => {
@@ -126,11 +85,9 @@ export default async (req: Request) => {
       });
     }
 
-    const auth = req.headers.get("Authorization") ?? "";
-    const token = auth.replace("Bearer ", "");
+    const token = extractToken(req);
     if (!token) return fail("Unauthorized");
-
-    const user = await verifyToken(token);
+    const user = await verifyRequest();
     if (!user) return fail("Unauthorized");
 
     const store = getStoreInstance();
@@ -209,7 +166,7 @@ export default async (req: Request) => {
           if (existing !== -1) idx.splice(existing, 1);
           if (oldEntry) {
             if (oldEntry.id !== id) {
-              if (oldEntry.storage === STORAGE_R2) deleteFromR2(oldEntry.id, token).catch(() => {});
+              if (oldEntry.storage === STORAGE_R2) deleteFromR2(oldEntry.id, token);
               else await store.delete(oldEntry.id);
             }
           }
@@ -245,7 +202,7 @@ export default async (req: Request) => {
         index.splice(idx, 1);
         await saveIndex(index);
         if (removed.storage === STORAGE_R2) {
-          deleteFromR2(removed.id, token).catch(() => {});
+          deleteFromR2(removed.id, token);
         } else {
           await store.delete(removed.id);
         }

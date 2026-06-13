@@ -1,55 +1,9 @@
 import { getStore } from "@netlify/blobs";
 import { X509Certificate } from "node:crypto";
+import { ok, fail, extractToken, verifyRequest, requireRole } from "./_auth.mjs";
 
-const SITE_URL = process.env.URL ?? `https://${process.env.SITE_NAME}.netlify.app`;
 const GOOGLE_REVOCATION_URL = "https://android.googleapis.com/attestation/status";
 const RE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
-
-function ok(data: unknown) {
-  return new Response(JSON.stringify(data), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-function fail(msg: string) {
-  return new Response(JSON.stringify({ error: msg }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-async function verifyToken(token: string): Promise<{ email: string; id: string } | null> {
-  try {
-    const res = await fetch(`${SITE_URL}/.netlify/identity/user`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { email?: string; id: string; sub?: string };
-    return { email: data.email ?? "", id: data.id ?? data.sub ?? "" };
-  } catch {
-    return null;
-  }
-}
-
-const HIERARCHY: Record<string, number> = { viewer: 0, editor: 1, admin: 2 };
-
-async function getUserRole(email: string): Promise<string> {
-  try {
-    const store = getStore("user-roles");
-    const raw = await store.get("index");
-    if (!raw) return "viewer";
-    const roles = JSON.parse(raw) as Record<string, string>;
-    return roles[email] ?? "viewer";
-  } catch {
-    return "viewer";
-  }
-}
-
-async function requireRole(email: string, minRole: string): Promise<boolean> {
-  const role = await getUserRole(email);
-  return (HIERARCHY[role] ?? 0) >= (HIERARCHY[minRole] ?? 0);
-}
 
 function extractPem(content: string): string | null {
   const certMatch = content.match(/<Certificate\b[^>]*>([\s\S]*?)<\/Certificate>/);
@@ -72,7 +26,10 @@ function hexToDecimal(hex: string): string {
 
 async function checkGoogleRevocation(serial: string): Promise<boolean> {
   try {
-    const res = await fetch(GOOGLE_REVOCATION_URL);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch(GOOGLE_REVOCATION_URL, { signal: controller.signal });
+    clearTimeout(timeout);
     if (!res.ok) return false;
     const data = await res.json() as { entries: Record<string, unknown> };
     const revokedKeys = Object.keys(data.entries ?? {});
@@ -114,6 +71,10 @@ function getHistoryStore() {
   return getStore("keybox-history");
 }
 
+async function flush(store: ReturnType<typeof getHistoryStore>): Promise<void> {
+  await store.get("index");
+}
+
 async function getHistoryIndex(): Promise<HistoryEntry[]> {
   const store = getHistoryStore();
   const raw = await store.get("index");
@@ -124,6 +85,7 @@ async function getHistoryIndex(): Promise<HistoryEntry[]> {
 async function saveHistoryIndex(index: HistoryEntry[]): Promise<void> {
   const store = getHistoryStore();
   await store.set("index", JSON.stringify(index));
+  await flush(store);
 }
 
 async function getContentMeta(key: string): Promise<{ useBase64: boolean } | null> {
@@ -296,11 +258,9 @@ export default async (req: Request) => {
       return ok({ entries: index.map(serializeEntry), latest, working, autoOverride });
     }
 
-    const auth = req.headers.get("Authorization") ?? "";
-    const token = auth.replace("Bearer ", "");
+    const token = extractToken(req);
     if (!token) return fail("Unauthorized");
-
-    const user = await verifyToken(token);
+    const user = await verifyRequest();
     if (!user) return fail("Unauthorized");
 
     if (!await requireRole(user.email, "admin")) return fail("Forbidden");

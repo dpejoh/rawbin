@@ -1,36 +1,7 @@
 import { getStore } from "@netlify/blobs";
+import { ok, fail, extractToken, verifyRequest, getUserRole, requireRole } from "./_auth.mjs";
 
-const SITE_URL = process.env.URL ?? `https://${process.env.SITE_NAME}.netlify.app`;
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
-
-const ROLE_HIERARCHY: Record<string, number> = { viewer: 0, editor: 1, admin: 2 };
-
-function ok(data: unknown) {
-  return new Response(JSON.stringify(data), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-function fail(msg: string) {
-  return new Response(JSON.stringify({ error: msg }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-async function verifyToken(token: string): Promise<{ email: string; id: string } | null> {
-  try {
-    const res = await fetch(`${SITE_URL}/.netlify/identity/user`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { email?: string; id: string; sub?: string };
-    return { email: data.email ?? "", id: data.id ?? data.sub ?? "" };
-  } catch {
-    return null;
-  }
-}
 
 async function getAllRoles(): Promise<Record<string, string>> {
   try {
@@ -53,26 +24,15 @@ function validRole(role: string): boolean {
   return role === "viewer" || role === "editor" || role === "admin";
 }
 
-async function getUserRole(email: string): Promise<string> {
-  const roles = await getAllRoles();
-  return roles[email] ?? "viewer";
-}
-
-async function requireRole(email: string, minRole: string): Promise<boolean> {
-  const role = await getUserRole(email);
-  return (ROLE_HIERARCHY[role] ?? 0) >= (ROLE_HIERARCHY[minRole] ?? 0);
-}
-
 export default async (req: Request) => {
   try {
     const method = req.method;
     const url = new URL(req.url);
 
-    const auth = req.headers.get("Authorization") ?? "";
-    const token = auth.replace("Bearer ", "");
+    const token = extractToken(req);
     if (!token) return fail("Unauthorized");
 
-    const user = await verifyToken(token);
+    const user = await verifyRequest();
     if (!user) return fail("Unauthorized");
 
     const callerRole = await getUserRole(user.email);
