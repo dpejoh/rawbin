@@ -15,9 +15,12 @@ export function getInstanceSlug(request: Request, url?: URL): string {
 
   const host = request.headers.get("host") ?? "";
   // e.g. yuri.rawbin.dpejoh.com → "yuri"
-  // e.g. rawbin.khaledxbz.workers.dev → "rawbin" (fallback to "admin")
-  const match = host.match(/^([^.]+)/);
-  return match ? match[1]! : "admin";
+  // e.g. rawbin.dpejoh.com → "admin" (bare domain = admin dashboard)
+  const parts = host.split(".");
+  if (parts.length >= 3) {
+    return parts[0]!;
+  }
+  return "admin";
 }
 
 export async function verifyJWT(

@@ -120,6 +120,7 @@ catalog.get("/api/catalog", async (c) => {
         serial: entry.serial,
         source: entry.source,
         version: entry.version,
+        text: entry.content,
         content: entry.content,
         status: entry.status,
         createdAt: entry.created_at,
@@ -140,18 +141,45 @@ catalog.get("/api/catalog", async (c) => {
     })));
   }
 
-  // List all
+  // List all — return with latest, working, autoOverride
   const items = await c.env.DB.prepare(
-    "SELECT id, serial, source, version, status, auto_override_source, auto_override_version, created_at, updated_at FROM keybox_history WHERE instance_slug = ? ORDER BY created_at DESC",
+    "SELECT id, serial, source, version, status, auto_override_source, auto_override_version, content, created_at, updated_at FROM keybox_history WHERE instance_slug = ? ORDER BY created_at DESC",
   ).bind(instance_slug).all();
 
-  return c.json(items.results.map((r: Record<string, unknown>) => ({
-    id: r.id, serial: r.serial, source: r.source, version: r.version,
-    status: r.status,
-    autoOverrideSource: r.auto_override_source,
-    autoOverrideVersion: r.auto_override_version,
-    createdAt: r.created_at, updatedAt: r.updated_at,
-  })));
+  const entries = items.results.map((r: Record<string, unknown>) => ({
+    id: r.id,
+    source: r.source,
+    version: r.version,
+    serial: r.serial,
+    text: r.content,
+    timestamp: r.created_at,
+    last_checked: r.updated_at,
+    revoked: r.status === "revoked",
+  }));
+
+  // Build latest per source
+  const latest: Record<string, string> = {};
+  for (const e of items.results) {
+    const src = e.source as string;
+    const ver = e.version as string;
+    if (!latest[src] || ver > latest[src]) {
+      latest[src] = ver;
+    }
+  }
+
+  // Find working entry (first "active" entry or latest overall)
+  const workingEntry = items.results.find((r) => r.status === "active") ?? items.results[0];
+  const working = workingEntry ? { source: workingEntry.source, version: workingEntry.version } : null;
+
+  // Find auto-override
+  const overrideEntry = items.results.find(
+    (r) => r.auto_override_source && r.auto_override_version,
+  );
+  const autoOverride = overrideEntry
+    ? { source: overrideEntry.auto_override_source, version: overrideEntry.auto_override_version }
+    : null;
+
+  return c.json({ entries, latest, working, autoOverride });
 });
 
 catalog.post("/api/catalog/save", async (c) => {
