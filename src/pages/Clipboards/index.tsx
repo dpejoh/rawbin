@@ -65,9 +65,9 @@ export default function ClipboardsPage({ token, role }: ClipboardsPageProps) {
   );
 
   const handleCreate = useCallback(
-    async (name: string, slug?: string) => {
+    async (name: string, slug?: string, useShuffle?: boolean) => {
       if (!token) return;
-      const id = await create(token, name, slug);
+      const id = await create(token, name, slug, undefined, useShuffle);
       if (id) {
         enqueueSnackbar("Clipboard created", { variant: "success" });
         select(id);
@@ -80,7 +80,7 @@ export default function ClipboardsPage({ token, role }: ClipboardsPageProps) {
   );
 
   const handleUpdate = useCallback(
-    async (tok: string, id: string, data: { name?: string; content?: string; slug?: string }): Promise<boolean> => {
+    async (tok: string, id: string, data: { name?: string; content?: string; slug?: string; useBase64?: boolean; useShuffle?: boolean }): Promise<boolean> => {
       const ok = await update(tok, id, data);
       return ok;
     },

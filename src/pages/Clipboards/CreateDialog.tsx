@@ -7,30 +7,36 @@ import {
   TextField,
   Button,
   Stack,
+  Box,
+  Switch,
+  Typography,
 } from "@mui/material";
 
 interface CreateDialogProps {
   open: boolean;
   onClose: () => void;
-  onCreate: (name: string, slug?: string) => Promise<void>;
+  onCreate: (name: string, slug?: string, useShuffle?: boolean) => Promise<void>;
 }
 
 export default function CreateDialog({ open, onClose, onCreate }: CreateDialogProps) {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
+  const [useShuffle, setUseShuffle] = useState(false);
 
   const handleCreate = useCallback(async () => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    await onCreate(trimmed, slug.trim() || undefined);
+    await onCreate(trimmed, slug.trim() || undefined, useShuffle);
     setName("");
     setSlug("");
+    setUseShuffle(false);
     onClose();
-  }, [name, slug, onCreate, onClose]);
+  }, [name, slug, useShuffle, onCreate, onClose]);
 
   const handleClose = useCallback(() => {
     setName("");
     setSlug("");
+    setUseShuffle(false);
     onClose();
   }, [onClose]);
 
@@ -59,6 +65,16 @@ export default function CreateDialog({ open, onClose, onCreate }: CreateDialogPr
             placeholder="my-custom-link"
             helperText="Alphanumeric, hyphens, underscores"
           />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Switch
+              checked={useShuffle}
+              onChange={(e) => setUseShuffle(e.target.checked)}
+              size="small"
+            />
+            <Typography variant="body2" color="text.secondary">
+              randomization
+            </Typography>
+          </Box>
         </Stack>
       </DialogContent>
       <DialogActions>

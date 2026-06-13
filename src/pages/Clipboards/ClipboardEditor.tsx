@@ -24,7 +24,7 @@ interface ClipboardEditorProps {
   clipboard: Clipboard;
   token: string | null;
   role: string;
-  onUpdate: (token: string, id: string, data: { name?: string; content?: string; slug?: string; useBase64?: boolean }) => Promise<boolean>;
+  onUpdate: (token: string, id: string, data: { name?: string; content?: string; slug?: string; useBase64?: boolean; useShuffle?: boolean }) => Promise<boolean>;
 }
 
 export default function ClipboardEditor({
@@ -37,8 +37,10 @@ export default function ClipboardEditor({
 
   const [content, setContent] = useState(() => decodeContent(clipboard.content ?? "", clipboard.useBase64 !== false));
   const [useBase64, setUseBase64] = useState(clipboard.useBase64 !== false);
+  const [useShuffle, setUseShuffle] = useState(clipboard.useShuffle === true);
   const [savedContent, setSavedContent] = useState(() => decodeContent(clipboard.content ?? "", clipboard.useBase64 !== false));
   const [savedBase64, setSavedBase64] = useState(clipboard.useBase64 !== false);
+  const [savedShuffle, setSavedShuffle] = useState(clipboard.useShuffle === true);
   const [name, setName] = useState(clipboard.name);
   const [savedName, setSavedName] = useState(clipboard.name);
   const [slug, setSlug] = useState(clipboard.slug ?? "");
@@ -57,6 +59,8 @@ export default function ClipboardEditor({
     setSavedContent(decoded);
     setUseBase64(clipboard.useBase64 !== false);
     setSavedBase64(clipboard.useBase64 !== false);
+    setUseShuffle(clipboard.useShuffle === true);
+    setSavedShuffle(clipboard.useShuffle === true);
     setName(clipboard.name);
     setSavedName(clipboard.name);
     setSlug(clipboard.slug ?? "");
@@ -96,16 +100,17 @@ export default function ClipboardEditor({
   const handleSaveContent = useCallback(async () => {
     if (!token) return;
     setIsSaving(true);
-    const ok = await onUpdate(token, clipboard.id, { content, useBase64 });
+    const ok = await onUpdate(token, clipboard.id, { content, useBase64, useShuffle });
     if (ok) {
       setSavedContent(content);
       setSavedBase64(useBase64);
+      setSavedShuffle(useShuffle);
       enqueueSnackbar("Saved", { variant: "success" });
     } else {
       enqueueSnackbar("Failed to save. Try again.", { variant: "error" });
     }
     setIsSaving(false);
-  }, [token, content, useBase64, clipboard.id, onUpdate, enqueueSnackbar]);
+  }, [token, content, useBase64, useShuffle, clipboard.id, onUpdate, enqueueSnackbar]);
 
   const handlePaste = useCallback(async () => {
     try {
@@ -138,11 +143,11 @@ export default function ClipboardEditor({
   }, []);
 
   const handleEdit = useCallback(() => { setEditing(true); setMasked(false); }, []);
-  const handleCancelEdit = useCallback(() => { setEditing(false); setMasked(true); setContent(savedContent); }, [savedContent]);
+  const handleCancelEdit = useCallback(() => { setEditing(false); setMasked(true); setContent(savedContent); setUseBase64(savedBase64); setUseShuffle(savedShuffle); }, [savedContent, savedBase64, savedShuffle]);
 
   const hasUnsaved = useMemo(
-    () => content !== savedContent || useBase64 !== savedBase64,
-    [content, savedContent, useBase64, savedBase64]
+    () => content !== savedContent || useBase64 !== savedBase64 || useShuffle !== savedShuffle,
+    [content, savedContent, useBase64, savedBase64, useShuffle, savedShuffle]
   );
 
   const charCount = content.length.toLocaleString();
@@ -321,6 +326,16 @@ export default function ClipboardEditor({
                   />
                   <Typography variant="body2" color="text.secondary">
                     Base64
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Switch
+                    checked={useShuffle}
+                    onChange={(e) => setUseShuffle(e.target.checked)}
+                    size="small"
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    randomization
                   </Typography>
                 </Box>
                 <SaveButton

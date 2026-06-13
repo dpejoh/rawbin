@@ -1,5 +1,6 @@
 import { getStore } from "@netlify/blobs";
 import { randomUUID } from "node:crypto";
+import { applyShuffle } from "./_shuffle.mjs";
 
 const SITE_URL = process.env.URL ?? `https://${process.env.SITE_NAME}.netlify.app`;
 
@@ -54,6 +55,7 @@ interface ClipboardMeta {
   name: string;
   slug?: string;
   useBase64?: boolean;
+  useShuffle?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -120,7 +122,8 @@ export default async (req: Request) => {
       if (!content) {
         return new Response("Not found", { status: 404 });
       }
-      return new Response(content, {
+      const output = item.useShuffle ? applyShuffle(content) : content;
+      return new Response(output, {
         status: 200,
         headers: { "Content-Type": "text/plain" },
       });
@@ -163,7 +166,7 @@ export default async (req: Request) => {
           return fail("Invalid body");
         }
 
-        const { name, slug, useBase64: useBase64Post } = body as { name: string; slug?: string; useBase64?: boolean };
+        const { name, slug, useBase64: useBase64Post, useShuffle: useShufflePost } = body as { name: string; slug?: string; useBase64?: boolean; useShuffle?: boolean };
         const trimmedName = name.trim();
         if (!trimmedName) {
           return fail("Name is required");
@@ -186,6 +189,7 @@ export default async (req: Request) => {
           id: clipId,
           name: trimmedName,
           useBase64: useBase64Post !== false,
+          useShuffle: useShufflePost === true,
           createdAt: now,
           updatedAt: now,
         };
@@ -217,7 +221,7 @@ export default async (req: Request) => {
           return fail("Invalid body");
         }
 
-        const putData = body as { id: string; name?: string; content?: string; slug?: string; useBase64?: boolean };
+        const putData = body as { id: string; name?: string; content?: string; slug?: string; useBase64?: boolean; useShuffle?: boolean };
         const index = await getIndex();
         const item = index.find((i) => i.id === putData.id);
         if (!item) return fail("Not found");
@@ -245,6 +249,10 @@ export default async (req: Request) => {
 
         if (putData.useBase64 !== undefined) {
           item.useBase64 = putData.useBase64;
+        }
+
+        if (putData.useShuffle !== undefined) {
+          item.useShuffle = putData.useShuffle;
         }
 
         if (putData.content !== undefined) {

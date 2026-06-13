@@ -5,6 +5,7 @@ export interface Clipboard {
   name: string;
   slug?: string;
   useBase64?: boolean;
+  useShuffle?: boolean;
   createdAt: string;
   updatedAt?: string;
   content: string;
@@ -18,8 +19,8 @@ interface UseClipboardsReturn {
   isSaving: boolean;
   fetchAll: (token: string) => Promise<Clipboard[]>;
   select: (id: string | null) => void;
-  create: (token: string, name: string, slug?: string, useBase64?: boolean) => Promise<string | null>;
-  update: (token: string, id: string, data: { name?: string; content?: string; slug?: string; useBase64?: boolean }) => Promise<boolean>;
+  create: (token: string, name: string, slug?: string, useBase64?: boolean, useShuffle?: boolean) => Promise<string | null>;
+  update: (token: string, id: string, data: { name?: string; content?: string; slug?: string; useBase64?: boolean; useShuffle?: boolean }) => Promise<boolean>;
   remove: (token: string, id: string) => Promise<boolean>;
 }
 
@@ -60,7 +61,7 @@ export default function useClipboards(): UseClipboardsReturn {
   );
 
   const create = useCallback(
-    async (token: string, name: string, slug?: string, useBase64?: boolean): Promise<string | null> => {
+    async (token: string, name: string, slug?: string, useBase64?: boolean, useShuffle?: boolean): Promise<string | null> => {
       setIsSaving(true);
       try {
         const res = await fetch("/.netlify/functions/clipboards", {
@@ -69,7 +70,7 @@ export default function useClipboards(): UseClipboardsReturn {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ name, slug: slug || undefined, useBase64: useBase64 !== false }),
+          body: JSON.stringify({ name, slug: slug || undefined, useBase64: useBase64 !== false, useShuffle: !!useShuffle }),
         });
         const data = await res.json().catch(() => ({})) as Record<string, unknown>;
         if (!data.error) {
@@ -89,7 +90,7 @@ export default function useClipboards(): UseClipboardsReturn {
   );
 
   const update = useCallback(
-    async (token: string, id: string, data: { name?: string; content?: string; slug?: string; useBase64?: boolean }): Promise<boolean> => {
+    async (token: string, id: string, data: { name?: string; content?: string; slug?: string; useBase64?: boolean; useShuffle?: boolean }): Promise<boolean> => {
       setIsSaving(true);
       try {
         const res = await fetch(`/.netlify/functions/clipboards`, {

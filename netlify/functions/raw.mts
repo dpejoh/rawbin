@@ -1,8 +1,5 @@
 import { getStore } from "@netlify/blobs";
-
-const RAV_B64 =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-const RAV_SHFL = "1dgWnocayqxU3r6vA5lCIPYfHmkV08b4tz+KMsp2NQ9LRXihODwSj7BEFJ/ZuGTe";
+import { applyShuffle } from "./_shuffle.mjs";
 
 const BLOCKED_AGENTS = ["googlebot", "bingbot", "baiduspider", "crawler", "spider", "scraper"];
 const RATE_LIMIT = 30;
@@ -130,7 +127,7 @@ export default async (req: Request) => {
     const metaRaw = await store.get(metaKey);
     const meta = metaRaw ? JSON.parse(metaRaw) as { useBase64: boolean } | null : null;
     const raw = meta?.useBase64 ? value : Buffer.from(value).toString("base64");
-    const output = raw.replace(/[A-Za-z0-9+/]/g, (c) => RAV_SHFL[RAV_B64.indexOf(c)] ?? c);
+    const output = applyShuffle(raw);
 
     return new Response(output, {
       status: 200,
