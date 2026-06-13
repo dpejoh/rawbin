@@ -6,18 +6,22 @@ import {
   Button,
   Card,
   Box,
+  ToggleButtonGroup,
+  ToggleButton,
 } from "@mui/material";
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import EditIcon from '@mui/icons-material/Edit';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import DataObjectIcon from '@mui/icons-material/DataObject';
 import { useSnackbar } from "notistack";
 import RawUrlRow from "../../components/RawUrlRow";
 import SaveButton from "../../components/SaveButton";
 import { maskContent } from "../../utils/mask";
 import { clipboardUrl } from "../../utils/clipboardUrl";
 import { decodeContent } from "../../utils/decodeContent";
+import JsonEditor from "../../components/JsonEditor";
 import type { Clipboard } from "../../hooks/useClipboards";
 
 interface ClipboardEditorProps {
@@ -51,7 +55,15 @@ export default function ClipboardEditor({
   const [masked, setMasked] = useState(true);
   const [revealed, setRevealed] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [mode, setMode] = useState<'raw' | 'gui'>('raw');
   const revealTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isJson = useMemo(() => {
+    const trimmed = content.trim();
+    if (!trimmed) return false;
+    try { JSON.parse(trimmed); return true; }
+    catch { return false; }
+  }, [content]);
 
   useEffect(() => {
     const decoded = decodeContent(clipboard.content ?? "", clipboard.useBase64 !== false);
@@ -65,6 +77,7 @@ export default function ClipboardEditor({
     setSavedName(clipboard.name);
     setSlug(clipboard.slug ?? "");
     setSavedSlug(clipboard.slug ?? "");
+    setMode('raw');
   }, [clipboard.id, clipboard.content, clipboard.name, clipboard.slug, clipboard.useBase64]);
 
   const handleSaveName = useCallback(async () => {
@@ -118,6 +131,8 @@ export default function ClipboardEditor({
       setContent(text);
       setEditing(true);
       setMasked(false);
+      const trimmed = text.trim();
+      try { JSON.parse(trimmed); setMode('gui'); } catch { setMode('raw'); }
       enqueueSnackbar('Pasted from clipboard', { variant: 'info' });
     } catch {
       enqueueSnackbar('Failed to read clipboard', { variant: 'error' });
@@ -142,13 +157,31 @@ export default function ClipboardEditor({
     revealTimeout.current = setTimeout(() => setRevealed(false), 300);
   }, []);
 
-  const handleEdit = useCallback(() => { setEditing(true); setMasked(false); }, []);
-  const handleCancelEdit = useCallback(() => { setEditing(false); setMasked(true); setContent(savedContent); setUseBase64(savedBase64); setUseShuffle(savedShuffle); }, [savedContent, savedBase64, savedShuffle]);
+  const handleEdit = useCallback(() => {
+    setEditing(true);
+    setMasked(false);
+    const trimmed = content.trim();
+    try { JSON.parse(trimmed); setMode('gui'); } catch { setMode('raw'); }
+  }, [content]);
+  const handleCancelEdit = useCallback(() => { setEditing(false); setMasked(true); setContent(savedContent); setUseBase64(savedBase64); setUseShuffle(savedShuffle); setMode('raw'); }, [savedContent, savedBase64, savedShuffle]);
 
   const hasUnsaved = useMemo(
     () => content !== savedContent || useBase64 !== savedBase64 || useShuffle !== savedShuffle,
     [content, savedContent, useBase64, savedBase64, useShuffle, savedShuffle]
   );
+
+  const handleModeChange = useCallback((_: React.MouseEvent<HTMLElement>, m: 'raw' | 'gui' | null) => {
+    if (!m) return;
+    if (m === 'gui') {
+      try {
+        JSON.parse(content.trim());
+      } catch {
+        enqueueSnackbar('Invalid JSON — fix syntax before switching to GUI', { variant: 'error' });
+        return;
+      }
+    }
+    setMode(m);
+  }, [content, enqueueSnackbar]);
 
   const charCount = content.length.toLocaleString();
   const showPreview = !editing && masked && content.length > 0;
@@ -289,6 +322,14 @@ export default function ClipboardEditor({
             {role === 'admin' && <Button variant="outlined" startIcon={<EditIcon />} onClick={handleEdit}>Edit</Button>}
           </Box>
         </Card>
+      ) : isJson && mode === 'gui' && role === 'admin' ? (
+        <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
+          <JsonEditor
+            value={content}
+            onChange={setContent}
+            rootName={name}
+          />
+        </Card>
       ) : (
         <Card variant="outlined" className="hide-scrollbar" sx={{ p: 2, mb: 2, maxHeight: 400, overflow: 'auto' }}>
           <TextField
@@ -309,9 +350,38 @@ export default function ClipboardEditor({
       )}
 
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="body2" color="text.secondary">
-            {charCount} characters
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              {charCount} characters
+            </Typography>
+            {editing && isJson && role === 'admin' && (
+              <ToggleButtonGroup
+                value={mode}
+                exclusive
+                size="small"
+                onChange={handleModeChange}
+                sx={{
+                  '& .MuiToggleButton-root': {
+                    px: 1.5,
+                    py: 0,
+                    fontSize: 12,
+                    lineHeight: '24px',
+                    fontFamily: '"Geist Mono", monospace',
+                    textTransform: 'none',
+                    borderColor: 'outlineVariant.main',
+                    color: 'text.secondary',
+                    '&.Mui-selected': {
+                      color: 'primary.main',
+                      bgcolor: 'rgba(168,199,250,0.12)',
+                    },
+                  },
+                }}
+              >
+                <ToggleButton value="raw">Text</ToggleButton>
+                <ToggleButton value="gui">GUI</ToggleButton>
+              </ToggleButtonGroup>
+            )}
+          </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {role === 'admin' && editing && <Button variant="text" onClick={handleCancelEdit}>Cancel</Button>}
             <Button variant="outlined" startIcon={<ContentCopyIcon />} onClick={handleCopy}>Copy</Button>
