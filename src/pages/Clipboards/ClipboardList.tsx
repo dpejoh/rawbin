@@ -1,28 +1,24 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
+import { FileText, MoreHorizontal, Link, Trash2, Search, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
 import {
-  Box,
-  Stack,
-  Typography,
-  IconButton,
-  Checkbox,
-  Button,
-  Menu,
-  MenuItem,
-  ListItemIcon as MenuItemIcon,
-  Divider,
-  Chip,
-} from '@mui/material';
-import DescriptionIcon from '@mui/icons-material/Description';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
-import LinkIcon from '@mui/icons-material/Link';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { relativeTime } from '../../utils/time';
 import { detectContentType } from '../../utils/detectType';
-import type { Clipboard } from '../../hooks/useClipboards';
+import { decodeContent } from '../../utils/decodeContent';
+import type { ClipboardItem } from '../../hooks/useClipboards';
 
 interface ClipboardListProps {
-  clipboards: Clipboard[];
+  clipboards: ClipboardItem[];
   selectedId: string | null;
   isLoading: boolean;
   role: string;
@@ -32,52 +28,34 @@ interface ClipboardListProps {
   onBatchDelete?: (ids: string[]) => void;
 }
 
-const typeChipColor: Record<string, 'primary' | 'secondary' | 'success' | 'default'> = {
-  json: 'primary',
+const typeChipVariant: Record<string, 'default' | 'secondary' | 'outline'> = {
+  json: 'default',
   xml: 'secondary',
-  pem: 'success',
-  yaml: 'primary',
-  toml: 'secondary',
-  text: 'default',
-  empty: 'default',
-  base64: 'default',
 };
 
 export default function ClipboardList({
-  clipboards,
-  selectedId,
-  isLoading,
-  role,
-  onSelect,
-  onCopyUrl,
-  onDelete,
-  onBatchDelete,
+  clipboards, selectedId, isLoading, role,
+  onSelect, onCopyUrl, onDelete, onBatchDelete,
 }: ClipboardListProps) {
-  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
-  const [menuId, setMenuId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const typeInfoMap = useMemo(() => {
-    const map: Record<string, { type: string; label: string }> = {};
-    for (const cb of clipboards) {
-      const info = detectContentType(cb.content ?? '');
-      map[cb.id] = info;
-    }
-    return map;
-  }, [clipboards]);
+  const typeInfo: Record<string, { type: string; label: string }> = {};
+  for (const cb of clipboards) {
+    const decoded = decodeContent(cb.content ?? '', cb.useBase64 !== false);
+    const info = detectContentType(decoded);
+    typeInfo[cb.id] = info;
+  }
 
-  const handleMenuOpen = useCallback((e: React.MouseEvent<HTMLElement>, id: string) => {
-    e.stopPropagation();
-    setMenuAnchor(e.currentTarget);
-    setMenuId(id);
-  }, []);
-
-  const handleMenuAction = useCallback((action: (id: string) => void) => {
-    if (menuId) action(menuId);
-    setMenuAnchor(null);
-    setMenuId(null);
-  }, [menuId]);
+  const filtered = useMemo(() => {
+    if (!searchQuery.trim()) return clipboards;
+    const q = searchQuery.trim().toLowerCase();
+    return clipboards.filter(cb =>
+      cb.name.toLowerCase().includes(q) ||
+      (cb.content ?? '').toLowerCase().includes(q)
+    );
+  }, [clipboards, searchQuery]);
 
   const handleToggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
@@ -94,150 +72,163 @@ export default function ClipboardList({
     }
   }, [selectedIds, onBatchDelete]);
 
+  const allVisibleSelected = filtered.length > 0 && selectedIds.size === filtered.length;
+
+  const handleSelectAll = useCallback(() => {
+    if (allVisibleSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(c => c.id)));
+    }
+  }, [filtered, allVisibleSelected]);
+
   if (isLoading) {
     return (
-      <Stack sx={{ width: 320, minWidth: 320, bgcolor: 'surfaceContainer.main', height: '100%', overflowY: 'auto', flexShrink: 0, p: 1, gap: 1 }}>
+      <div className="w-72 min-w-72 border-r h-full overflow-y-auto shrink-0 p-2 space-y-2">
         {Array.from({ length: 5 }).map((_, i) => (
-          <Box key={i} className="skeleton" sx={{ height: 64 }} />
+          <Skeleton key={i} className="h-20 w-full rounded-md" />
         ))}
-      </Stack>
+      </div>
     );
   }
 
   return (
-    <Box sx={{ width: 320, minWidth: 320, bgcolor: 'surfaceContainer.main', height: '100%', overflowY: 'auto', flexShrink: 0 }}>
-      <Stack direction="row" alignItems="center" sx={{ gap: 1, px: 1.5, py: 1, borderBottom: 1, borderColor: 'outlineVariant.main' }}>
-        <Chip
-          label={selectMode ? `${selectedIds.size} selected` : 'Select'}
-          size="small"
-          variant={selectMode ? 'filled' : 'outlined'}
-          color={selectMode ? 'primary' : 'default'}
-          onClick={() => {
-            if (selectMode) {
-              setSelectMode(false);
-              setSelectedIds(new Set());
-            } else {
-              setSelectMode(true);
-            }
-          }}
-          sx={{ cursor: 'pointer' }}
-        />
-        {selectMode && (
-          <Button
-            variant="text"
-            size="small"
-            onClick={() => {
-              setSelectMode(false);
-              setSelectedIds(new Set());
-            }}
-            sx={{ textTransform: 'none', minWidth: 'auto', fontSize: 12, mr: 1, height: 24, lineHeight: '16px' }}
-          >
-            Cancel
-          </Button>
-        )}
-        {selectMode && (
-          <Button
-            variant="text"
-            size="small"
-            onClick={() => {
-              if (selectedIds.size === clipboards.length) setSelectedIds(new Set());
-              else setSelectedIds(new Set(clipboards.map(c => c.id)));
-            }}
-            sx={{ textTransform: 'none', minWidth: 'auto', fontSize: 12 }}
-          >
-            {selectedIds.size === clipboards.length ? 'Deselect All' : 'Select All'}
-          </Button>
-        )}
-        {role === 'admin' && selectMode && selectedIds.size > 0 && (
-          <Button
-            variant="contained"
-            color="error"
-            size="small"
-            startIcon={<DeleteSweepIcon />}
-            onClick={handleBatchDelete}
-            sx={{ textTransform: 'none', minWidth: 'auto', fontSize: 12, height: 24 }}
-          >
-            Delete ({selectedIds.size})
-          </Button>
-        )}
-      </Stack>
-      {clipboards.map((cb) => {
-        const isActive = cb.id === selectedId;
-        const isSelected = selectedIds.has(cb.id);
-        const typeInfo = typeInfoMap[cb.id];
-        return (
-          <Box
-            key={cb.id}
-            onClick={() => { if (!isSelected) onSelect(cb.id); }}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.75,
-              px: 1.5,
-              py: 1,
-              cursor: 'pointer',
-              bgcolor: isActive
-                ? '#1A3C6E'
-                : isSelected
-                  ? 'rgba(168,199,250,0.12)'
-                  : 'transparent',
-              borderBottom: 1,
-              borderColor: 'outlineVariant.main',
-              transition: 'background 150ms',
-              '&:hover': {
-                bgcolor: 'surfaceContainerHigh.main',
-              },
-            }}
-          >
-            <Box sx={{ width: 36, height: 24, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => e.stopPropagation()}>
-              {selectMode && (
-                <Checkbox
-                  checked={isSelected}
-                  onChange={() => handleToggleSelect(cb.id)}
-                  size="small"
-                  sx={{ p: 0.5 }}
-                />
-              )}
-            </Box>
-            <DescriptionIcon sx={{ fontSize: 20, color: 'text.secondary', flexShrink: 0 }} />
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="subtitle2" noWrap sx={{ color: isActive ? '#fff' : 'text.primary' }}>
-                {cb.name}
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                <Typography variant="caption" sx={{ color: isActive ? 'rgba(255,255,255,0.7)' : 'text.secondary' }}>
-                  {relativeTime(cb.updatedAt)} · {cb.content.length.toLocaleString()} chars
-                </Typography>
-                {typeInfo && typeInfo.type !== 'text' && typeInfo.type !== 'empty' && (
-                  <Chip label={typeInfo.label} size="small"
-                    color={typeChipColor[typeInfo.type] ?? 'default'}
-                    sx={{ height: 18, fontSize: 10 }}
-                  />
-                )}
-              </Box>
-            </Box>
-            <IconButton size="small" onClick={(e) => handleMenuOpen(e, cb.id)} sx={{ color: 'text.secondary' }}>
-              <MoreVertIcon fontSize="small" />
-            </IconButton>
-          </Box>
-        );
-      })}
+    <div className="w-72 min-w-72 border-r h-full overflow-y-auto shrink-0 flex flex-col">
+      {/* Search */}
+      <div className="p-2 border-b">
+        <div className="relative">
+          <Search className="size-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search..."
+            className="h-8 pl-8 pr-7 text-xs"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label="Clear search"
+            >
+              <X className="size-3" />
+            </button>
+          )}
+        </div>
+      </div>
 
-      <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
-        <MenuItem onClick={() => handleMenuAction(onCopyUrl)}>
-          <MenuItemIcon><LinkIcon fontSize="small" /></MenuItemIcon>
-          Copy raw URL
-        </MenuItem>
-        {role === 'admin' && (
+      {/* Toolbar */}
+      <div className="flex items-center gap-1 px-3 py-2 border-b">
+        {selectMode && (
+          <Checkbox
+            checked={allVisibleSelected}
+            onCheckedChange={handleSelectAll}
+            aria-label={allVisibleSelected ? 'Deselect all' : 'Select all'}
+          />
+        )}
+        <Badge
+          variant={selectMode ? 'default' : 'outline'}
+          className="cursor-pointer text-xs"
+          onClick={() => {
+            if (selectMode) { setSelectMode(false); setSelectedIds(new Set()); }
+            else setSelectMode(true);
+          }}
+        >
+          {selectMode ? `${selectedIds.size} selected` : 'Select'}
+        </Badge>
+        {selectMode && (
           <>
-            <Divider />
-            <MenuItem onClick={() => handleMenuAction(onDelete)} sx={{ color: 'error.main' }}>
-              <MenuItemIcon><DeleteOutlineIcon fontSize="small" sx={{ color: 'error.main' }} /></MenuItemIcon>
-              Delete
-            </MenuItem>
+            <Button variant="ghost" size="sm" className="text-xs h-6 px-1.5"
+              onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}>
+              Cancel
+            </Button>
+            {role === 'admin' && selectedIds.size > 0 && (
+              <Button variant="destructive" size="sm" className="text-xs h-6 px-1.5"
+                onClick={handleBatchDelete}>
+                <Trash2 className="size-3 mr-1" />
+                {selectedIds.size}
+              </Button>
+            )}
           </>
         )}
-      </Menu>
-    </Box>
+      </div>
+
+      {/* List */}
+      <div className="flex-1 overflow-y-auto p-2 space-y-2">
+        {filtered.map((cb) => {
+          const isActive = cb.id === selectedId;
+          const isSelected = selectedIds.has(cb.id);
+          const info = typeInfo[cb.id];
+          return (
+            <div
+              key={cb.id}
+              onClick={() => { if (!isSelected) onSelect(cb.id); }}
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer transition-colors border ${
+                isActive ? 'bg-primary/10 border-primary/30' : isSelected ? 'bg-primary/10 border-primary/30' : 'bg-card hover:bg-accent border-border'
+              }`}
+            >
+              <div className="size-9 shrink-0 flex items-center justify-center">
+                {selectMode ? (
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={() => handleToggleSelect(cb.id)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <FileText className="size-6 text-primary" />
+                )}
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">
+                  {cb.name}
+                </p>
+                <div className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap">
+                  <span>{relativeTime(cb.updatedAt)}</span>
+                  <span>·</span>
+                  <span>{cb.content.length.toLocaleString()} chars</span>
+                  {(info?.type === 'json' || info?.type === 'xml') && (
+                    <Badge variant={typeChipVariant[info.type] ?? 'outline'} className="text-[10px] px-1 py-0 h-4 shrink-0">
+                      {info.label}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-muted-foreground hover:text-foreground p-1 shrink-0"
+                    aria-label="More actions"
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onCopyUrl(cb.id); }}>
+                    <Link className="size-4 mr-2" />
+                    Copy raw URL
+                  </DropdownMenuItem>
+                  {role === 'admin' && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(cb.id); }} className="text-destructive">
+                        <Trash2 className="size-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          );
+        })}
+        {filtered.length === 0 && searchQuery && (
+          <p className="text-xs text-muted-foreground text-center py-8 px-4">
+            No clipboards match "{searchQuery}"
+          </p>
+        )}
+      </div>
+    </div>
   );
 }

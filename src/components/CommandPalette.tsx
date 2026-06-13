@@ -1,17 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Key, FileText, Folder } from 'lucide-react';
 import {
-  Box,
-  Dialog,
-  TextField,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Typography,
-} from '@mui/material';
-import KeyIcon from '@mui/icons-material/Key';
-import DescriptionIcon from '@mui/icons-material/Description';
-import FolderIcon from '@mui/icons-material/Folder';
+  CommandDialog,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from '@/components/ui/command';
 import type { Page } from '../App';
 
 interface PaletteItem {
@@ -37,19 +33,16 @@ function fuzzyMatch(text: string, query: string): boolean {
   return qi === q.length;
 }
 
-function TypeIcon({ type }: { type: PaletteItem['type'] }) {
-  switch (type) {
-    case 'keybox': return <KeyIcon />;
-    case 'clipboard': return <DescriptionIcon />;
-    case 'file': return <FolderIcon />;
-  }
-}
+const typeIcons: Record<PaletteItem['type'], React.ReactNode> = {
+  keybox: <Key className="size-4" />,
+  clipboard: <FileText className="size-4" />,
+  file: <Folder className="size-4" />,
+};
 
 export default function CommandPalette({ token, onNavigate }: CommandPaletteProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [items, setItems] = useState<PaletteItem[]>([]);
-  const [selectedIdx, setSelectedIdx] = useState(0);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -69,7 +62,6 @@ export default function CommandPalette({ token, onNavigate }: CommandPaletteProp
   useEffect(() => {
     if (!open) return;
     setQuery('');
-    setSelectedIdx(0);
     if (!token) return;
 
     const abortController = new AbortController();
@@ -136,87 +128,37 @@ export default function CommandPalette({ token, onNavigate }: CommandPaletteProp
     );
   }, [items, query]);
 
-  useEffect(() => {
-    setSelectedIdx(0);
-  }, [query]);
-
   const handleSelect = useCallback((item: PaletteItem) => {
     onNavigate(item.page);
     setOpen(false);
     setQuery('');
   }, [onNavigate]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setSelectedIdx(prev => Math.min(prev + 1, filtered.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setSelectedIdx(prev => Math.max(prev - 1, 0));
-    } else if (e.key === 'Enter' && filtered[selectedIdx]) {
-      e.preventDefault();
-      handleSelect(filtered[selectedIdx]!);
-    }
-  }, [filtered, selectedIdx, handleSelect]);
-
   return (
-    <Dialog
-      open={open}
-      onClose={() => { setOpen(false); setQuery(''); }}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{ sx: { borderRadius: 2 } }}
-    >
-      <Box sx={{ px: 2, pt: 2 }}>
-        <TextField
-          variant="filled"
-          fullWidth
-          placeholder="Search clipboards, files, pages…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={handleKeyDown}
-          autoFocus
-          sx={{ '& .MuiInputBase-input': { fontFamily: '"Geist Mono", monospace' } }}
-        />
-      </Box>
-      {filtered.length > 0 && (
-        <List sx={{ maxHeight: 320, overflowY: 'auto', pt: 1 }} dense>
-          {filtered.map((item, i) => (
-            <ListItemButton
+    <CommandDialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setQuery(''); }}>
+      <CommandInput
+        placeholder="Search clipboards, files, pages…"
+        value={query}
+        onValueChange={setQuery}
+      />
+      <CommandList>
+        <CommandEmpty>No results for "{query}"</CommandEmpty>
+        <CommandGroup>
+          {filtered.map((item) => (
+            <CommandItem
               key={item.id}
-              selected={i === selectedIdx}
-              onClick={() => handleSelect(item)}
-              sx={{
-                borderRadius: 1,
-                mx: 1,
-                '&.Mui-selected': {
-                  bgcolor: 'primary.main',
-                  color: '#0842A0',
-                  '& .MuiListItemIcon-root': { color: '#0842A0' },
-                },
-              }}
+              value={item.id}
+              onSelect={() => handleSelect(item)}
             >
-              <ListItemIcon sx={{ minWidth: 36 }}>
-                <TypeIcon type={item.type} />
-              </ListItemIcon>
-              <ListItemText
-                primary={item.label}
-                secondary={item.description}
-                primaryTypographyProps={{ variant: 'subtitle1', noWrap: true }}
-                secondaryTypographyProps={{ variant: 'caption' }}
-              />
-            </ListItemButton>
+              {typeIcons[item.type]}
+              <div className="flex flex-col">
+                <span>{item.label}</span>
+                <span className="text-xs text-muted-foreground">{item.description}</span>
+              </div>
+            </CommandItem>
           ))}
-        </List>
-      )}
-      {query.trim() && filtered.length === 0 && (
-        <Typography
-          variant="body2"
-          sx={{ textAlign: 'center', py: 3, color: 'text.secondary' }}
-        >
-          No results for "{query}"
-        </Typography>
-      )}
-    </Dialog>
+        </CommandGroup>
+      </CommandList>
+    </CommandDialog>
   );
 }

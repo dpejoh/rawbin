@@ -1,12 +1,13 @@
 import { useState, useCallback } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  TextField,
-  Button,
-} from '@mui/material';
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 interface CreateFolderDialogProps {
   open: boolean;
@@ -25,24 +26,25 @@ export default function CreateFolderDialog({ open, onClose, onCreate }: CreateFo
   }, [name, onCreate, onClose]);
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>New Folder</DialogTitle>
-      <DialogContent>
-        <TextField
-          label="Folder name"
-          variant="outlined"
-          fullWidth
-          autoFocus
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') handle(); }}
-          sx={{ mt: 1 }}
-        />
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); setName(''); } }}>
+      <DialogContent className="sm:max-w-xs">
+        <DialogHeader>
+          <DialogTitle>New Folder</DialogTitle>
+        </DialogHeader>
+        <div className="py-2">
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Folder name"
+            onKeyDown={(e) => { if (e.key === 'Enter') handle(); }}
+            autoFocus
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handle} disabled={!name.trim()}>Create</Button>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} variant="text">Cancel</Button>
-        <Button onClick={handle} variant="contained" disabled={!name.trim()}>Create</Button>
-      </DialogActions>
     </Dialog>
   );
 }

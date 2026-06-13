@@ -1,36 +1,35 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  Typography, TextField, Button, IconButton, Chip, CircularProgress,
-  InputAdornment, Checkbox, Box, Stack, Dialog, DialogTitle,
-  DialogContent, DialogActions, Select, MenuItem, Switch,
-} from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
-import AddIcon from '@mui/icons-material/Add';
-import FingerprintIcon from '@mui/icons-material/Fingerprint';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import HistoryIcon from '@mui/icons-material/History';
-import GppBadIcon from '@mui/icons-material/GppBad';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
-import AutorenewIcon from '@mui/icons-material/Autorenew';
-import { useSnackbar } from 'notistack';
-import RawUrlRow from '../../components/RawUrlRow';
-import { relativeTime } from '../../utils/time';
-
-interface HistoryEntry {
-  source: string;
-  version: string;
-  text: string;
-  serial: string;
-  revoked: boolean;
-  softbanned?: boolean;
-  timestamp: string;
-}
+  Plus, Trash2, Upload, History, Shield,
+  Loader2, RefreshCw, Search,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import PageLayout from '../../components/PageLayout';
+import SearchInput from '../../components/SearchInput';
+import EmptyState from '../../components/EmptyState';
+import KeyboxRow from './KeyboxRow';
+import AddKeyboxDialog from './AddKeyboxDialog';
+import XmlImportDialog from './XmlImportDialog';
+import AutoOverrideDialog from './AutoOverrideDialog';
+import type { HistoryEntry, StatusType } from './types';
 
 interface KeyboxManagerProps {
   token: string | null;
@@ -38,7 +37,6 @@ interface KeyboxManagerProps {
 }
 
 export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
-  const { enqueueSnackbar } = useSnackbar();
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -53,43 +51,27 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
   const dragCounter = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [addMode, setAddMode] = useState(false);
-  const [addSource, setAddSource] = useState('');
-  const [addVersion, setAddVersion] = useState('');
-  const [addText, setAddText] = useState('');
-  const [addContent, setAddContent] = useState('');
-  const [addUseBase64, setAddUseBase64] = useState(true);
-
-  const [xmlDialogOpen, setXmlDialogOpen] = useState(false);
-  const [xmlItems, setXmlItems] = useState<Array<{ filename: string; content: string; version: string; source: string; text: string }>>([]);
-  const [addProviderForIndex, setAddProviderForIndex] = useState<number | null>(null);
-  const [newProvider, setNewProvider] = useState('');
-  const [addProviderOpen, setAddProviderOpen] = useState(false);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<HistoryEntry | null>(null);
+  const [recheckingKey, setRecheckingKey] = useState<string | null>(null);
+  const [settingStatusKey, setSettingStatusKey] = useState<string | null>(null);
 
   const [contentCache, setContentCache] = useState<Record<string, string>>({});
   const [loadingContent, setLoadingContent] = useState<Record<string, boolean>>({});
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [editSource, setEditSource] = useState('');
-  const [editVersion, setEditVersion] = useState('');
-  const [editContent, setEditContent] = useState('');
-  const [editText, setEditText] = useState('');
-  const [editUseBase64, setEditUseBase64] = useState(true);
-  const [editNewProvider, setEditNewProvider] = useState('');
-  const [editAddProviderOpen, setEditAddProviderOpen] = useState(false);
-  const [recheckingKey, setRecheckingKey] = useState<string | null>(null);
-  const [settingStatusKey, setSettingStatusKey] = useState<string | null>(null);
-  const [latestPerSource, setLatestPerSource] = useState<Record<string, string>>({});
-  const [autoOverride, setAutoOverride] = useState<{ source: string; version?: string } | null>(null);
+
+  const [xmlDialogOpen, setXmlDialogOpen] = useState(false);
+  const [xmlItems, setXmlItems] = useState<Array<{ filename: string; content: string; version: string; text: string; source: string }>>([]);
+
+  const [sortBy, setSortBy] = useState<'timestamp' | 'source' | 'version'>('timestamp');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
   const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
   const [overrideSource, setOverrideSource] = useState('');
   const [overrideVersion, setOverrideVersion] = useState('');
+  const [autoOverride, setAutoOverride] = useState<{ source: string; version?: string } | null>(null);
+  const [latestPerSource, setLatestPerSource] = useState<Record<string, string>>({});
 
   const entryKey = (e: HistoryEntry) => `${e.source}:${e.version}`;
-
-  const nextVersion = (src: string) => {
-    const count = entries.filter(e => e.source === src).length;
-    return String(count + 1);
-  };
 
   const fetchHistory = useCallback(async () => {
     try {
@@ -97,33 +79,17 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
       if (res.ok) {
         const data = await res.json() as { entries: HistoryEntry[]; latest: Record<string, string>; autoOverride?: { source: string; version?: string } | null };
         const list = Array.isArray(data) ? data as HistoryEntry[] : data.entries;
-        setEntries(list.sort((a, b) => {
-          const na = parseInt(a.version, 10);
-          const nb = parseInt(b.version, 10);
-          if (!isNaN(na) && !isNaN(nb)) return nb - na;
-          return b.timestamp.localeCompare(a.timestamp);
-        }));
+        setEntries(list.sort((a, b) => b.timestamp.localeCompare(a.timestamp)));
         const unique = [...new Set(list.map(e => e.source))].sort();
         setSources(unique);
         if (data.latest) setLatestPerSource(data.latest);
-        if (data.autoOverride) setAutoOverride(data.autoOverride);
-        else setAutoOverride(null);
+        setAutoOverride(data.autoOverride ?? null);
       }
     } catch { }
     finally { setIsLoading(false); }
   }, []);
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
-
-  const handleToggleSelect = useCallback((entry: HistoryEntry) => {
-    const key = entryKey(entry);
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }, []);
 
   const loadContent = useCallback(async (key: string) => {
     if (contentCache[key] || loadingContent[key]) return;
@@ -138,13 +104,12 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
     finally { setLoadingContent(prev => ({ ...prev, [key]: false })); }
   }, [contentCache, loadingContent]);
 
-  const handleExpand = useCallback((key: string) => {
+  const handleExpand = useCallback((entry: HistoryEntry) => {
+    const key = entryKey(entry);
     if (expandedKey === key) {
       setExpandedKey(null);
-      setEditingKey(null);
     } else {
       setExpandedKey(key);
-      setEditingKey(null);
       loadContent(key);
     }
   }, [expandedKey, loadContent]);
@@ -182,31 +147,30 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
           const result = await res.json() as { imported: number; results: Array<{ source: string; version: string; status: string }> };
           imported = result.results.filter(r => r.status === 'ok').length;
           const skipped = result.results.filter(r => r.status !== 'ok').length;
-          if (imported > 0) enqueueSnackbar(`Imported ${imported} keybox${imported !== 1 ? 'es' : ''}${skipped > 0 ? ` (${skipped} skipped)` : ''}`, { variant: 'success' });
-        } else enqueueSnackbar('JSON import failed', { variant: 'error' });
-      } catch { enqueueSnackbar('JSON import failed', { variant: 'error' }); }
+          if (imported > 0) toast.success(`Imported ${imported} keybox${imported !== 1 ? 'es' : ''}${skipped > 0 ? ` (${skipped} skipped)` : ''}`);
+        } else toast.error('JSON import failed');
+      } catch { toast.error('JSON import failed'); }
     }
     if (xmlImportItems.length > 0) {
       setXmlItems(xmlImportItems.map(f => ({ ...f, source: '' })));
       setXmlDialogOpen(true);
     }
     if (jsonImportData.length === 0 && xmlImportItems.length === 0) {
-      enqueueSnackbar('No valid keyboxes found in selection', { variant: 'error' });
+      toast.error('No valid keyboxes found in selection');
     }
     setIsImporting(false);
     if (imported > 0) {
       setContentCache({});
       await fetchHistory();
     }
-  }, [token, fetchHistory, enqueueSnackbar]);
+  }, [token, fetchHistory]);
 
   const handleXmlImport = useCallback(async () => {
     if (!token || xmlItems.length === 0) return;
     setIsImporting(true);
-    const items = xmlItems.map(item => ({ ...item, version: item.version || nextVersion(item.source) }));
-    const valid = items.filter(item => item.source && item.version);
+    const valid = xmlItems.filter(item => item.source);
     if (valid.length === 0) {
-      enqueueSnackbar('All items need a provider and version', { variant: 'error' });
+      toast.error('All items need a provider');
       setIsImporting(false);
       return;
     }
@@ -220,31 +184,47 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
         const result = await res.json() as { imported: number; results: Array<{ source: string; version: string; status: string }> };
         const ok = result.results.filter(r => r.status === 'ok').length;
         const skipped = result.results.filter(r => r.status !== 'ok').length;
-        enqueueSnackbar(`Imported ${ok} keybox${ok !== 1 ? 'es' : ''}${skipped > 0 ? ` (${skipped} skipped)` : ''}`, { variant: 'success' });
+        toast.success(`Imported ${ok} keybox${ok !== 1 ? 'es' : ''}${skipped > 0 ? ` (${skipped} skipped)` : ''}`);
         setXmlDialogOpen(false);
         setContentCache({});
         await fetchHistory();
-      } else enqueueSnackbar('Import failed', { variant: 'error' });
-    } catch { enqueueSnackbar('Import failed', { variant: 'error' }); }
+      } else toast.error('Import failed');
+    } catch { toast.error('Import failed'); }
     finally { setIsImporting(false); }
-  }, [token, xmlItems, fetchHistory, enqueueSnackbar]);
+  }, [token, xmlItems, fetchHistory]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragging(false); dragCounter.current = 0;
     handleImport(e.dataTransfer.files);
   }, [handleImport]);
-
   const handleDragOver = useCallback((e: React.DragEvent) => e.preventDefault(), []);
   const handleDragEnter = useCallback(() => { dragCounter.current++; setDragging(true); }, []);
   const handleDragLeave = useCallback(() => { dragCounter.current--; if (dragCounter.current === 0) setDragging(false); }, []);
 
-  const filtered = entries.filter(e => {
+  const filtered = [...entries].filter(e => {
     if (sourceFilter && e.source !== sourceFilter) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       return e.version.includes(q) || e.serial.includes(q) || e.source.includes(q);
     }
     return true;
+  }).sort((a, b) => {
+    const asc = sortOrder === 'asc';
+    if (sortBy === 'timestamp') return asc
+      ? a.timestamp.localeCompare(b.timestamp)
+      : b.timestamp.localeCompare(a.timestamp);
+    if (sortBy === 'source') return asc
+      ? a.source.localeCompare(b.source)
+      : b.source.localeCompare(a.source);
+    if (sortBy === 'version') {
+      const na = parseInt(a.version, 10);
+      const nb = parseInt(b.version, 10);
+      if (!isNaN(na) && !isNaN(nb)) return asc ? na - nb : nb - na;
+      return asc
+        ? a.version.localeCompare(b.version)
+        : b.version.localeCompare(a.version);
+    }
+    return 0;
   });
 
   const handleDelete = useCallback(async (entry: HistoryEntry) => {
@@ -255,14 +235,37 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
         body: JSON.stringify({ source: entry.source, version: entry.version }),
       });
       if (res.ok) {
-        enqueueSnackbar(`${entry.source} v${entry.version} deleted`, { variant: 'success' });
+        toast.success(`${entry.source} v${entry.version} deleted`);
         const key = entryKey(entry);
-        if (expandedKey === key) { setExpandedKey(null); setEditingKey(null); }
+        if (expandedKey === key) setExpandedKey(null);
         setContentCache(prev => { const n = { ...prev }; delete n[key]; return n; });
         await fetchHistory();
-      } else enqueueSnackbar('Delete failed', { variant: 'error' });
-    } catch { enqueueSnackbar('Delete failed', { variant: 'error' }); }
-  }, [token, fetchHistory, expandedKey, enqueueSnackbar]);
+      } else toast.error('Delete failed');
+    } catch { toast.error('Delete failed'); }
+    setDeleteTarget(null);
+  }, [token, fetchHistory, expandedKey]);
+
+  const handleBatchDelete = useCallback(async () => {
+    if (!token || selectedIds.size === 0) return;
+    setIsDeleting(true);
+    let ok = 0; let fail = 0;
+    for (const entry of entries.filter(e => selectedIds.has(entryKey(e)))) {
+      try {
+        const res = await fetch('/.netlify/functions/catalog', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ source: entry.source, version: entry.version }),
+        });
+        if (res.ok) ok++; else fail++;
+      } catch { fail++; }
+    }
+    toast.success(`Deleted ${ok} entry${ok !== 1 ? 'es' : ''}${fail > 0 ? ` (${fail} failed)` : ''}`);
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    setIsDeleting(false);
+    setContentCache({});
+    await fetchHistory();
+  }, [token, entries, selectedIds, fetchHistory]);
 
   const handleRecheck = useCallback(async (entry: HistoryEntry) => {
     if (!token) return;
@@ -273,15 +276,15 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        enqueueSnackbar(`${entry.source} v${entry.version} re-checked`, { variant: 'success' });
+        toast.success(`${entry.source} v${entry.version} re-checked`);
         setContentCache({});
         await fetchHistory();
-      } else enqueueSnackbar('Re-check failed', { variant: 'error' });
-    } catch { enqueueSnackbar('Re-check failed', { variant: 'error' }); }
+      } else toast.error('Re-check failed');
+    } catch { toast.error('Re-check failed'); }
     finally { setRecheckingKey(null); }
-  }, [token, fetchHistory, enqueueSnackbar]);
+  }, [token, fetchHistory]);
 
-  const handleSetStatus = useCallback(async (entry: HistoryEntry, status: 'active' | 'softbanned' | 'revoked') => {
+  const handleSetStatus = useCallback(async (entry: HistoryEntry, status: StatusType) => {
     if (!token) return;
     const key = entryKey(entry);
     setSettingStatusKey(key);
@@ -289,16 +292,69 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
       const res = await fetch('/.netlify/functions/catalog/set-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ source: entry.source, version: entry.version, status }),
+        body: JSON.stringify({ serial: entry.serial, status }),
       });
       if (res.ok) {
-        enqueueSnackbar(`${entry.source} v${entry.version} → ${status}`, { variant: 'success' });
+        const data = await res.json() as { updated: number };
+        toast.success(`${data.updated} entr${data.updated !== 1 ? 'ies' : 'y'} with serial ${entry.serial.slice(0, 12)}… → ${status}`);
         setContentCache({});
         await fetchHistory();
-      } else enqueueSnackbar('Set status failed', { variant: 'error' });
-    } catch { enqueueSnackbar('Set status failed', { variant: 'error' }); }
+      } else {
+        const msg = await res.text().then(t => { try { return JSON.parse(t).error; } catch { return t; } }).catch(() => 'Set status failed');
+        toast.error(msg);
+      }
+    } catch { toast.error('Set status failed'); }
     finally { setSettingStatusKey(null); }
-  }, [token, fetchHistory, enqueueSnackbar]);
+  }, [token, fetchHistory]);
+
+  const handleAddKeybox = useCallback(async (data: { source: string; version: string; text: string; content: string; useBase64: boolean }) => {
+    if (!token) return;
+    try {
+      const res = await fetch('/.netlify/functions/catalog/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...data, version: data.version || '1' }),
+      });
+      if (res.ok) {
+        toast.success('Keybox added');
+        setContentCache({});
+        await fetchHistory();
+      } else {
+        const msg = await res.text().catch(() => 'Failed to add');
+        toast.error(msg);
+      }
+    } catch { toast.error('Failed to add'); }
+  }, [token, fetchHistory]);
+
+  const handleEditSave = useCallback(async (entry: HistoryEntry, data: { source: string; version: string; text: string; content: string; useBase64: boolean }) => {
+    if (!token) return;
+    const srcChanged = data.source !== entry.source;
+    try {
+      if (srcChanged) {
+        const delRes = await fetch('/.netlify/functions/catalog', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ source: entry.source, version: entry.version }),
+        });
+        if (!delRes.ok) { toast.error('Failed to replace old entry'); return; }
+      }
+      const saveRes = await fetch('/.netlify/functions/catalog/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(data),
+      });
+      if (saveRes.ok) {
+        toast.success('Entry updated');
+        setContentCache(prev => {
+          const n = { ...prev };
+          delete n[entryKey(entry)];
+          return n;
+        });
+        setExpandedKey(`${data.source}:${data.version}`);
+        await fetchHistory();
+      } else toast.error('Failed to save entry');
+    } catch { toast.error('Failed to save entry'); }
+  }, [token, fetchHistory]);
 
   const handleSetAutoOverride = useCallback(async () => {
     if (!token || !overrideSource) return;
@@ -309,15 +365,13 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
         body: JSON.stringify({ source: overrideSource, version: overrideVersion || undefined }),
       });
       if (res.ok) {
-        enqueueSnackbar('Auto-override set', { variant: 'success' });
+        toast.success('Auto-override set');
         setOverrideDialogOpen(false);
-        setOverrideSource('');
-        setOverrideVersion('');
         setContentCache({});
         await fetchHistory();
-      } else enqueueSnackbar('Failed to set override', { variant: 'error' });
-    } catch { enqueueSnackbar('Failed to set override', { variant: 'error' }); }
-  }, [token, overrideSource, overrideVersion, fetchHistory, enqueueSnackbar]);
+      } else toast.error('Failed to set override');
+    } catch { toast.error('Failed to set override'); }
+  }, [token, overrideSource, overrideVersion, fetchHistory]);
 
   const handleClearAutoOverride = useCallback(async () => {
     if (!token) return;
@@ -327,581 +381,199 @@ export default function KeyboxManager({ token, role }: KeyboxManagerProps) {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        enqueueSnackbar('Auto-override cleared', { variant: 'success' });
+        toast.success('Auto-override cleared');
         setContentCache({});
         await fetchHistory();
-      } else enqueueSnackbar('Failed to clear override', { variant: 'error' });
-    } catch { enqueueSnackbar('Failed to clear override', { variant: 'error' }); }
-  }, [token, fetchHistory, enqueueSnackbar]);
-
-  const handleAddSave = useCallback(async () => {
-    if (!token || !addSource || !addContent) return;
-    const finalVersion = addVersion || nextVersion(addSource);
-    if (!finalVersion) return;
-    try {
-      const res = await fetch('/.netlify/functions/catalog/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ source: addSource, version: finalVersion, text: addText, content: addContent, useBase64: addUseBase64 }),
-      });
-      if (res.ok) {
-        enqueueSnackbar('Keybox added', { variant: 'success' });
-        setAddMode(false);
-        setAddSource('');
-        setAddVersion('');
-        setAddText('');
-        setAddContent('');
-        setAddUseBase64(true);
-        setContentCache({});
-        await fetchHistory();
-      } else {
-        const msg = await res.text().catch(() => 'Failed to add');
-        enqueueSnackbar(msg, { variant: 'error' });
-      }
-    } catch { enqueueSnackbar('Failed to add', { variant: 'error' }); }
-  }, [token, addSource, addVersion, addContent, fetchHistory, enqueueSnackbar]);
-
-  const handleStartEdit = useCallback((entry: HistoryEntry) => {
-    const key = entryKey(entry);
-    setEditingKey(key);
-    setEditSource(entry.source);
-    setEditVersion(entry.version);
-    setEditText(entry.text || '');
-    setEditContent(contentCache[key] ?? '');
-    setEditUseBase64(true);
-  }, [contentCache]);
-
-  const handleEditSave = useCallback(async (entry: HistoryEntry) => {
-    if (!token || !editSource || !editVersion || !editContent) return;
-    const key = entryKey(entry);
-    const srcChanged = editSource !== entry.source;
-    const verChanged = editVersion !== entry.version;
-    try {
-      if (srcChanged || verChanged) {
-        const delRes = await fetch('/.netlify/functions/catalog', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ source: entry.source, version: entry.version }),
-        });
-        if (!delRes.ok) { enqueueSnackbar('Failed to replace old entry', { variant: 'error' }); return; }
-        setContentCache(prev => { const n = { ...prev }; delete n[key]; return n; });
-      }
-      const saveRes = await fetch('/.netlify/functions/catalog/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ source: editSource, version: editVersion, text: editText, content: editContent, useBase64: editUseBase64 }),
-      });
-      if (saveRes.ok) {
-        enqueueSnackbar('Entry updated', { variant: 'success' });
-        setEditingKey(null);
-        setContentCache(prev => {
-          const n = { ...prev };
-          delete n[key];
-          n[`${editSource}:${editVersion}`] = editContent;
-          return n;
-        });
-        setExpandedKey(`${editSource}:${editVersion}`);
-        await fetchHistory();
-      } else enqueueSnackbar('Failed to save entry', { variant: 'error' });
-    } catch { enqueueSnackbar('Failed to save entry', { variant: 'error' }); }
-  }, [token, editSource, editVersion, editContent, fetchHistory, enqueueSnackbar]);
+      } else toast.error('Failed to clear override');
+    } catch { toast.error('Failed to clear override'); }
+  }, [token, fetchHistory]);
 
   return (
-    <Box sx={{ p: 4, maxWidth: 800, display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-        <Box>
-          <Typography variant="h4" sx={{ mb: 0.5 }}>Keyboxes</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {entries.length} keybox{entries.length !== 1 ? 'es' : ''}
-          </Typography>
-        </Box>
-      </Stack>
-
+    <PageLayout title="Keyboxes" count={`${entries.length} keybox${entries.length !== 1 ? 'es' : ''}`} maxWidth="md">
       {role === 'admin' && (
-        <Box sx={{
-          border: `2px dashed ${dragging ? 'var(--mdui-color-primary, #A8C7FA)' : 'var(--mdui-color-outline, #8E9099)'}`,
-          borderRadius: '12px', p: 2, mb: 2, textAlign: 'center', cursor: 'pointer',
-          transition: 'border-color 150ms, background 150ms',
-          bgcolor: dragging ? 'rgba(168,199,250,0.05)' : 'transparent',
-        }}
+        <div
+          className={`border-2 border-dashed rounded-xl p-3 mb-4 text-center cursor-pointer transition-colors ${
+            dragging ? 'border-primary bg-primary/5' : 'border-muted-foreground/20'
+          }`}
           onDrop={handleDrop} onDragOver={handleDragOver}
           onDragEnter={handleDragEnter} onDragLeave={handleDragLeave}
           onClick={() => fileInputRef.current?.click()}
         >
-          <CloudUploadIcon sx={{ fontSize: 28, color: 'text.secondary', mb: 0.5 }} />
-          <Typography variant="body2">{isImporting ? 'Importing...' : 'Drop XML or JSON files here'}</Typography>
-          <input ref={fileInputRef} type="file" accept=".xml,.json" multiple style={{ display: 'none' }}
+          <Upload className="size-6 text-muted-foreground mx-auto mb-1" />
+          <p className="text-sm text-muted-foreground">{isImporting ? 'Importing...' : 'Drop XML or JSON files to import'}</p>
+          <input ref={fileInputRef} type="file" accept=".xml,.json" multiple className="hidden"
             onChange={e => handleImport(e.target.files)} />
-          {isImporting && <CircularProgress size={20} sx={{ mt: 0.5 }} />}
-        </Box>
+          {isImporting && <Loader2 className="size-4 animate-spin mx-auto mt-1 text-muted-foreground" />}
+        </div>
       )}
 
-      <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
         {role === 'admin' && (
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setAddMode(!addMode); if (!addMode) { setExpandedKey(null); setEditingKey(null); } }}
-            sx={{ textTransform: 'none' }}>
-            {addMode ? 'Cancel' : 'Add Keybox'}
+          <Button size="sm" onClick={() => setAddDialogOpen(true)}>
+            <Plus className="size-4 mr-1" />
+            Add
           </Button>
         )}
-        <Button variant="outlined" size="small"
-          onClick={() => { setOverrideSource(autoOverride?.source || ''); setOverrideVersion(autoOverride?.version || ''); setOverrideDialogOpen(true); }}
-          sx={{ textTransform: 'none', ml: 'auto' }}>
-          {autoOverride ? `Override: ${autoOverride.source}${autoOverride.version ? ` v${autoOverride.version}` : ''}` : 'Auto Override'}
+        <Button variant="outline" size="sm"
+          onClick={() => { setOverrideSource(autoOverride?.source || ''); setOverrideVersion(autoOverride?.version || ''); setOverrideDialogOpen(true); }}>
+          <RefreshCw className="size-3.5 mr-1" />
+          {autoOverride ? `Override: ${autoOverride.source}` : 'Auto Override'}
         </Button>
-      </Stack>
+      </div>
 
-      {addMode && (
-        <Box sx={{ mb: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'surfaceContainer.main' }}>
-          <Typography variant="subtitle2" sx={{ mb: 1.5 }}>Add Keybox</Typography>
-          <Stack spacing={1.5}>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Select
-                value={addSource}
-                onChange={(e) => {
-                  if (e.target.value === '__add__') setAddProviderOpen(true);
-                  else {
-                    setAddSource(e.target.value);
-                    setAddVersion(nextVersion(e.target.value));
-                  }
-                }}
-                size="small" displayEmpty sx={{ minWidth: 160 }}
-                renderValue={(v) => v || 'Select provider'}
-              >
-                {sources.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
-                <MenuItem value="__add__" sx={{ borderTop: 1, borderColor: 'divider', mt: 0.5, pt: 1, color: 'primary.main', fontWeight: 500 }}>
-                  ✚ Add provider
-                </MenuItem>
-              </Select>
-              <TextField label="Text" size="small" type="text" sx={{ width: 240 }}
-                value={addText} onChange={(e) => setAddText(e.target.value)} />
-            </Stack>
-            <TextField
-              multiline minRows={8} fullWidth
-              placeholder="Paste keybox XML content here..."
-              value={addContent} onChange={(e) => setAddContent(e.target.value)}
-              inputProps={{ spellCheck: false }}
-              sx={{ '& .MuiInputBase-root': { fontFamily: '"Geist Mono", monospace', fontSize: 13 } }}
-            />
-            <Stack direction="row" alignItems="center" spacing={0.5}>
-              <Switch checked={addUseBase64} onChange={(e) => setAddUseBase64(e.target.checked)} size="small" />
-              <Typography variant="body2" color="text.secondary">Base64</Typography>
-            </Stack>
-            <Stack direction="row" spacing={1} justifyContent="flex-end">
-              <Button variant="text" onClick={() => { setAddMode(false); setAddSource(''); setAddVersion(''); setAddText(''); setAddContent(''); }}>Cancel</Button>
-              <Button variant="contained" onClick={handleAddSave} disabled={!addSource || !addContent}>Save</Button>
-            </Stack>
-          </Stack>
-        </Box>
-      )}
-
-      <Dialog open={addProviderOpen} onClose={() => setAddProviderOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Add Provider</DialogTitle>
-        <DialogContent>
-          <TextField autoFocus fullWidth placeholder="e.g. droidwin" value={newProvider}
-            onChange={(e) => setNewProvider(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && newProvider.trim()) {
-                setAddSource(newProvider.trim());
-                setNewProvider('');
-                setAddProviderOpen(false);
-              }
-            }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddProviderOpen(false)}>Cancel</Button>
-          <Button onClick={() => {
-            if (newProvider.trim()) {
-              setAddSource(newProvider.trim());
-              setNewProvider('');
-              setAddProviderOpen(false);
-            }
-          }}>Add</Button>
-        </DialogActions>
-      </Dialog>
-
-      <Box display="flex" sx={{ gap: '6px', mb: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-        <Chip label="All" size="small" variant={sourceFilter === null ? 'filled' : 'outlined'}
-          onClick={() => setSourceFilter(null)} color={sourceFilter === null ? 'primary' : 'default'} />
+      <div className="flex items-center gap-1.5 flex-wrap mb-3">
+        <Badge variant={sourceFilter === null ? 'default' : 'outline'} className="cursor-pointer"
+          onClick={() => setSourceFilter(null)}>
+          All
+        </Badge>
         {sources.map(s => (
-          <Chip key={s} label={s} size="small" variant={sourceFilter === s ? 'filled' : 'outlined'}
-            onClick={() => setSourceFilter(sourceFilter === s ? null : s)}
-            color={sourceFilter === s ? 'primary' : 'default'} />
+          <Badge key={s} variant={sourceFilter === s ? 'default' : 'outline'} className="cursor-pointer"
+            onClick={() => setSourceFilter(sourceFilter === s ? null : s)}>
+            {s}
+          </Badge>
         ))}
-        <Box sx={{ flex: 1 }} />
-        <Chip
-          label={selectMode ? `${selectedIds.size} selected` : 'Select'}
-          size="small"
-          variant={selectMode ? 'filled' : 'outlined'}
-          color={selectMode ? 'primary' : 'default'}
+        <div className="flex-1" />
+        <Badge
+          variant={selectMode ? 'default' : 'outline'}
+          className="cursor-pointer"
           onClick={() => { if (selectMode) { setSelectMode(false); setSelectedIds(new Set()); } else setSelectMode(true); }}
-          sx={{ cursor: 'pointer' }}
-        />
+        >
+          {selectMode ? `${selectedIds.size} selected` : 'Select'}
+        </Badge>
         {selectMode && (
-          <Button variant="text" size="small"
-            onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}
-            sx={{ textTransform: 'none', minWidth: 'auto', fontSize: 12, height: 24 }}>
-            Cancel
-          </Button>
+          <>
+            <Button variant="ghost" size="sm" className="text-xs h-6"
+              onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}>
+              Cancel
+            </Button>
+            {role === 'admin' && selectedIds.size > 0 && (
+              <Button variant="destructive" size="sm" className="h-6"
+                onClick={handleBatchDelete} disabled={isDeleting}>
+                <Trash2 className="size-3.5 mr-1" />
+                {isDeleting ? 'Deleting...' : `Delete (${selectedIds.size})`}
+              </Button>
+            )}
+          </>
         )}
-        {role === 'admin' && selectMode && selectedIds.size > 0 && (
-          <Button variant="contained" color="error" size="small" startIcon={<DeleteSweepIcon />}
-            onClick={async () => {
-              if (!token || selectedIds.size === 0) return;
-              setIsDeleting(true);
-              let ok = 0; let fail = 0;
-              for (const entry of entries.filter(e => selectedIds.has(`${e.source}:${e.version}`))) {
-                try {
-                  const res = await fetch('/.netlify/functions/catalog', {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                    body: JSON.stringify({ source: entry.source, version: entry.version }),
-                  });
-                  if (res.ok) ok++; else fail++;
-                } catch { fail++; }
-              }
-              enqueueSnackbar(`Deleted ${ok} entry${ok !== 1 ? 'es' : ''}${fail > 0 ? ` (${fail} failed)` : ''}`, { variant: fail === 0 ? 'success' : 'error' });
-              setSelectedIds(new Set());
-              setSelectMode(false);
-              setIsDeleting(false);
-              setContentCache({});
-              await fetchHistory();
-            }}
-            disabled={isDeleting}
-            sx={{ textTransform: 'none', height: 24 }}>
-            {isDeleting ? 'Deleting...' : `Delete (${selectedIds.size})`}
-          </Button>
-        )}
-      </Box>
+      </div>
 
-      <TextField variant="filled" fullWidth placeholder="Search by version, serial, or source..."
-        value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-        sx={{ mb: 2, '& .MuiInputBase-input': { fontFamily: '"Geist Mono", monospace' } }}
-        InputProps={{
-          endAdornment: searchQuery ? (
-            <InputAdornment position="end">
-              <IconButton size="small" onClick={() => setSearchQuery('')}><CloseIcon fontSize="small" /></IconButton>
-            </InputAdornment>
-          ) : undefined,
-        }}
-      />
+      <div className="flex items-center gap-1 mb-3 text-xs text-muted-foreground flex-wrap">
+        <span className="font-medium mr-1">Sort:</span>
+        {([['timestamp','Date'],['source','Source'],['version','Version']] as const).map(([field,label]) => (
+          <button key={field}
+            className={`px-2 py-0.5 rounded transition-colors ${sortBy === field ? 'bg-primary/10 text-primary font-semibold' : 'hover:text-foreground'}`}
+            onClick={() => {
+              if (sortBy === field) setSortOrder(o => o === 'asc' ? 'desc' : 'asc');
+              else { setSortBy(field as 'timestamp' | 'source' | 'version'); setSortOrder('desc'); }
+            }}
+          >
+            {label}{sortBy === field ? (sortOrder === 'asc' ? ' ↑' : ' ↓') : ''}
+          </button>
+        ))}
+      </div>
+
+      <div className="mb-4">
+        <SearchInput
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Search by version, serial, or source..."
+        />
+      </div>
 
       {isLoading ? (
-        <Stack spacing={1.5}>
-          {[1, 2, 3, 4].map(i => <Box key={i} className="skeleton" sx={{ height: 72, borderRadius: '8px' }} />)}
-        </Stack>
+        <div className="space-y-2">
+          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-[72px] w-full rounded-lg" />)}
+        </div>
       ) : filtered.length === 0 ? (
-        <Box className="empty-state" sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', p: '64px 24px', textAlign: 'center' }}>
-          <HistoryIcon sx={{ fontSize: 48, color: 'text.secondary' }} />
-          <Typography variant="h6">{searchQuery || sourceFilter ? 'No matching keyboxes' : (addMode ? 'Add a keybox above' : 'No keyboxes yet')}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {searchQuery || sourceFilter ? 'Try a different search term or filter' : 'Import keyboxes or use Add Keybox to get started'}
-          </Typography>
-        </Box>
+        <EmptyState
+          icon={<History className="size-12" />}
+          title={searchQuery || sourceFilter ? 'No matching keyboxes' : 'No keyboxes yet'}
+          description={
+            searchQuery || sourceFilter
+              ? 'Try a different search term or filter'
+              : 'Import keyboxes or use Add Keybox to get started'
+          }
+          action={role === 'admin' && !searchQuery && !sourceFilter ? { label: 'Add Keybox', onClick: () => setAddDialogOpen(true) } : undefined}
+        />
       ) : (
-        <Box sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div className="flex-1 overflow-auto flex flex-col gap-2">
           {filtered.map(entry => {
             const key = entryKey(entry);
-            const isSelected = selectedIds.has(key);
-            const isExpanded = expandedKey === key;
-            const isEditing = editingKey === key;
-            const cachedContent = contentCache[key];
-            const isLoadingContent = loadingContent[key];
-            const isRechecking = recheckingKey === key;
             return (
-              <Box key={key}>
-                <Box
-                  onClick={(e) => {
-                    if ((e.target as HTMLElement).closest('.MuiCheckbox-root')) return;
-                    if ((e.target as HTMLElement).closest('button')) return;
-                    handleExpand(key);
-                  }}
-                  sx={{
-                    display: 'flex', alignItems: 'center', gap: '8px',
-                    p: '12px 16px', borderRadius: isExpanded ? '8px 8px 0 0' : '8px',
-                    bgcolor: isSelected ? 'rgba(168,199,250,0.12)' : 'surfaceContainer.main',
-                    cursor: 'pointer', transition: 'background 150ms',
-                    '&:hover': { bgcolor: 'surfaceContainerHigh.main' },
-                  }}
-                >
-                  <Box sx={{ width: 36, height: 24, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => e.stopPropagation()}>
-                    {selectMode && (
-                      <Checkbox checked={isSelected} onChange={() => handleToggleSelect(entry)} size="small" sx={{ p: 0.5 }} />
-                    )}
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
-                    <Box sx={{ textAlign: 'center', minWidth: 80 }}>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>{entry.source}</Typography>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>{entry.text || entry.version}</Typography>
-                    </Box>
-                    <Box sx={{ minWidth: 0 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <FingerprintIcon sx={{ fontSize: 14, opacity: 0.5 }} />
-                        <Typography variant="caption" sx={{ fontFamily: '"Geist Mono", monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.serial}</Typography>
-                      </Box>
-                      <Typography variant="caption" color="text.secondary">{relativeTime(entry.timestamp)}</Typography>
-                    </Box>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                    {(() => {
-                      const icon = entry.revoked ? <GppBadIcon /> : entry.softbanned ? <WarningAmberIcon /> : <VerifiedUserIcon />;
-                      const label = entry.revoked ? 'Revoked' : entry.softbanned ? 'Softbanned' : 'Active';
-                      const color = entry.revoked ? 'error.main' : entry.softbanned ? 'warning.main' : 'success.main';
-                      return (
-                        <Chip icon={icon} label={label} size="small"
-                          sx={{ color, '& .MuiChip-icon': { color } }}
-                        />
-                      );
-                    })()}
-                    {isExpanded ? <ExpandLessIcon sx={{ color: 'text.secondary' }} /> : <ExpandMoreIcon sx={{ color: 'text.secondary' }} />}
-                  </Box>
-                </Box>
-                {isExpanded && (
-                  <Box sx={{
-                    p: '12px 16px', borderRadius: '0 0 8px 8px',
-                    bgcolor: 'surfaceContainer.main',
-                    borderTop: '1px solid var(--mdui-color-outline-variant, #44474F)',
-                  }}>
-                    {isEditing ? (
-                      <Stack spacing={1.5}>
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          <Select
-                            value={editSource}
-                            onChange={(e) => {
-                              if (e.target.value === '__add__') setEditAddProviderOpen(true);
-                              else setEditSource(e.target.value);
-                            }}
-                            size="small" displayEmpty sx={{ minWidth: 160 }}
-                          >
-                            {sources.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
-                            <MenuItem value="__add__" sx={{ borderTop: 1, borderColor: 'divider', mt: 0.5, pt: 1, color: 'primary.main', fontWeight: 500 }}>
-                              ✚ Add provider
-                            </MenuItem>
-                          </Select>
-                          <TextField label="Text" size="small" type="text" sx={{ width: 240 }}
-                            value={editText} onChange={(e) => setEditText(e.target.value)} />
-                        </Stack>
-                        <TextField multiline minRows={8} fullWidth
-                          value={editContent} onChange={(e) => setEditContent(e.target.value)}
-                          inputProps={{ spellCheck: false }}
-                          sx={{ '& .MuiInputBase-root': { fontFamily: '"Geist Mono", monospace', fontSize: 13 } }} />
-                        <Stack direction="row" alignItems="center" spacing={0.5}>
-                          <Switch checked={editUseBase64} onChange={(e) => setEditUseBase64(e.target.checked)} size="small" />
-                          <Typography variant="body2" color="text.secondary">Base64</Typography>
-                        </Stack>
-                        <Stack direction="row" spacing={1} justifyContent="flex-end">
-                          <Button size="small" onClick={() => setEditingKey(null)}>Cancel</Button>
-                          <Button size="small" variant="contained" onClick={() => handleEditSave(entry)} disabled={!editSource || !editContent}>Save</Button>
-                        </Stack>
-                      </Stack>
-                    ) : (
-                      <>
-                        <Stack direction="row" justifyContent="space-between" sx={{ py: 0.5 }}>
-                          <Typography variant="caption" color="text.secondary">Text</Typography>
-                          <Typography variant="caption">{entry.text || entry.version}</Typography>
-                        </Stack>
-                        <Stack direction="row" justifyContent="space-between" sx={{ py: 0.5 }}>
-                          <Typography variant="caption" color="text.secondary">Source</Typography>
-                          <Typography variant="caption">{entry.source}</Typography>
-                        </Stack>
-                        <Stack direction="row" justifyContent="space-between" sx={{ py: 0.5 }}>
-                          <Typography variant="caption" color="text.secondary">Version</Typography>
-                          <Typography variant="caption">{entry.version}</Typography>
-                        </Stack>
-                        <Stack direction="row" justifyContent="space-between" sx={{ py: 0.5 }}>
-                          <Typography variant="caption" color="text.secondary">Serial</Typography>
-                          <Typography variant="caption" sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 12, wordBreak: 'break-all', ml: 2 }}>{entry.serial}</Typography>
-                        </Stack>
-                        <Stack direction="row" justifyContent="space-between" sx={{ py: 0.5 }}>
-                          <Typography variant="caption" color="text.secondary">Date</Typography>
-                          <Typography variant="caption">{new Date(entry.timestamp).toLocaleString()}</Typography>
-                        </Stack>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ py: 0.5 }}>
-                          <Typography variant="caption" color="text.secondary">Status</Typography>
-                          {(() => {
-                            const icon = entry.revoked ? <GppBadIcon /> : entry.softbanned ? <WarningAmberIcon /> : <VerifiedUserIcon />;
-                            const label = entry.revoked ? 'Revoked' : entry.softbanned ? 'Softbanned' : 'Active';
-                            const color = entry.revoked ? 'error.main' : entry.softbanned ? 'warning.main' : 'success.main';
-                            return (
-                              <Chip icon={icon} label={label} size="small"
-                                sx={{ color, '& .MuiChip-icon': { color } }} />
-                            );
-                          })()}
-                        </Stack>
-                        <Box sx={{ mt: 1 }}>
-                          <RawUrlRow url={`${window.location.origin}/key/${entry.source}/${entry.version}`} />
-                        </Box>
-                        {isLoadingContent ? (
-                          <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}><CircularProgress size={20} /></Box>
-                        ) : cachedContent && (
-                          <Box sx={{ mt: 1 }}>
-                            <TextField multiline minRows={4} maxRows={12} fullWidth
-                              value={cachedContent}
-                              inputProps={{ readOnly: true, spellCheck: false }}
-                              sx={{ '& .MuiInputBase-root': { fontFamily: '"Geist Mono", monospace', fontSize: 12 } }} />
-                          </Box>
-                        )}
-                        <Box sx={{ mt: 1.5, display: 'flex', gap: 1 }}>
-                          {role === 'admin' && (
-                            <Button variant="outlined" size="small" startIcon={<EditIcon />}
-                              onClick={(e) => { e.stopPropagation(); handleStartEdit(entry); }} sx={{ textTransform: 'none' }}>
-                              Edit
-                            </Button>
-                          )}
-                          <Button variant="outlined" size="small" startIcon={<AutorenewIcon />}
-                            onClick={(e) => { e.stopPropagation(); handleRecheck(entry); }} disabled={isRechecking} sx={{ textTransform: 'none' }}>
-                            {isRechecking ? 'Checking...' : 'Re-check'}
-                          </Button>
-                          <Select
-                            value={entry.revoked ? 'revoked' : entry.softbanned ? 'softbanned' : 'active'}
-                            onChange={(e) => { e.stopPropagation(); handleSetStatus(entry, e.target.value as 'active' | 'softbanned' | 'revoked'); }}
-                            size="small"
-                            disabled={settingStatusKey === key}
-                            sx={{ textTransform: 'none', minWidth: 110, height: 32, fontSize: 13 }}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <MenuItem value="active"><VerifiedUserIcon sx={{ fontSize: 16, mr: 0.5, color: 'success.main' }} />Active</MenuItem>
-                            <MenuItem value="softbanned"><WarningAmberIcon sx={{ fontSize: 16, mr: 0.5, color: 'warning.main' }} />Softbanned</MenuItem>
-                            <MenuItem value="revoked"><GppBadIcon sx={{ fontSize: 16, mr: 0.5, color: 'error.main' }} />Revoked</MenuItem>
-                          </Select>
-                          {role === 'admin' && (
-                            <Button variant="outlined" size="small" startIcon={<DeleteIcon />} color="error"
-                              onClick={(e) => { e.stopPropagation(); handleDelete(entry); }} sx={{ textTransform: 'none' }}>
-                              Delete
-                            </Button>
-                          )}
-                        </Box>
-                      </>
-                    )}
-                  </Box>
-                )}
-              </Box>
+              <KeyboxRow
+                key={key}
+                entry={entry}
+                isSelected={selectedIds.has(key)}
+                selectMode={selectMode}
+                content={contentCache[key] ?? null}
+                isLoadingContent={loadingContent[key] ?? false}
+                expanded={expandedKey === key}
+                role={role}
+                token={token}
+                sources={sources}
+                onToggleSelect={(e) => {
+                  setSelectedIds(prev => {
+                    const next = new Set(prev);
+                    const k = entryKey(e);
+                    if (next.has(k)) next.delete(k); else next.add(k);
+                    return next;
+                  });
+                }}
+                onExpand={handleExpand}
+                onDelete={(e) => setDeleteTarget(e)}
+                onRecheck={handleRecheck}
+                onSetStatus={handleSetStatus}
+                onEditSave={handleEditSave}
+                isSettingStatus={settingStatusKey === key}
+                isRechecking={recheckingKey === key}
+              />
             );
           })}
-        </Box>
+        </div>
       )}
 
-      <Dialog open={xmlDialogOpen} onClose={() => setXmlDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Import XML Keyboxes</DialogTitle>
-        <DialogContent>
-          {xmlItems.map((item, i) => (
-            <Box key={i} sx={{ mb: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>{item.filename}</Typography>
-              <Stack spacing={1.5}>
-                <Stack direction="row" alignItems="center" spacing={1}>
-                  <Select value={item.source}
-                    onChange={(e) => {
-                      if (e.target.value === '__add__') setAddProviderForIndex(i);
-                      else setXmlItems(prev => prev.map((x, j) => j === i ? { ...x, source: e.target.value, version: nextVersion(e.target.value) } : x));
-                    }}
-                    size="small" displayEmpty sx={{ minWidth: 160 }}
-                    renderValue={(v) => v || 'Select provider'}
-                  >
-                    {sources.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
-                    <MenuItem value="__add__" sx={{ borderTop: 1, borderColor: 'divider', mt: 0.5, pt: 1, color: 'primary.main', fontWeight: 500 }}>
-                      ✚ Add provider
-                    </MenuItem>
-                  </Select>
-                  <TextField label="Text" size="small" type="text" sx={{ width: 160 }}
-                    value={item.text}
-                    onChange={(e) => setXmlItems(prev => prev.map((x, j) => j === i ? { ...x, text: e.target.value } : x))} />
-                </Stack>
-              </Stack>
-            </Box>
-          ))}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => { setXmlDialogOpen(false); setXmlItems([]); }}>Cancel</Button>
-          <Button variant="contained" onClick={handleXmlImport} disabled={isImporting}>
-            {isImporting ? 'Importing...' : `Import ${xmlItems.length} file${xmlItems.length !== 1 ? 's' : ''}`}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <AddKeyboxDialog
+        open={addDialogOpen}
+        onOpenChange={setAddDialogOpen}
+        sources={sources}
+        onSave={handleAddKeybox}
+      />
 
-      <Dialog open={addProviderForIndex !== null} onClose={() => setAddProviderForIndex(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Add Provider</DialogTitle>
-        <DialogContent>
-          <TextField autoFocus fullWidth placeholder="e.g. droidwin" value={newProvider}
-            onChange={(e) => setNewProvider(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && addProviderForIndex !== null && newProvider.trim()) {
-                setXmlItems(prev => prev.map((x, j) => j === addProviderForIndex ? { ...x, source: newProvider.trim() } : x));
-                setAddProviderForIndex(null);
-                setNewProvider('');
-              }
-            }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddProviderForIndex(null)}>Cancel</Button>
-          <Button onClick={() => {
-            if (addProviderForIndex !== null && newProvider.trim()) {
-              setXmlItems(prev => prev.map((x, j) => j === addProviderForIndex ? { ...x, source: newProvider.trim() } : x));
-              setAddProviderForIndex(null);
-              setNewProvider('');
-            }
-          }}>Add</Button>
-        </DialogActions>
-      </Dialog>
+      <XmlImportDialog
+        open={xmlDialogOpen}
+        onOpenChange={(v) => { if (!v) { setXmlDialogOpen(false); setXmlItems([]); } }}
+        items={xmlItems}
+        onUpdateItem={(i, item) => setXmlItems(prev => prev.map((x, j) => j === i ? item : x))}
+        sources={sources}
+        onImport={handleXmlImport}
+        isImporting={isImporting}
+      />
 
-      <Dialog open={editAddProviderOpen} onClose={() => setEditAddProviderOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Add Provider</DialogTitle>
-        <DialogContent>
-          <TextField autoFocus fullWidth placeholder="e.g. droidwin" value={editNewProvider}
-            onChange={(e) => setEditNewProvider(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && editNewProvider.trim()) {
-                setEditSource(editNewProvider.trim());
-                setEditNewProvider('');
-                setEditAddProviderOpen(false);
-              }
-            }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditAddProviderOpen(false)}>Cancel</Button>
-          <Button onClick={() => {
-            if (editNewProvider.trim()) {
-              setEditSource(editNewProvider.trim());
-              setEditNewProvider('');
-              setEditAddProviderOpen(false);
-            }
-          }}>Add</Button>
-        </DialogActions>
-      </Dialog>
+      <AutoOverrideDialog
+        open={overrideDialogOpen}
+        onOpenChange={setOverrideDialogOpen}
+        sources={sources}
+        overrideSource={overrideSource}
+        overrideVersion={overrideVersion}
+        onOverrideSourceChange={setOverrideSource}
+        onOverrideVersionChange={setOverrideVersion}
+        onSave={handleSetAutoOverride}
+        onClear={handleClearAutoOverride}
+        hasExisting={autoOverride !== null}
+      />
 
-      <Dialog open={overrideDialogOpen} onClose={() => setOverrideDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Auto Override</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Override the automatic working selection. Leave version empty to always use the latest.
-          </Typography>
-          <Stack spacing={1.5}>
-            <Select
-              value={overrideSource}
-              onChange={(e) => setOverrideSource(e.target.value)}
-              size="small" displayEmpty sx={{ minWidth: 160 }}
-              renderValue={(v) => v || 'Select source'}
-            >
-              {sources.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
-            </Select>
-            <TextField label="Version (optional)" size="small" type="text"
-              value={overrideVersion}
-              onChange={(e) => setOverrideVersion(e.target.value)}
-              placeholder="Leave empty for latest"
-            />
-          </Stack>
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
+        <DialogContent className="sm:max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Delete {deleteTarget?.source} v{deleteTarget?.version}?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">This cannot be undone.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => deleteTarget && handleDelete(deleteTarget)}>Delete</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          {autoOverride && (
-            <Button color="error" onClick={() => { handleClearAutoOverride(); setOverrideDialogOpen(false); }} sx={{ mr: 'auto' }}>
-              Clear
-            </Button>
-          )}
-          <Button onClick={() => setOverrideDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleSetAutoOverride} disabled={!overrideSource}>Save</Button>
-        </DialogActions>
       </Dialog>
-    </Box>
+    </PageLayout>
   );
 }

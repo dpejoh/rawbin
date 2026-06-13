@@ -1,20 +1,21 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { Trash2, Pencil, Copy, Check, Smartphone, Upload } from 'lucide-react';
+import { toast } from 'sonner';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
-  Typography, TextField, Button, IconButton, Tooltip, Chip, CircularProgress,
-  InputAdornment, Box, Stack, Dialog, DialogTitle,
-  DialogContent, DialogActions, Table, TableBody, TableCell,
-  TableContainer, TableHead, TableRow, TableSortLabel,
-} from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
-import DeleteIcon from '@mui/icons-material/Delete';
-import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
-import EditIcon from '@mui/icons-material/Edit';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import UploadFileIcon from '@mui/icons-material/UploadFile';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import CheckIcon from '@mui/icons-material/Check';
-import SmartphoneIcon from '@mui/icons-material/Smartphone';
-import { useSnackbar } from 'notistack';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import PageLayout from '../../components/PageLayout';
+import SearchInput from '../../components/SearchInput';
+import EmptyState from '../../components/EmptyState';
 import useAPKs from '../../hooks/useAPKs';
 import { relativeTime, formatSize } from '../../utils/time';
 import { parseAPK } from '../../utils/parseAPK';
@@ -34,7 +35,6 @@ interface EditForm {
 }
 
 export default function APKsPage({ token, role }: APKsPageProps) {
-  const { enqueueSnackbar } = useSnackbar();
   const { apks, isLoading, fetchAll, upload, remove } = useAPKs();
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<APK | null>(null);
@@ -49,10 +49,13 @@ export default function APKsPage({ token, role }: APKsPageProps) {
   const [editForm, setEditForm] = useState<EditForm>({ packageName: '', appName: '', versionCode: 0, versionName: '' });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const dropInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadTarget, setUploadTarget] = useState<APK | null>(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
 
-  useEffect(() => {
-    if (token) fetchAll(token);
-  }, [token, fetchAll]);
+  useEffect(() => { if (token) fetchAll(token); }, [token, fetchAll]);
 
   const displayEntries = [...apks]
     .filter(a => {
@@ -67,12 +70,45 @@ export default function APKsPage({ token, role }: APKsPageProps) {
       return a[sortBy].localeCompare(b[sortBy]) * dir;
     });
 
+  const handleUploadClick = useCallback((apk: APK) => {
+    setUploadTarget(apk);
+    setUploadFile(null);
+    setUploadOpen(true);
+  }, []);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) setUploadFile(file);
+    e.target.value = '';
+  }, []);
+
+  const handleUpload = useCallback(async () => {
+    if (!token || !uploadFile || !uploadTarget) return;
+    setIsUploadingFile(true);
+    const parsed = await parseAPK(uploadFile);
+    const metadata = {
+      packageName: uploadTarget.packageName,
+      appName: uploadTarget.appName,
+      versionCode: parsed ? parsed.versionCode : uploadTarget.versionCode,
+      versionName: parsed ? parsed.versionName : uploadTarget.versionName,
+    };
+    const result = await upload(token, uploadFile, metadata);
+    if (result) {
+      toast.success(`"${uploadTarget.packageName}" updated`);
+      setUploadOpen(false);
+      setUploadFile(null);
+      setUploadTarget(null);
+      await fetchAll(token);
+    } else toast.error('Update failed');
+    setIsUploadingFile(false);
+  }, [token, uploadFile, uploadTarget, upload, fetchAll]);
+
   const handleFiles = useCallback(async (files: FileList) => {
     if (!token) return;
     for (let i = 0; i < files.length; i++) {
       const file = files[i]!;
       if (!file.name.endsWith('.apk') && !file.name.endsWith('.apks')) {
-        enqueueSnackbar(`Skipped "${file.name}" — only .apk/.apks files are supported`, { variant: 'warning' });
+        toast.warning(`Skipped "${file.name}" — only .apk/.apks files supported`);
         continue;
       }
       setIsUploading(true);
@@ -87,15 +123,12 @@ export default function APKsPage({ token, role }: APKsPageProps) {
         versionName: parsed ? parsed.versionName : '',
       };
       const result = await upload(token, file, metadata);
-      if (result) {
-        enqueueSnackbar(`"${metadata.packageName}" uploaded`, { variant: 'success' });
-      } else {
-        enqueueSnackbar(`"${metadata.packageName}" upload failed`, { variant: 'error' });
-      }
+      if (result) toast.success(`"${metadata.packageName}" uploaded`);
+      else toast.error(`"${metadata.packageName}" upload failed`);
       setIsUploading(false);
     }
     await fetchAll(token);
-  }, [token, upload, fetchAll, enqueueSnackbar]);
+  }, [token, upload, fetchAll]);
 
   const handleDropZoneFiles = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -108,7 +141,7 @@ export default function APKsPage({ token, role }: APKsPageProps) {
     const file = e.dataTransfer.files[0];
     if (!file || !token) return;
     if (!file.name.endsWith('.apk') && !file.name.endsWith('.apks')) {
-      enqueueSnackbar('Only .apk/.apks files are supported', { variant: 'error' });
+      toast.error('Only .apk/.apks files are supported');
       return;
     }
     const parsed = await parseAPK(file);
@@ -116,31 +149,21 @@ export default function APKsPage({ token, role }: APKsPageProps) {
       ? parsed.packageName
       : file.name.replace(/\.apks?$/i, '').replace(/[_-]\d+.*$/, '').trim();
     const metadata = {
-      packageName: pkgName,
-      appName: guessAppName(pkgName),
-      versionCode: parsed ? parsed.versionCode : 0,
-      versionName: parsed ? parsed.versionName : '',
+      packageName: pkgName, appName: guessAppName(pkgName),
+      versionCode: parsed ? parsed.versionCode : 0, versionName: parsed ? parsed.versionName : '',
     };
     const result = await upload(token, file, metadata);
-    if (result) {
-      enqueueSnackbar('APK uploaded', { variant: 'success' });
-      await fetchAll(token);
-    } else {
-      enqueueSnackbar('Upload failed', { variant: 'error' });
-    }
-  }, [token, upload, fetchAll, enqueueSnackbar]);
+    if (result) { toast.success('APK uploaded'); await fetchAll(token); }
+    else toast.error('Upload failed');
+  }, [token, upload, fetchAll]);
 
   const handleDelete = useCallback(async () => {
     if (!token || !deleteTarget) return;
     const ok = await remove(token, deleteTarget.id);
-    if (ok) {
-      enqueueSnackbar(`APK "${deleteTarget.packageName}" deleted`, { variant: 'success' });
-      await fetchAll(token);
-    } else {
-      enqueueSnackbar('Delete failed', { variant: 'error' });
-    }
+    if (ok) { toast.success(`APK "${deleteTarget.packageName}" deleted`); await fetchAll(token); }
+    else toast.error('Delete failed');
     setDeleteTarget(null);
-  }, [token, deleteTarget, remove, fetchAll, enqueueSnackbar]);
+  }, [token, deleteTarget, remove, fetchAll]);
 
   const handleCopyUrl = useCallback(async (apk: APK) => {
     const r2Worker = import.meta.env.VITE_R2_WORKER_URL ?? "http://localhost:8787";
@@ -148,27 +171,23 @@ export default function APKsPage({ token, role }: APKsPageProps) {
     try {
       await navigator.clipboard.writeText(url);
       setCopiedId(apk.packageName);
-      enqueueSnackbar('Raw URL copied', { variant: 'info' });
+      toast('Raw URL copied');
       setTimeout(() => setCopiedId(null), 1500);
-    } catch {
-      enqueueSnackbar('Failed to copy', { variant: 'error' });
-    }
-  }, [enqueueSnackbar]);
+    } catch { toast.error('Failed to copy'); }
+  }, []);
 
   const handleEditOpen = useCallback((apk: APK) => {
     setEditTarget(apk);
     setEditForm({
-      packageName: apk.packageName,
-      appName: apk.appName,
-      versionCode: apk.versionCode,
-      versionName: apk.versionName,
+      packageName: apk.packageName, appName: apk.appName,
+      versionCode: apk.versionCode, versionName: apk.versionName,
     });
   }, []);
 
   const handleEditSave = useCallback(async () => {
     if (!token || !editTarget) return;
     const { packageName, appName, versionCode, versionName } = editForm;
-    if (!packageName.trim()) { enqueueSnackbar('Package name is required', { variant: 'error' }); return; }
+    if (!packageName.trim()) { toast.error('Package name is required'); return; }
     setIsSavingEdit(true);
     try {
       const res = await fetch('/.netlify/functions/apks', {
@@ -177,18 +196,11 @@ export default function APKsPage({ token, role }: APKsPageProps) {
         body: JSON.stringify({ id: editTarget.packageName, packageName, appName, versionCode, versionName }),
       });
       const data = await res.json() as Record<string, unknown>;
-      if (data.error) {
-        enqueueSnackbar(String(data.error), { variant: 'error' });
-      } else {
-        enqueueSnackbar('APK metadata updated', { variant: 'success' });
-        setEditTarget(null);
-        await fetchAll(token);
-      }
-    } catch {
-      enqueueSnackbar('Failed to save', { variant: 'error' });
-    }
+      if (data.error) toast.error(String(data.error));
+      else { toast.success('APK metadata updated'); setEditTarget(null); await fetchAll(token); }
+    } catch { toast.error('Failed to save'); }
     setIsSavingEdit(false);
-  }, [token, editTarget, editForm, fetchAll, enqueueSnackbar]);
+  }, [token, editTarget, editForm, fetchAll]);
 
   const handleBulkDelete = useCallback(async () => {
     if (!token || selectedIds.size === 0) return;
@@ -198,222 +210,209 @@ export default function APKsPage({ token, role }: APKsPageProps) {
       const res = await remove(token, pkg);
       if (res) ok++; else fail++;
     }
-    enqueueSnackbar(`Deleted ${ok} APK${ok !== 1 ? 's' : ''}${fail > 0 ? ` (${fail} failed)` : ''}`, { variant: fail === 0 ? 'success' : 'error' });
-    setSelectedIds(new Set());
-    setSelectMode(false);
-    setIsBatchDeleting(false);
+    toast(fail === 0 ? `Deleted ${ok} APK${ok !== 1 ? 's' : ''}` : `${ok} deleted, ${fail} failed`);
+    setSelectedIds(new Set()); setSelectMode(false); setIsBatchDeleting(false);
     await fetchAll(token);
-  }, [token, selectedIds, remove, fetchAll, enqueueSnackbar]);
+  }, [token, selectedIds, remove, fetchAll]);
 
   return (
-    <Box sx={{ p: 4, maxWidth: 800, display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}
+    <PageLayout title="APKs" count={`${apks.length} package${apks.length !== 1 ? 's' : ''}`} maxWidth="lg"
       onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
       onDrop={handleDrop}
     >
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-        <Box>
-          <Typography variant="h4" sx={{ mb: 0.5 }}>APKs</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {apks.length} package{apks.length !== 1 ? 's' : ''}
-          </Typography>
-        </Box>
-      </Stack>
-
       {role !== 'viewer' && (
-        <Box sx={{
-          border: '2px dashed var(--mdui-color-outline, #8E9099)',
-          borderRadius: '12px', p: 2, mb: 2, textAlign: 'center', cursor: 'pointer',
-          transition: 'border-color 150ms, background 150ms',
-          '&:hover': { borderColor: 'primary.main' },
-          opacity: isUploading ? 0.6 : 1,
-        }} onClick={() => dropInputRef.current?.click()}>
-          <UploadFileIcon sx={{ fontSize: 28, color: 'text.secondary', mb: 0.5 }} />
-          <Typography variant="body2">{isUploading ? 'Uploading...' : 'Drop .apk/.apks files here or click to upload'}</Typography>
-          <input ref={dropInputRef} type="file" accept=".apk,.apks" multiple style={{ display: 'none' }} onChange={handleDropZoneFiles} />
-        </Box>
+        <div
+          className={`border-2 border-dashed rounded-xl p-3 mb-4 text-center cursor-pointer transition-colors hover:border-primary ${isUploading ? 'opacity-60' : ''}`}
+          onClick={() => dropInputRef.current?.click()}
+        >
+          <Upload className="size-7 text-muted-foreground mx-auto mb-1" />
+          <p className="text-sm text-muted-foreground">
+            {isUploading ? 'Uploading...' : 'Drop .apk/.apks files here or click to upload'}
+          </p>
+          <input ref={dropInputRef} type="file" accept=".apk,.apks" multiple className="hidden" onChange={handleDropZoneFiles} />
+        </div>
       )}
 
-      <TextField variant="filled" fullWidth placeholder="Search by package name or app name..."
-        value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-        sx={{ mb: 2, '& .MuiInputBase-input': { fontFamily: '"Geist Mono", monospace' } }}
-        InputProps={{
-          endAdornment: searchQuery ? (
-            <InputAdornment position="end">
-              <IconButton size="small" onClick={() => setSearchQuery('')}><CloseIcon fontSize="small" /></IconButton>
-            </InputAdornment>
-          ) : undefined,
-        }}
-      />
-
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
-        <Chip
-          label={selectMode ? `${selectedIds.size} selected` : 'Select'}
-          size="small"
-          variant={selectMode ? 'filled' : 'outlined'}
-          color={selectMode ? 'primary' : 'default'}
-          onClick={() => {
-            if (selectMode) { setSelectMode(false); setSelectedIds(new Set()); }
-            else setSelectMode(true);
-          }}
-          sx={{ cursor: 'pointer' }}
+      <div className="mb-4">
+        <SearchInput
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Search by package name or app name..."
         />
+      </div>
+
+      <div className="flex items-center gap-2 mb-4">
+        <Badge
+          variant={selectMode ? 'default' : 'outline'}
+          className="cursor-pointer"
+          onClick={() => { if (selectMode) { setSelectMode(false); setSelectedIds(new Set()); } else setSelectMode(true); }}
+        >
+          {selectMode ? `${selectedIds.size} selected` : 'Select'}
+        </Badge>
         {selectMode && (
-          <Button variant="text" size="small"
-            onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}
-            sx={{ textTransform: 'none', minWidth: 'auto', fontSize: 12, height: 24 }}>
-            Cancel
-          </Button>
+          <>
+            <Button variant="ghost" size="sm" className="text-xs"
+              onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}>
+              Cancel
+            </Button>
+            {role !== 'viewer' && selectedIds.size > 0 && (
+              <Button variant="destructive" size="sm"
+                onClick={handleBulkDelete} disabled={isBatchDeleting}>
+                <Trash2 className="size-4 mr-1" />
+                {isBatchDeleting ? 'Deleting...' : `Delete (${selectedIds.size})`}
+              </Button>
+            )}
+          </>
         )}
-        {role !== 'viewer' && selectMode && selectedIds.size > 0 && (
-          <Button variant="contained" color="error" size="small" startIcon={<DeleteSweepIcon />}
-            onClick={handleBulkDelete} disabled={isBatchDeleting}
-            sx={{ textTransform: 'none', height: 24 }}>
-            {isBatchDeleting ? 'Deleting...' : `Delete (${selectedIds.size})`}
-          </Button>
-        )}
-      </Stack>
+      </div>
 
       {isLoading ? (
-        <Stack spacing={1.5}>
-          {[1, 2, 3].map(i => <Box key={i} className="skeleton" sx={{ height: 52, borderRadius: '8px' }} />)}
-        </Stack>
+        <div className="space-y-2">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full rounded-md" />)}
+        </div>
       ) : displayEntries.length === 0 ? (
-        <Box className="empty-state">
-          <SmartphoneIcon sx={{ fontSize: 48, color: 'text.secondary' }} />
-          <Typography variant="h6">{searchQuery ? 'No matching APKs' : 'No APKs yet'}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {searchQuery ? 'Try a different search term' : 'Upload an APK file to get started'}
-          </Typography>
-        </Box>
+        <EmptyState
+          icon={<Smartphone className="size-12" />}
+          title={searchQuery ? 'No matching APKs' : 'No APKs yet'}
+          description={searchQuery ? 'Try a different search term' : 'Upload an APK file to get started'}
+        />
       ) : (
-        <TableContainer sx={{ flex: 1, overflow: 'auto' }}>
-          <Table size="small" stickyHeader>
-            <TableHead>
-              <TableRow>
-                {selectMode && <TableCell padding="checkbox" sx={{ width: 40 }} />}
-                <TableCell sx={{ fontWeight: 600 }}>
-                  <TableSortLabel active={sortBy === 'packageName'} direction={sortBy === 'packageName' ? sortOrder : 'asc'}
-                    onClick={() => { if (sortBy === 'packageName') setSortOrder(o => o === 'asc' ? 'desc' : 'asc'); else { setSortBy('packageName'); setSortOrder('asc'); } }}>
-                    Package
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>
-                  <TableSortLabel active={sortBy === 'appName'} direction={sortBy === 'appName' ? sortOrder : 'asc'}
-                    onClick={() => { if (sortBy === 'appName') setSortOrder(o => o === 'asc' ? 'desc' : 'asc'); else { setSortBy('appName'); setSortOrder('asc'); } }}>
-                    App
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>
-                  <TableSortLabel active={sortBy === 'versionCode'} direction={sortBy === 'versionCode' ? sortOrder : 'asc'}
-                    onClick={() => { if (sortBy === 'versionCode') setSortOrder(o => o === 'asc' ? 'desc' : 'asc'); else { setSortBy('versionCode'); setSortOrder('desc'); } }}>
-                    Version
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Size</TableCell>
-                <TableCell sx={{ fontWeight: 600 }} align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {displayEntries.map(apk => {
-                const isSelected = selectedIds.has(apk.packageName);
-                return (
-                <TableRow key={apk.id} hover selected={isSelected} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
-                  {selectMode && (
-                    <TableCell padding="checkbox" onClick={() => {
-                      setSelectedIds(prev => {
-                        const next = new Set(prev);
-                        if (next.has(apk.packageName)) next.delete(apk.packageName);
-                        else next.add(apk.packageName);
-                        return next;
-                      });
-                    }} sx={{ cursor: 'pointer' }}>
-                      <Box sx={{ width: 18, height: 18, borderRadius: '4px', border: '2px solid', borderColor: isSelected ? 'primary.main' : 'outline.main', bgcolor: isSelected ? 'primary.main' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {isSelected && <Box sx={{ width: 6, height: 6, borderRadius: '1px', bgcolor: 'white', transform: 'rotate(45deg)' }} />}
-                      </Box>
-                    </TableCell>
+        <>
+          <div className="flex items-center gap-1 mb-3 text-xs text-muted-foreground flex-wrap">
+            <span className="font-medium mr-1">Sort:</span>
+            {([['packageName','Package'],['appName','App Name'],['versionCode','Version'],['updatedAt','Updated']] as const).map(([field,label]) => (
+              <button key={field}
+                className={`px-2 py-0.5 rounded transition-colors ${sortBy === field ? 'bg-primary/10 text-primary font-semibold' : 'hover:text-foreground'}`}
+                onClick={() => {
+                  if (sortBy === field) setSortOrder(o => o === 'asc' ? 'desc' : 'asc');
+                  else { setSortBy(field); setSortOrder(field === 'updatedAt' ? 'desc' : 'asc'); }
+                }}
+              >
+                {label}{sortBy === field ? (sortOrder === 'asc' ? ' ↑' : ' ↓') : ''}
+              </button>
+            ))}
+          </div>
+          <div className="flex-1 overflow-auto space-y-2">
+            {displayEntries.map(apk => {
+              const isSelected = selectedIds.has(apk.packageName);
+              return (
+                <div key={apk.id}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isSelected ? 'bg-primary/10' : 'bg-card hover:bg-accent border border-border'}`}
+                >
+                  <div className="size-9 shrink-0 flex items-center justify-center">
+                    {selectMode ? (
+                      <Checkbox checked={isSelected}
+                        onCheckedChange={() => {
+                          setSelectedIds(prev => {
+                            const next = new Set(prev);
+                            if (next.has(apk.packageName)) next.delete(apk.packageName);
+                            else next.add(apk.packageName);
+                            return next;
+                          });
+                        }}
+                      />
+                    ) : (
+                      <Smartphone className="size-6 text-primary shrink-0" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{apk.appName}</p>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap">
+                      <span className="font-mono">{apk.packageName}</span>
+                      <span>·</span>
+                      <span>v{apk.versionName || apk.versionCode}</span>
+                      {apk.versionCode > 0 && <span>(code {apk.versionCode})</span>}
+                      <span>·</span>
+                      <span>{formatSize(apk.size)}</span>
+                      <span>·</span>
+                      <span>{relativeTime(apk.updatedAt)}</span>
+                    </div>
+                  </div>
+                  <button onClick={() => handleEditOpen(apk)} className="text-muted-foreground hover:text-foreground p-1 shrink-0" title="Edit metadata" aria-label="Edit metadata">
+                    <Pencil className="size-4" />
+                  </button>
+                  <button onClick={() => handleCopyUrl(apk)} className="text-muted-foreground hover:text-foreground p-1 shrink-0" title="Copy raw URL" aria-label="Copy raw URL">
+                    {copiedId === apk.packageName ? <Check className="size-4 text-green-500" /> : <Copy className="size-4" />}
+                  </button>
+                  {role !== 'viewer' && (
+                    <>
+                      <button onClick={() => handleUploadClick(apk)} className="text-muted-foreground hover:text-foreground p-1 shrink-0" title="Upload new version" aria-label="Upload new version">
+                        <Upload className="size-4" />
+                      </button>
+                      <button onClick={() => setDeleteTarget(apk)} className="text-muted-foreground hover:text-destructive p-1 shrink-0" title="Delete" aria-label="Delete">
+                        <Trash2 className="size-4" />
+                      </button>
+                    </>
                   )}
-                  <TableCell sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 13 }}>{apk.packageName}</TableCell>
-                  <TableCell sx={{ fontSize: 13 }}>{apk.appName}</TableCell>
-                  <TableCell>
-                    <Typography variant="caption" sx={{ fontFamily: '"Geist Mono", monospace' }}>
-                      v{apk.versionName || apk.versionCode}
-                    </Typography>
-                    {apk.versionCode > 0 && (
-                      <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
-                        (code {apk.versionCode})
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="caption" color="text.secondary">{formatSize(apk.size)}</Typography>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Tooltip title="Edit metadata">
-                      <IconButton size="small" onClick={() => handleEditOpen(apk)} sx={{ color: 'text.secondary' }}>
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Copy raw URL">
-                      <IconButton size="small" onClick={() => handleCopyUrl(apk)} sx={{ color: 'text.secondary' }}>
-                        {copiedId === apk.packageName ? <CheckIcon fontSize="small" sx={{ color: 'success.main' }} /> : <ContentCopyIcon fontSize="small" />}
-                      </IconButton>
-                    </Tooltip>
-                    {role !== 'viewer' && (
-                      <IconButton size="small" onClick={() => setDeleteTarget(apk)} title="Delete" color="error">
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    )}
-                  </TableCell>
-                </TableRow>
+                </div>
               );
             })}
-            </TableBody>
-          </Table>
-        </TableContainer>
+          </div>
+        </>
       )}
 
-      <Dialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Delete APK &ldquo;{deleteTarget?.packageName}&rdquo;?</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary">
-            This will permanently remove the APK and its raw endpoint.
-          </Typography>
+      <Dialog open={uploadOpen} onOpenChange={(v) => { if (!v) { setUploadOpen(false); setUploadFile(null); } }}>
+        <DialogContent className="sm:max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Update &ldquo;{uploadTarget?.packageName}&rdquo;</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <div
+              className={`border border-dashed border-muted-foreground rounded-lg p-4 text-center cursor-pointer transition-colors ${uploadFile ? 'bg-primary/5' : ''}`}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {uploadFile ? (
+                <p className="text-sm">{uploadFile.name}</p>
+              ) : (
+                <>
+                  <Upload className="size-6 text-muted-foreground mx-auto mb-1" />
+                  <p className="text-sm text-muted-foreground">Click to select .apk/.apks file</p>
+                </>
+              )}
+            </div>
+            <input ref={fileInputRef} type="file" accept=".apk,.apks" className="hidden" onChange={handleFileSelect} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setUploadOpen(false); setUploadFile(null); }}>Cancel</Button>
+            <Button onClick={handleUpload} disabled={!uploadFile || isUploadingFile}>
+              {isUploadingFile ? 'Uploading...' : 'Upload'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteTarget(null)}>Cancel</Button>
-          <Button onClick={handleDelete} variant="contained" color="error">Delete</Button>
-        </DialogActions>
       </Dialog>
 
-      <Dialog open={Boolean(editTarget)} onClose={() => setEditTarget(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Edit &ldquo;{editTarget?.packageName}&rdquo;</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField autoFocus fullWidth label="Package name" size="small"
-              value={editForm.packageName}
-              onChange={(e) => setEditForm(f => ({ ...f, packageName: e.target.value }))}
-            />
-            <TextField fullWidth label="App name" size="small"
-              value={editForm.appName}
-              onChange={(e) => setEditForm(f => ({ ...f, appName: e.target.value }))}
-            />
-            <TextField fullWidth label="Version code" size="small" type="number"
-              value={editForm.versionCode}
-              onChange={(e) => setEditForm(f => ({ ...f, versionCode: parseInt(e.target.value, 10) || 0 }))}
-            />
-            <TextField fullWidth label="Version name" size="small"
-              value={editForm.versionName}
-              onChange={(e) => setEditForm(f => ({ ...f, versionName: e.target.value }))}
-            />
-          </Stack>
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
+        <DialogContent className="sm:max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Delete APK &ldquo;{deleteTarget?.packageName}&rdquo;?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">This will permanently remove the APK and its raw endpoint.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditTarget(null)}>Cancel</Button>
-          <Button variant="contained" onClick={handleEditSave} disabled={isSavingEdit || !editForm.packageName.trim()}>
-            {isSavingEdit ? 'Saving...' : 'Save'}
-          </Button>
-        </DialogActions>
       </Dialog>
-    </Box>
+
+      <Dialog open={Boolean(editTarget)} onOpenChange={(v) => { if (!v) setEditTarget(null); }}>
+        <DialogContent className="sm:max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Edit &ldquo;{editTarget?.packageName}&rdquo;</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Input value={editForm.packageName} onChange={(e) => setEditForm(f => ({ ...f, packageName: e.target.value }))} placeholder="Package name" />
+            <Input value={editForm.appName} onChange={(e) => setEditForm(f => ({ ...f, appName: e.target.value }))} placeholder="App name" />
+            <Input type="number" value={editForm.versionCode} onChange={(e) => setEditForm(f => ({ ...f, versionCode: parseInt(e.target.value, 10) || 0 }))} placeholder="Version code" />
+            <Input value={editForm.versionName} onChange={(e) => setEditForm(f => ({ ...f, versionName: e.target.value }))} placeholder="Version name" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTarget(null)}>Cancel</Button>
+            <Button onClick={handleEditSave} disabled={isSavingEdit || !editForm.packageName.trim()}>
+              {isSavingEdit ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </PageLayout>
   );
 }

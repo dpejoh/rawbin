@@ -1,6 +1,5 @@
-import { Box } from "@mui/material";
-import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
-import { LoadingButton } from "@mui/lab";
+import { Loader2, Circle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface SaveButtonProps {
   loading: boolean;
@@ -10,22 +9,16 @@ interface SaveButtonProps {
 
 export default function SaveButton({ loading, hasUnsaved, onSave }: SaveButtonProps) {
   return (
-    <Box sx={{ display: "inline-flex", alignItems: "center", gap: 1 }}>
-      {hasUnsaved && (
-        <FiberManualRecordIcon
-          sx={{ fontSize: 8, color: "primary.main" }}
-        />
-      )}
-      <LoadingButton
-        variant="contained"
-        size="large"
-        loading={loading}
-        disabled={!hasUnsaved}
+    <div className="inline-flex items-center gap-2">
+      {hasUnsaved && <Circle className="size-2 fill-primary text-primary" />}
+      <Button
+        size="lg"
         onClick={onSave}
-        sx={{ borderRadius: 2, textTransform: "none" }}
+        disabled={!hasUnsaved || loading}
       >
+        {loading && <Loader2 className="size-4 animate-spin mr-1" />}
         Save
-      </LoadingButton>
-    </Box>
+      </Button>
+    </div>
   );
 }

@@ -1,22 +1,12 @@
 import { useState, useCallback, useEffect, Suspense, lazy } from 'react';
-import {
-  ThemeProvider,
-  CssBaseline,
-  Box,
-  useMediaQuery,
-  CircularProgress,
-  Stack,
-  Button,
-  Typography,
-} from '@mui/material';
-import LockOpenIcon from '@mui/icons-material/LockOpen';
-import theme from './theme/theme';
+import { Toaster } from 'sonner';
 import NavRail from './components/NavRail';
 import BottomNav from './components/BottomNav';
-import SnackbarProvider from './components/SnackbarProvider';
 import CommandPalette from './components/CommandPalette';
 import GlobalFab from './components/GlobalFab';
+import BackToTop from './components/BackToTop';
 import useAuth from './hooks/useAuth';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const KeyboxManager = lazy(() => import('./pages/KeyboxManager'));
 const ClipboardsPage = lazy(() => import('./pages/Clipboards'));
@@ -34,8 +24,30 @@ function getInitialPage(): Page {
   return 'keybox';
 }
 
+function LoadingScreen() {
+  return (
+    <div className="flex items-center justify-center h-screen bg-background">
+      <div className="flex flex-col items-center gap-4">
+        <Skeleton className="h-8 w-8 rounded-full" />
+        <Skeleton className="h-4 w-32" />
+      </div>
+    </div>
+  );
+}
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center p-8">
+      <div className="space-y-3">
+        <Skeleton className="h-4 w-48" />
+        <Skeleton className="h-4 w-64" />
+        <Skeleton className="h-4 w-40" />
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
-  const isMobile = useMediaQuery('(max-width: 599px)');
   const { user, token, role, isLoading, signOut, openLogin } = useAuth();
   const [page, setPage] = useState<Page>(getInitialPage);
 
@@ -47,62 +59,64 @@ export default function App() {
 
   const userInitials = user?.email ? (user.email[0]?.toUpperCase() ?? '?') : '?';
 
+  useEffect(() => {
+    document.documentElement.classList.add('dark');
+  }, []);
+
   if (isLoading) {
-    return (
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <Stack alignItems="center" justifyContent="center" sx={{ height: '100vh', bgcolor: 'background.default' }}>
-          <CircularProgress />
-        </Stack>
-      </ThemeProvider>
-    );
+    return <LoadingScreen />;
   }
 
   if (!user) {
     return (
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <Stack alignItems="center" justifyContent="center" sx={{ height: '100vh', bgcolor: 'background.default', gap: 2, px: 3 }}>
-          <LockOpenIcon sx={{ fontSize: 48, color: 'outline.main' }} />
-          <Typography variant="h5" sx={{ color: 'text.primary' }}>Sign in to rawbin</Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center' }}>
+      <div className="flex items-center justify-center h-screen bg-background">
+        <div className="flex flex-col items-center gap-4 px-6 text-center">
+          <svg className="size-12 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <h1 className="text-xl text-foreground">Sign in to rawbin</h1>
+          <p className="text-sm text-muted-foreground max-w-xs">
             Authenticate with your Netlify Identity account to continue.
-          </Typography>
-          <Button variant="contained" size="large" onClick={openLogin} sx={{ textTransform: 'none', mt: 1 }}>
+          </p>
+          <button
+            onClick={openLogin}
+            className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground h-10 px-6 text-sm font-medium hover:bg-primary/90 transition-colors"
+          >
             Sign In
-          </Button>
-        </Stack>
-      </ThemeProvider>
+          </button>
+        </div>
+      </div>
     );
   }
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <SnackbarProvider>
-        <Box sx={{ display: 'flex', height: '100vh', bgcolor: 'background.default', overflow: 'hidden' }}>
-          {isMobile ? (
-            <BottomNav activePage={page} onNavigate={handleNavigate} role={role} />
-          ) : (
-            <NavRail activePage={page} onNavigate={handleNavigate} userInitials={userInitials} onSignOut={signOut} role={role} />
-          )}
+    <div className="flex h-screen bg-background overflow-hidden">
+      <div className="hidden sm:flex">
+        <NavRail activePage={page} onNavigate={handleNavigate} userInitials={userInitials} onSignOut={signOut} role={role} />
+      </div>
+      <div className="sm:hidden">
+        <BottomNav activePage={page} onNavigate={handleNavigate} role={role} />
+      </div>
 
-          <Box component="main" sx={{ flex: 1, overflow: 'auto', pb: isMobile ? 7 : 0 }}>
-            <Suspense fallback={<Stack alignItems="center" justifyContent="center" sx={{ p: 8 }}><CircularProgress /></Stack>}>
-              {page === 'keybox' && <KeyboxManager token={token} role={role} />}
-              {page === 'clipboards' && <ClipboardsPage token={token} role={role} />}
-              {page === 'files' && <FilesPage token={token} role={role} />}
-              {page === 'apps' && <AppCatalog token={token} role={role} />}
-              {page === 'modules' && <ModulesPage token={token} role={role} />}
-              {page === 'apks' && <APKsPage token={token} role={role} />}
-              {page === 'roles' && <RolesPage token={token} role={role} />}
-            </Suspense>
-          </Box>
-        </Box>
+      <main className="flex-1 overflow-auto pb-16 sm:pb-0">
+        <Suspense fallback={<PageLoader />}>
+          {page === 'keybox' && <KeyboxManager token={token} role={role} />}
+          {page === 'clipboards' && <ClipboardsPage token={token} role={role} />}
+          {page === 'files' && <FilesPage token={token} role={role} />}
+          {page === 'apps' && <AppCatalog token={token} role={role} />}
+          {page === 'modules' && <ModulesPage token={token} role={role} />}
+          {page === 'apks' && <APKsPage token={token} role={role} />}
+          {page === 'roles' && <RolesPage token={token} role={role} />}
+        </Suspense>
+      </main>
 
-        {token && <CommandPalette token={token} onNavigate={handleNavigate} />}
-        {token && <GlobalFab token={token} role={role} onNavigate={handleNavigate} />}
-      </SnackbarProvider>
-    </ThemeProvider>
+      <Toaster
+        position="bottom-center"
+        richColors
+        closeButton
+      />
+
+      <BackToTop />
+      {token && <CommandPalette token={token} onNavigate={handleNavigate} />}
+      {token && <GlobalFab token={token} role={role} onNavigate={handleNavigate} />}
+    </div>
   );
 }

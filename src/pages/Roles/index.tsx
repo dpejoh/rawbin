@@ -1,14 +1,26 @@
 import { useEffect, useState, useCallback } from 'react';
+import { Trash2, UserPlus, Shield } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
-  Typography, TextField, Button, IconButton, Box, Stack,
-  Dialog, DialogTitle, DialogContent, DialogActions,
-  Select, MenuItem, Table, TableBody, TableCell,
-  TableContainer, TableHead, TableRow,
-} from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import AddIcon from '@mui/icons-material/Add';
-import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
-import { useSnackbar } from 'notistack';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import PageLayout from '../../components/PageLayout';
+import EmptyState from '../../components/EmptyState';
 
 interface RolesPageProps {
   token: string | null;
@@ -16,7 +28,6 @@ interface RolesPageProps {
 }
 
 export default function RolesPage({ token }: RolesPageProps) {
-  const { enqueueSnackbar } = useSnackbar();
   const [roles, setRoles] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
@@ -48,15 +59,15 @@ export default function RolesPage({ token }: RolesPageProps) {
         body: JSON.stringify({ email: newEmail.trim(), role: newRole }),
       });
       if (res.ok) {
-        enqueueSnackbar(`Role set for ${newEmail.trim()}`, { variant: 'success' });
+        toast.success(`Role set for ${newEmail.trim()}`);
         setAddOpen(false);
         setNewEmail('');
         await fetchRoles();
       } else {
-        enqueueSnackbar('Failed to set role', { variant: 'error' });
+        toast.error('Failed to set role');
       }
-    } catch { enqueueSnackbar('Failed to set role', { variant: 'error' }); }
-  }, [token, newEmail, newRole, fetchRoles, enqueueSnackbar]);
+    } catch { toast.error('Failed to set role'); }
+  }, [token, newEmail, newRole, fetchRoles]);
 
   const handleDelete = useCallback(async (email: string) => {
     if (!token) return;
@@ -67,96 +78,93 @@ export default function RolesPage({ token }: RolesPageProps) {
         body: JSON.stringify({ email }),
       });
       if (res.ok) {
-        enqueueSnackbar(`Removed ${email}`, { variant: 'success' });
+        toast.success(`Removed ${email}`);
         await fetchRoles();
       } else {
-        enqueueSnackbar('Failed to remove', { variant: 'error' });
+        toast.error('Failed to remove');
       }
-    } catch { enqueueSnackbar('Failed to remove', { variant: 'error' }); }
-  }, [token, fetchRoles, enqueueSnackbar]);
+    } catch { toast.error('Failed to remove'); }
+  }, [token, fetchRoles]);
 
   const entries = Object.entries(roles).sort(([a], [b]) => a.localeCompare(b));
 
   return (
-    <Box sx={{ p: 4, maxWidth: 600, display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-        <Box>
-          <Typography variant="h4" sx={{ mb: 0.5 }}>User Roles</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {Object.keys(roles).length} user{Object.keys(roles).length !== 1 ? 's' : ''}
-          </Typography>
-        </Box>
-      </Stack>
-
-      <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}
-          sx={{ textTransform: 'none' }}>
+    <PageLayout title="User Roles" count={`${Object.keys(roles).length} user${Object.keys(roles).length !== 1 ? 's' : ''}`} maxWidth="sm"
+      actions={
+        <Button size="sm" onClick={() => setAddOpen(true)}>
+          <UserPlus className="size-4 mr-1" />
           Add User
         </Button>
-      </Stack>
+      }
+    >
 
       {isLoading ? (
-        <Stack spacing={1.5}>
-          {[1, 2, 3].map(i => <Box key={i} className="skeleton" sx={{ height: 52, borderRadius: '8px' }} />)}
-        </Stack>
+        <div className="space-y-2">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full rounded-md" />)}
+        </div>
       ) : entries.length === 0 ? (
-        <Box className="empty-state" sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', p: '64px 24px', textAlign: 'center' }}>
-          <AdminPanelSettingsIcon sx={{ fontSize: 48, color: 'text.secondary' }} />
-          <Typography variant="h6">No custom roles yet</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Unlisted users default to viewer. Add users here to grant editor or admin access.
-          </Typography>
-        </Box>
+        <EmptyState
+          icon={<Shield className="size-12" />}
+          title="No custom roles yet"
+          description="Unlisted users default to viewer. Add users here to grant editor or admin access."
+        />
       ) : (
-        <TableContainer sx={{ flex: 1, overflow: 'auto' }}>
-          <Table size="small" stickyHeader>
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600 }}>Email</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Role</TableCell>
-                <TableCell align="right" sx={{ width: 60 }}>Remove</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {entries.map(([email, role]) => (
-                <TableRow key={email} hover sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
-                  <TableCell sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 13 }}>{email}</TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ textTransform: 'capitalize' }}>{role}</Typography>
-                  </TableCell>
-                  <TableCell align="right">
-                    <IconButton size="small" onClick={() => handleDelete(email)} color="error" title="Remove role">
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <div className="flex-1 overflow-auto space-y-2">
+          {entries.map(([email, r]) => {
+            const roleColor = r === 'admin' ? 'text-amber-500 bg-amber-500/10' : r === 'editor' ? 'text-blue-400 bg-blue-400/10' : 'text-muted-foreground bg-muted';
+            return (
+              <div key={email}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg bg-card hover:bg-accent border border-border transition-colors"
+              >
+                <Shield className="size-6 text-primary shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-mono">{email}</p>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-xs font-medium capitalize shrink-0 ${roleColor}`}>{r}</span>
+                <button onClick={() => handleDelete(email)} className="text-muted-foreground hover:text-destructive p-1 shrink-0" title="Remove user" aria-label="Remove user">
+                  <Trash2 className="size-4" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
       )}
 
-      <Dialog open={addOpen} onClose={() => setAddOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Add User Role</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField autoFocus label="Email" fullWidth placeholder="user@example.com"
-              value={newEmail} onChange={(e) => setNewEmail(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
-              inputProps={{ spellCheck: false, fontFamily: '"Geist Mono", monospace' }}
-            />
-            <Select value={newRole} onChange={(e) => setNewRole(e.target.value)} size="small" fullWidth>
-              <MenuItem value="viewer">Viewer</MenuItem>
-              <MenuItem value="editor">Editor</MenuItem>
-              <MenuItem value="admin">Admin</MenuItem>
-            </Select>
-          </Stack>
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="sm:max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Add User Role</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                placeholder="user@example.com"
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <Select value={newRole} onValueChange={setNewRole}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="viewer">Viewer</SelectItem>
+                  <SelectItem value="editor">Editor</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button onClick={handleAdd} disabled={!newEmail.trim()}>Add</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleAdd} disabled={!newEmail.trim()}>Add</Button>
-        </DialogActions>
       </Dialog>
-    </Box>
+    </PageLayout>
   );
 }

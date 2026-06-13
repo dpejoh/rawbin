@@ -1,0 +1,127 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.625rem;
+  /* MD3 blue light — hue shifted to 220° */
+  --background: hsl(216 38% 96%);
+  --foreground: hsl(220 10% 11%);
+  --card: hsl(220 14% 91%);
+  --card-foreground: hsl(220 10% 11%);
+  --popover: hsl(228 19% 90%);
+  --popover-foreground: hsl(220 10% 11%);
+  --primary: hsl(220 95% 43%);
+  --primary-foreground: hsl(0 5% 100%);
+  --secondary: hsl(221 19% 39%);
+  --secondary-foreground: hsl(0 5% 100%);
+  --muted: hsl(224 35% 90%);
+  --muted-foreground: hsl(220 11% 29%);
+  --accent: hsl(224 35% 90%);
+  --accent-foreground: hsl(220 11% 29%);
+  --destructive: hsl(0 82% 42%);
+  --destructive-foreground: hsl(0 5% 100%);
+  --border: hsl(224 16% 79%);
+  --input: hsl(230 10% 48%);
+  --ring: hsl(220 95% 43%);
+  --chart-1: hsl(220 77% 60%);
+  --chart-2: hsl(220 67% 50%);
+  --chart-3: hsl(220 66% 40%);
+  --chart-4: hsl(220 57% 65%);
+  --chart-5: hsl(220 88% 55%);
+  --sidebar: hsl(220 14% 91%);
+  --sidebar-foreground: hsl(220 10% 11%);
+  --sidebar-primary: hsl(220 95% 43%);
+  --sidebar-primary-foreground: hsl(0 5% 100%);
+  --sidebar-accent: hsl(224 35% 90%);
+  --sidebar-accent-foreground: hsl(220 11% 29%);
+  --sidebar-border: hsl(224 16% 79%);
+  --sidebar-ring: hsl(220 95% 43%);
+}
+
+.dark {
+  /* MD3 blue dark — hue shifted to 220° */
+  --background: hsl(220 10% 11%);
+  --foreground: hsl(220 10% 89%);
+  --card: hsl(225 11% 17%);
+  --card-foreground: hsl(220 10% 89%);
+  --popover: hsl(228 11% 20%);
+  --popover-foreground: hsl(220 10% 89%);
+  --primary: hsl(221 100% 85%);
+  --primary-foreground: hsl(220 100% 23%);
+  --secondary: hsl(221 39% 81%);
+  --secondary-foreground: hsl(222 35% 21%);
+  --muted: hsl(220 11% 32%);
+  --muted-foreground: hsl(224 16% 79%);
+  --accent: hsl(220 11% 32%);
+  --accent-foreground: hsl(224 16% 79%);
+  --destructive: hsl(6 100% 84%);
+  --destructive-foreground: hsl(357 100% 21%);
+  --border: hsl(220 11% 35%);
+  --input: hsl(220 11% 62%);
+  --ring: hsl(221 100% 85%);
+  --chart-1: hsl(220 88% 65%);
+  --chart-2: hsl(220 77% 55%);
+  --chart-3: hsl(220 67% 45%);
+  --chart-4: hsl(220 83% 50%);
+  --chart-5: hsl(220 97% 60%);
+  --sidebar: hsl(225 11% 17%);
+  --sidebar-foreground: hsl(220 10% 89%);
+  --sidebar-primary: hsl(221 100% 85%);
+  --sidebar-primary-foreground: hsl(220 100% 23%);
+  --sidebar-accent: hsl(220 11% 29%);
+  --sidebar-accent-foreground: hsl(224 16% 79%);
+  --sidebar-border: hsl(220 11% 29%);
+  --sidebar-ring: hsl(221 100% 85%);
+}
+
+@theme inline {
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

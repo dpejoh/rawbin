@@ -1,18 +1,15 @@
 import { useState, useCallback, useRef } from 'react';
+import { Upload, Link } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
-  TextField,
-  Typography,
-  Box,
-} from '@mui/material';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import UploadFileIcon from '@mui/icons-material/UploadFile';
-import InsertLinkIcon from '@mui/icons-material/InsertLink';
-import { useSnackbar } from 'notistack';
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 const R2_WORKER = import.meta.env.VITE_R2_WORKER_URL ?? "http://localhost:8787";
 
@@ -25,10 +22,9 @@ interface UploadDialogProps {
 }
 
 export default function UploadDialog({ open, token, currentFolderId, onClose, onUploaded }: UploadDialogProps) {
-  const { enqueueSnackbar } = useSnackbar();
-  const [mode,        setMode]        = useState<'file' | 'url'>('file');
-  const [url,         setUrl]         = useState('');
-  const [fileName,    setFileName]    = useState('');
+  const [mode, setMode] = useState<'file' | 'url'>('file');
+  const [url, setUrl] = useState('');
+  const [fileName, setFileName] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -44,13 +40,13 @@ export default function UploadDialog({ open, token, currentFolderId, onClose, on
     });
     const data = await res.json().catch(() => ({})) as Record<string, unknown>;
     if (data.error) {
-      enqueueSnackbar(String(data.error), { variant: 'error' });
+      toast.error(String(data.error));
     } else {
-      enqueueSnackbar('File uploaded from URL', { variant: 'success' });
+      toast.success('File uploaded from URL');
       onUploaded();
     }
     setIsUploading(false);
-  }, [token, mode, url, fileName, currentFolderId, onUploaded, enqueueSnackbar]);
+  }, [token, mode, url, fileName, currentFolderId, onUploaded]);
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -65,7 +61,7 @@ export default function UploadDialog({ open, token, currentFolderId, onClose, on
       });
       if (!fileRes.ok) {
         const errText = await fileRes.text().catch(() => '');
-        enqueueSnackbar(errText || 'Storage upload failed', { variant: 'error' });
+        toast.error(errText || 'Storage upload failed');
         setIsUploading(false);
         return;
       }
@@ -83,65 +79,76 @@ export default function UploadDialog({ open, token, currentFolderId, onClose, on
       });
       const metaData = await metaRes.json().catch(() => ({})) as Record<string, unknown>;
       if (metaData.error) {
-        enqueueSnackbar(String(metaData.error), { variant: 'error' });
+        toast.error(String(metaData.error));
       } else {
-        enqueueSnackbar('File uploaded', { variant: 'success' });
+        toast.success('File uploaded');
         onUploaded();
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      enqueueSnackbar(msg || 'Upload failed', { variant: 'error' });
+      toast.error(msg || 'Upload failed');
     }
     setIsUploading(false);
     e.target.value = '';
-  }, [token, currentFolderId, onUploaded, enqueueSnackbar]);
+  }, [token, currentFolderId, onUploaded]);
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>Upload File</DialogTitle>
-      <DialogContent>
-        <Box className="field-group">
-          <Box className="mode-toggle">
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="sm:max-w-xs">
+        <DialogHeader>
+          <DialogTitle>Upload File</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="flex gap-2">
             <Button
-              variant={mode === 'file' ? 'contained' : 'outlined'}
-              size="small"
-              startIcon={<UploadFileIcon />}
+              variant={mode === 'file' ? 'default' : 'outline'}
+              size="sm"
               onClick={() => setMode('file')}
-              sx={{ textTransform: 'none' }}
             >
+              <Upload className="size-4 mr-1" />
               From disk
             </Button>
             <Button
-              variant={mode === 'url' ? 'contained' : 'outlined'}
-              size="small"
-              startIcon={<InsertLinkIcon />}
+              variant={mode === 'url' ? 'default' : 'outline'}
+              size="sm"
               onClick={() => setMode('url')}
-              sx={{ textTransform: 'none' }}
             >
+              <Link className="size-4 mr-1" />
               From URL
             </Button>
-          </Box>
+          </div>
 
           {mode === 'url' ? (
-            <>
-              <TextField label="File URL" variant="outlined" fullWidth value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/file.pdf" sx={{ mt: 2 }} />
-              <TextField label="File name (optional)" variant="outlined" fullWidth value={fileName} onChange={(e) => setFileName(e.target.value)} placeholder="my-file.pdf" />
-            </>
+            <div className="space-y-3">
+              <Input
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://example.com/file.pdf"
+              />
+              <Input
+                value={fileName}
+                onChange={(e) => setFileName(e.target.value)}
+                placeholder="File name (optional)"
+              />
+            </div>
           ) : (
-            <Box className="upload-dropzone" onClick={() => fileInputRef.current?.click()} sx={{ mt: 2 }}>
-              <CloudUploadIcon sx={{ fontSize: 40, color: 'outline.main' }} />
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>Click to select a file</Typography>
-            </Box>
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="border border-dashed border-muted-foreground rounded-xl p-8 flex flex-col items-center gap-2 cursor-pointer hover:bg-accent transition-colors"
+            >
+              <Upload className="size-10 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Click to select a file</p>
+            </div>
           )}
-        </Box>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleUpload} disabled={isUploading || (mode === 'url' && !url.trim())}>
+            {isUploading ? 'Uploading\u2026' : 'Upload'}
+          </Button>
+        </DialogFooter>
+        <input ref={fileInputRef} type="file" hidden onChange={handleFileChange} />
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} variant="text">Cancel</Button>
-        <Button onClick={handleUpload} variant="contained" disabled={isUploading || (mode === 'url' && !url.trim())}>
-          {isUploading ? 'Uploading\u2026' : 'Upload'}
-        </Button>
-      </DialogActions>
-      <input ref={fileInputRef} type="file" hidden onChange={handleFileChange} />
     </Dialog>
   );
 }

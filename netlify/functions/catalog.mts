@@ -333,28 +333,31 @@ export default async (req: Request) => {
       }
 
       if (isSetStatus) {
-        const { source, version, status } = body as { source?: string; version?: string; status?: string };
-        if (!source || !version || !status) return fail("Missing source, version, or status");
+        const { serial, status } = body as { serial?: string; status?: string };
+        if (!serial || !status) return fail("Missing serial or status");
         if (!["active", "softbanned", "revoked"].includes(status)) return fail("Invalid status");
         const index = await getHistoryIndex();
-        const entry = index.find(e => e.source === source && e.version === version);
-        if (!entry) return fail("Not found");
-        if (status === "active" || status === "softbanned") {
-          const isRevoked = await checkGoogleRevocation(entry.serial);
-          if (isRevoked) {
+        const matching = index.filter(e => e.serial === serial);
+        if (matching.length === 0) return fail("No entries found with that serial");
+        const now = new Date().toISOString();
+        for (const entry of matching) {
+          if (status === "active" || status === "softbanned") {
+            const isRevoked = await checkGoogleRevocation(entry.serial);
+            if (isRevoked) {
+              entry.revoked = true;
+              entry.softbanned = false;
+            } else {
+              entry.revoked = false;
+              entry.softbanned = status === "softbanned";
+            }
+          } else {
             entry.revoked = true;
             entry.softbanned = false;
-          } else {
-            entry.revoked = false;
-            entry.softbanned = status === "softbanned";
           }
-        } else {
-          entry.revoked = true;
-          entry.softbanned = false;
+          entry.last_checked = now;
         }
-        entry.last_checked = new Date().toISOString();
         await saveHistoryIndex(index);
-        return ok(serializeEntry(entry));
+        return ok({ updated: matching.length, serial, status });
       }
 
       if (isSave) {

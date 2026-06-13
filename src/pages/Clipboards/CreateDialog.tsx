@@ -1,16 +1,15 @@
 import { useState, useCallback } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-  TextField,
-  Button,
-  Stack,
-  Box,
-  Switch,
-  Typography,
-} from "@mui/material";
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface CreateDialogProps {
   open: boolean;
@@ -41,54 +40,44 @@ export default function CreateDialog({ open, onClose, onCreate }: CreateDialogPr
   }, [onClose]);
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth>
-      <DialogTitle>New Clipboard</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField
-            label="Name"
-            variant="outlined"
-            fullWidth
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleCreate();
-            }}
-          />
-          <TextField
-            label="Custom URL (optional)"
-            variant="outlined"
-            fullWidth
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            placeholder="my-custom-link"
-            helperText="Alphanumeric, hyphens, underscores"
-          />
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
+      <DialogContent className="sm:max-w-xs">
+        <DialogHeader>
+          <DialogTitle>New Clipboard</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="space-y-1.5">
+            <Label>Name</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Clipboard name"
+              onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); }}
+              autoFocus
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Custom URL (optional)</Label>
+            <Input
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              placeholder="my-custom-link"
+            />
+            <p className="text-xs text-muted-foreground">Alphanumeric, hyphens, underscores</p>
+          </div>
+          <div className="flex items-center gap-2">
             <Switch
               checked={useShuffle}
-              onChange={(e) => setUseShuffle(e.target.checked)}
-              size="small"
+              onCheckedChange={setUseShuffle}
             />
-            <Typography variant="body2" color="text.secondary">
-              randomization
-            </Typography>
-          </Box>
-        </Stack>
+            <Label className="text-sm text-muted-foreground">randomization</Label>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={handleClose}>Cancel</Button>
+          <Button onClick={handleCreate} disabled={!name.trim()}>Create</Button>
+        </DialogFooter>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose} variant="text">
-          Cancel
-        </Button>
-        <Button
-          onClick={handleCreate}
-          variant="contained"
-          disabled={!name.trim()}
-        >
-          Create
-        </Button>
-      </DialogActions>
     </Dialog>
   );
 }

@@ -1,11 +1,25 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { Plus, CloudUpload } from 'lucide-react';
+import { toast } from 'sonner';
 import {
-  Fab, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, Button, Stack, Typography, Switch, Box, Select, MenuItem,
-} from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import { useSnackbar } from 'notistack';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { guessAppName } from '../utils/guessAppName';
 import { parseModule } from '../utils/parseModule';
 import type { Page } from '../App';
@@ -89,8 +103,8 @@ const DEFAULT_STATE: FormState = {
 };
 
 export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
-  const { enqueueSnackbar } = useSnackbar();
   if (role === 'viewer') return null;
+
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(DEFAULT_STATE);
   const [uploading, setUploading] = useState(false);
@@ -175,7 +189,7 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
         if (res.ok) {
           successMsg = `Keybox "${body.source} v${body.version}" saved`;
         } else {
-          enqueueSnackbar(await res.text().catch(() => 'Upload failed'), { variant: 'error' });
+          toast.error(await res.text().catch(() => 'Upload failed'));
           setUploading(false);
           return;
         }
@@ -194,7 +208,7 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
         });
         if (!fileRes.ok) {
           const errText = await fileRes.text().catch(() => '');
-          enqueueSnackbar(errText || `Upload failed (HTTP ${fileRes.status})`, { variant: 'error' });
+          toast.error(errText || `Upload failed (HTTP ${fileRes.status})`);
           setUploading(false);
           return;
         }
@@ -204,7 +218,7 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
           blobId = data.id;
           size = data.size;
         } catch {
-          enqueueSnackbar('Invalid response from storage server', { variant: 'error' });
+          toast.error('Invalid response from storage server');
           setUploading(false);
           return;
         }
@@ -238,12 +252,12 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
           metaData = await metaRes.json() as Record<string, unknown>;
         } catch {
           const body = await metaRes.text().catch(() => '');
-          enqueueSnackbar(body || 'Invalid JSON response from server', { variant: 'error' });
+          toast.error(body || 'Invalid JSON response from server');
           setUploading(false);
           return;
         }
         if (metaData.error) {
-          enqueueSnackbar(String(metaData.error), { variant: 'error' });
+          toast.error(String(metaData.error));
           setUploading(false);
           return;
         }
@@ -252,14 +266,14 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
           : `APK "${(metadata as { packageName: string }).packageName}" uploaded`;
       }
 
-      enqueueSnackbar(successMsg, { variant: 'success' });
+      toast.success(successMsg);
       handleClose();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      enqueueSnackbar(msg || 'Upload failed', { variant: 'error' });
+      toast.error(msg || 'Upload failed');
     }
     setUploading(false);
-  }, [token, form, enqueueSnackbar, handleClose]);
+  }, [token, form, handleClose]);
 
   const setField = useCallback(<T,>(field: string, value: T) => {
     setForm(prev => {
@@ -273,144 +287,189 @@ export default function GlobalFab({ token, role, onNavigate }: GlobalFabProps) {
 
   return (
     <>
-      <input ref={fileInputRef} type="file" accept=".xml,.zip,.apk,.apks" style={{ display: 'none' }} onChange={handleFileSelect} />
-      <Fab
-        color="primary"
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xml,.zip,.apk,.apks"
+        className="hidden"
+        onChange={handleFileSelect}
+      />
+      <button
         onClick={() => fileInputRef.current?.click()}
-        sx={{
-          position: 'fixed', bottom: 88, right: 24, zIndex: 1100,
-          borderRadius: 2,
-        }}
+        className="fixed bottom-24 right-6 z-50 sm:bottom-6 flex items-center justify-center size-12 rounded-xl bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
         title="Upload file (Ctrl+Shift+U)"
       >
-        <AddIcon />
-      </Fab>
+        <Plus className="size-5" />
+      </button>
 
-      <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth>
-        <DialogTitle>
-          <Stack direction="row" alignItems="center" spacing={1}>
-            <CloudUploadIcon />
-            <Typography>Upload</Typography>
-          </Stack>
-        </DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
+      <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CloudUpload className="size-5" />
+              Upload
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
             {form.file && (
-              <Typography variant="body2" color="text.secondary" sx={{ fontFamily: '"Geist Mono", monospace' }}>
+              <p className="text-sm text-muted-foreground font-mono">
                 {form.file.name} ({(form.file.size / 1024).toFixed(1)} KB)
-              </Typography>
+              </p>
             )}
 
-            <Box>
-              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                Type
-              </Typography>
+            <div className="space-y-1.5">
+              <Label>Type</Label>
               <Select
                 value={form.detectedType}
-                onChange={(e) => setForm(prev => ({ ...prev, detectedType: e.target.value as DetectedType }))}
-                size="small" fullWidth
+                onValueChange={(v) => setForm(prev => ({ ...prev, detectedType: v as DetectedType }))}
               >
-                <MenuItem value="keybox">Keybox (XML)</MenuItem>
-                <MenuItem value="module">Module (ZIP)</MenuItem>
-                <MenuItem value="apk">APK</MenuItem>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="keybox">Keybox (XML)</SelectItem>
+                  <SelectItem value="module">Module (ZIP)</SelectItem>
+                  <SelectItem value="apk">APK</SelectItem>
+                </SelectContent>
               </Select>
-            </Box>
+            </div>
 
             {form.detectedType === 'keybox' && (
-              <>
-                <TextField label="Source" size="small" fullWidth
-                  value={form.keybox.source}
-                  onChange={(e) => setForm(prev => ({ ...prev, keybox: { ...prev.keybox, source: e.target.value } }))}
-                  placeholder="e.g. droidwin"
-                />
-                <TextField label="Version" size="small" fullWidth
-                  value={form.keybox.version}
-                  onChange={(e) => setForm(prev => ({ ...prev, keybox: { ...prev.keybox, version: e.target.value } }))}
-                  placeholder="e.g. 3"
-                />
-                <TextField label="Label (optional)" size="small" fullWidth
-                  value={form.keybox.text}
-                  onChange={(e) => setForm(prev => ({ ...prev, keybox: { ...prev.keybox, text: e.target.value } }))}
-                  placeholder="Display text"
-                />
-                <Stack direction="row" alignItems="center" spacing={1}>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>Source</Label>
+                  <Input
+                    value={form.keybox.source}
+                    onChange={(e) => setField('source', e.target.value)}
+                    placeholder="e.g. droidwin"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Version</Label>
+                  <Input
+                    value={form.keybox.version}
+                    onChange={(e) => setField('version', e.target.value)}
+                    placeholder="e.g. 3"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Label (optional)</Label>
+                  <Input
+                    value={form.keybox.text}
+                    onChange={(e) => setField('text', e.target.value)}
+                    placeholder="Display text"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
                   <Switch
                     checked={form.keybox.useBase64}
-                    onChange={(e) => setForm(prev => ({ ...prev, keybox: { ...prev.keybox, useBase64: e.target.checked } }))}
-                    size="small"
+                    onCheckedChange={(v) => setField('useBase64', v)}
                   />
-                  <Typography variant="body2" color="text.secondary">Base64</Typography>
-                </Stack>
-              </>
+                  <Label>Base64</Label>
+                </div>
+              </div>
             )}
 
             {form.detectedType === 'module' && (
-              <>
-                <TextField label="Module ID" size="small" fullWidth
-                  value={form.module.moduleId}
-                  onChange={(e) => setForm(prev => ({ ...prev, module: { ...prev.module, moduleId: e.target.value } }))}
-                  placeholder="e.g. zygisk_lsposed"
-                />
-                <TextField label="Name" size="small" fullWidth
-                  value={form.module.name}
-                  onChange={(e) => setForm(prev => ({ ...prev, module: { ...prev.module, name: e.target.value } }))}
-                  placeholder="Display name"
-                />
-                <TextField label="Version" size="small" fullWidth
-                  value={form.module.version}
-                  onChange={(e) => setForm(prev => ({ ...prev, module: { ...prev.module, version: e.target.value } }))}
-                  placeholder="e.g. 1.9.2"
-                />
-                <TextField label="Version Code" size="small" fullWidth type="number"
-                  value={form.module.versionCode}
-                  onChange={(e) => setForm(prev => ({ ...prev, module: { ...prev.module, versionCode: e.target.value } }))}
-                  placeholder="e.g. 19002"
-                />
-                <TextField label="Author (optional)" size="small" fullWidth
-                  value={form.module.author}
-                  onChange={(e) => setForm(prev => ({ ...prev, module: { ...prev.module, author: e.target.value } }))}
-                  placeholder="Author name"
-                />
-                <TextField label="Description (optional)" size="small" fullWidth multiline maxRows={3}
-                  value={form.module.description}
-                  onChange={(e) => setForm(prev => ({ ...prev, module: { ...prev.module, description: e.target.value } }))}
-                  placeholder="Short description"
-                />
-              </>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>Module ID</Label>
+                  <Input
+                    value={form.module.moduleId}
+                    onChange={(e) => setField('moduleId', e.target.value)}
+                    placeholder="e.g. zygisk_lsposed"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Name</Label>
+                  <Input
+                    value={form.module.name}
+                    onChange={(e) => setField('name', e.target.value)}
+                    placeholder="Display name"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Version</Label>
+                  <Input
+                    value={form.module.version}
+                    onChange={(e) => setField('version', e.target.value)}
+                    placeholder="e.g. 1.9.2"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Version Code</Label>
+                  <Input
+                    type="number"
+                    value={form.module.versionCode}
+                    onChange={(e) => setField('versionCode', e.target.value)}
+                    placeholder="e.g. 19002"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Author (optional)</Label>
+                  <Input
+                    value={form.module.author}
+                    onChange={(e) => setField('author', e.target.value)}
+                    placeholder="Author name"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Description (optional)</Label>
+                  <Textarea
+                    value={form.module.description}
+                    onChange={(e) => setField('description', e.target.value)}
+                    placeholder="Short description"
+                    className="min-h-[60px]"
+                  />
+                </div>
+              </div>
             )}
 
             {form.detectedType === 'apk' && (
-              <>
-                <TextField label="Package Name" size="small" fullWidth
-                  value={form.apk.packageName}
-                  onChange={(e) => setForm(prev => ({ ...prev, apk: { ...prev.apk, packageName: e.target.value } }))}
-                  placeholder="e.g. com.example.app"
-                />
-                <TextField label="App Name (optional)" size="small" fullWidth
-                  value={form.apk.appName}
-                  onChange={(e) => setForm(prev => ({ ...prev, apk: { ...prev.apk, appName: e.target.value } }))}
-                  placeholder="Display name"
-                />
-                <TextField label="Version Name (optional)" size="small" fullWidth
-                  value={form.apk.versionName}
-                  onChange={(e) => setForm(prev => ({ ...prev, apk: { ...prev.apk, versionName: e.target.value } }))}
-                  placeholder="e.g. 2.1.0"
-                />
-                <TextField label="Version Code" size="small" fullWidth type="number"
-                  value={form.apk.versionCode}
-                  onChange={(e) => setForm(prev => ({ ...prev, apk: { ...prev.apk, versionCode: e.target.value } }))}
-                  placeholder="e.g. 210"
-                />
-              </>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>Package Name</Label>
+                  <Input
+                    value={form.apk.packageName}
+                    onChange={(e) => setField('packageName', e.target.value)}
+                    placeholder="e.g. com.example.app"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>App Name (optional)</Label>
+                  <Input
+                    value={form.apk.appName}
+                    onChange={(e) => setField('appName', e.target.value)}
+                    placeholder="Display name"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Version Name (optional)</Label>
+                  <Input
+                    value={form.apk.versionName}
+                    onChange={(e) => setField('versionName', e.target.value)}
+                    placeholder="e.g. 2.1.0"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Version Code</Label>
+                  <Input
+                    type="number"
+                    value={form.apk.versionCode}
+                    onChange={(e) => setField('versionCode', e.target.value)}
+                    placeholder="e.g. 210"
+                  />
+                </div>
+              </div>
             )}
-          </Stack>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={handleClose}>Cancel</Button>
+            <Button onClick={handleUpload} disabled={uploading || !form.file}>
+              {uploading ? 'Uploading...' : 'Upload'}
+            </Button>
+          </div>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose}>Cancel</Button>
-          <Button variant="contained" onClick={handleUpload} disabled={uploading || !form.file}>
-            {uploading ? 'Uploading...' : 'Upload'}
-          </Button>
-        </DialogActions>
       </Dialog>
     </>
   );
