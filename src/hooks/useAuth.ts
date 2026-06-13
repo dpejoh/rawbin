@@ -33,11 +33,35 @@ export default function useAuth() {
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [recoveryToken, setRecoveryToken] = useState<string | null>(null);
 
+  const HIERARCHY: Record<string, number> = { viewer: 0, editor: 1, admin: 2 };
+
+  const roleFromArray = useCallback((roles: string[]): UserRole => {
+    let best: UserRole = "viewer";
+    let bestLevel = 0;
+    for (const r of roles) {
+      const level = HIERARCHY[r] ?? 0;
+      if (level > bestLevel) {
+        bestLevel = level;
+        best = r as UserRole;
+      }
+    }
+    return best;
+  }, []);
+
   const fetchRole = useCallback(async (jwt: string) => {
     try {
-      const res = await fetch("/.netlify/functions/roles", {
-        headers: { Authorization: `Bearer ${jwt}` },
-      });
+      const [res, identityUser] = await Promise.all([
+        fetch("/.netlify/functions/roles", {
+          headers: { Authorization: `Bearer ${jwt}` },
+        }),
+        getUser(),
+      ]);
+      // Prefer identity roles (app_metadata.roles from Netlify Identity dashboard)
+      if (identityUser?.roles && identityUser.roles.length > 0) {
+        setRole(roleFromArray(identityUser.roles));
+        return;
+      }
+      // Fall back to custom store via API
       if (res.ok) {
         const data = (await res.json()) as { role?: string };
         if (data.role === "editor" || data.role === "admin") setRole(data.role);
@@ -48,7 +72,7 @@ export default function useAuth() {
     } catch {
       setRole("viewer");
     }
-  }, []);
+  }, [roleFromArray]);
 
   const syncSession = useCallback(async () => {
     try {

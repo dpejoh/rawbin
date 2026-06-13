@@ -111,8 +111,8 @@ export default async (req: Request) => {
 
     const token = extractToken(req);
     if (!token) return fail("Unauthorized");
-    const user = await verifyRequest();
-    if (!user) return fail("Unauthorized");
+    const auth = await verifyRequest();
+    if (!auth) return fail("Unauthorized");
 
     switch (method) {
       case "GET": {
@@ -127,7 +127,7 @@ export default async (req: Request) => {
       }
 
       case "POST": {
-        if (!await requireRole(user.email, "admin")) return fail("Forbidden");
+        if (!await requireRole(auth.email, "admin", auth.roles)) return fail("Forbidden");
         let body: unknown;
         try {
           body = (await req.json()) as unknown;
@@ -182,7 +182,7 @@ export default async (req: Request) => {
       }
 
       case "PUT": {
-        if (!await requireRole(user.email, "admin")) return fail("Forbidden");
+        if (!await requireRole(auth.email, "admin", auth.roles)) return fail("Forbidden");
         let body: unknown;
         try {
           body = (await req.json()) as unknown;
@@ -244,7 +244,7 @@ export default async (req: Request) => {
       }
 
       case "DELETE": {
-        if (!await requireRole(user.email, "admin")) return fail("Forbidden");
+        if (!await requireRole(auth.email, "admin", auth.roles)) return fail("Forbidden");
         let body: unknown;
         try {
           body = (await req.json()) as unknown;

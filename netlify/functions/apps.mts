@@ -54,10 +54,10 @@ export default async (req: Request) => {
 
     const token = extractToken(req);
     if (!token) return fail("Unauthorized");
-    const user = await verifyRequest();
-    if (!user) return fail("Unauthorized");
+    const auth = await verifyRequest();
+    if (!auth) return fail("Unauthorized");
 
-    if (!await requireRole(user.email, "admin")) return fail("Forbidden");
+    if (!await requireRole(auth.email, "admin", auth.roles)) return fail("Forbidden");
 
     if (method === "POST") {
       const path = url.pathname;

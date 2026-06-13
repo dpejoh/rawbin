@@ -21,11 +21,11 @@ export function extractToken(req: Request): string | null {
   return auth.slice(7)
 }
 
-export async function verifyRequest(): Promise<{ email: string; id: string } | null> {
+export async function verifyRequest(): Promise<{ email: string; id: string; roles: string[] } | null> {
   try {
     const user = await getUser()
     if (!user) return null
-    return { email: user.email ?? '', id: user.id }
+    return { email: user.email ?? '', id: user.id, roles: user.roles ?? [] }
   } catch {
     return null
   }
@@ -33,7 +33,7 @@ export async function verifyRequest(): Promise<{ email: string; id: string } | n
 
 const HIERARCHY: Record<string, number> = { viewer: 0, editor: 1, admin: 2 }
 
-export async function getUserRole(email: string): Promise<string> {
+async function getCustomRole(email: string): Promise<string> {
   try {
     const store = getStore('user-roles')
     const raw = await store.get('index')
@@ -45,7 +45,23 @@ export async function getUserRole(email: string): Promise<string> {
   }
 }
 
-export async function requireRole(email: string, minRole: string): Promise<boolean> {
-  const role = await getUserRole(email)
+export async function getEffectiveRole(email: string, identityRoles: string[]): Promise<string> {
+  if (identityRoles.length > 0) {
+    let best = 'viewer'
+    let bestLevel = 0
+    for (const r of identityRoles) {
+      const level = HIERARCHY[r] ?? 0
+      if (level > bestLevel) {
+        bestLevel = level
+        best = r
+      }
+    }
+    return best
+  }
+  return getCustomRole(email)
+}
+
+export async function requireRole(email: string, minRole: string, identityRoles: string[] = []): Promise<boolean> {
+  const role = await getEffectiveRole(email, identityRoles)
   return (HIERARCHY[role] ?? 0) >= (HIERARCHY[minRole] ?? 0)
 }

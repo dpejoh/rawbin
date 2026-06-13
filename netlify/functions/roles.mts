@@ -1,9 +1,10 @@
 import { getStore } from "@netlify/blobs";
-import { ok, fail, extractToken, verifyRequest, getUserRole, requireRole } from "./_auth.mjs";
+import { admin } from "@netlify/identity";
+import { ok, fail, extractToken, verifyRequest, getEffectiveRole, requireRole } from "./_auth.mjs";
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 
-async function getAllRoles(): Promise<Record<string, string>> {
+async function getAllCustomRoles(): Promise<Record<string, string>> {
   try {
     const store = getStore("user-roles");
     const raw = await store.get("index");
@@ -14,10 +15,30 @@ async function getAllRoles(): Promise<Record<string, string>> {
   }
 }
 
-async function saveAllRoles(roles: Record<string, string>): Promise<void> {
+async function saveAllCustomRoles(roles: Record<string, string>): Promise<void> {
   const store = getStore("user-roles");
   await store.set("index", JSON.stringify(roles));
   await store.get("index");
+}
+
+async function findUserIdByEmail(email: string): Promise<string | null> {
+  try {
+    const users = await admin.listUsers();
+    const user = users.find((u) => u.email === email);
+    return user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function setIdentityRole(email: string, newRole: string): Promise<void> {
+  const userId = await findUserIdByEmail(email);
+  if (!userId) return;
+  try {
+    await admin.updateUser(userId, { app_metadata: { roles: [newRole] } });
+  } catch (err) {
+    console.error("Failed to update Netlify Identity role:", email, err);
+  }
 }
 
 function validRole(role: string): boolean {
@@ -32,28 +53,29 @@ export default async (req: Request) => {
     const token = extractToken(req);
     if (!token) return fail("Unauthorized");
 
-    const user = await verifyRequest();
-    if (!user) return fail("Unauthorized");
+    const auth = await verifyRequest();
+    if (!auth) return fail("Unauthorized");
 
-    const callerRole = await getUserRole(user.email);
+    const callerRole = await getEffectiveRole(auth.email, auth.roles);
 
-    // Bootstrap: if store is empty and caller matches ADMIN_EMAIL, auto-promote
-    const allRoles = await getAllRoles();
-    if (Object.keys(allRoles).length === 0 && method === "GET" && user.email === ADMIN_EMAIL) {
-      allRoles[user.email] = "admin";
-      await saveAllRoles(allRoles);
-      return ok({ email: user.email, role: "admin", bootstrap: true });
+    // Bootstrap: if custom store is empty and caller matches ADMIN_EMAIL, auto-promote
+    const allCustomRoles = await getAllCustomRoles();
+    if (Object.keys(allCustomRoles).length === 0 && method === "GET" && auth.email === ADMIN_EMAIL) {
+      allCustomRoles[auth.email] = "admin";
+      await saveAllCustomRoles(allCustomRoles);
+      await setIdentityRole(auth.email, "admin");
+      return ok({ email: auth.email, role: "admin", bootstrap: true });
     }
 
     if (method === "GET") {
-      const result: Record<string, unknown> = { email: user.email, role: callerRole };
+      const result: Record<string, unknown> = { email: auth.email, role: callerRole };
       if (callerRole === "admin") {
-        result.roles = allRoles;
+        result.roles = allCustomRoles;
       }
       return ok(result);
     }
 
-    if (!await requireRole(user.email, "admin")) return fail("Forbidden");
+    if (!await requireRole(auth.email, "admin", auth.roles)) return fail("Forbidden");
 
     if (method === "POST") {
       let body: unknown;
@@ -67,8 +89,9 @@ export default async (req: Request) => {
       if (!email || !role) return fail("Missing email or role");
       if (!validRole(role)) return fail("Invalid role. Must be: viewer, editor, or admin");
 
-      allRoles[email] = role;
-      await saveAllRoles(allRoles);
+      allCustomRoles[email] = role;
+      await saveAllCustomRoles(allCustomRoles);
+      await setIdentityRole(email, role);
 
       return ok({ email, role });
     }
@@ -84,10 +107,12 @@ export default async (req: Request) => {
       const { email } = body as { email?: string };
       if (!email) return fail("Missing email");
 
-      const roles = await getAllRoles();
+      const roles = await getAllCustomRoles();
       if (!roles[email]) return fail("Not found");
       delete roles[email];
-      await saveAllRoles(roles);
+      await saveAllCustomRoles(roles);
+      // Remove role from Netlify Identity user record
+      await setIdentityRole(email, "viewer");
 
       return ok({ deleted: true });
     }
