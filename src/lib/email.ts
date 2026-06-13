@@ -21,7 +21,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<void> {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: fromEmail,
+        from: `rawbin <${fromEmail}>`,
         to: [args.to],
         subject: args.subject,
         html: args.html,

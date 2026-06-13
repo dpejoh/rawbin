@@ -74,8 +74,8 @@ roles.post("/api/roles", async (c) => {
     await sendEmail({
       to: body.email,
       subject: "You've been invited to rawbin",
-      html: `<p>Hi,</p><p>You've been invited to <strong>${session.instance_slug}.rawbin.dpejoh.com</strong> as a <strong>${body.role}</strong>.</p><p>Click the link below to set your password and get started:</p><p><a href="${setupUrl}">${setupUrl}</a></p><p>This link expires in 48 hours.</p>`,
-      text: `Hi,\n\nYou've been invited to ${session.instance_slug}.rawbin.dpejoh.com as a ${body.role}.\n\nClick this link to set your password:\n${setupUrl}\n\nThis link expires in 48 hours.`,
+      html: `<p>Hi,</p><p>You've been invited to <strong>${session.instance_slug}.${host}</strong> as a <strong>${body.role}</strong>.</p><p>Click the link below to set your password and get started:</p><p><a href="${setupUrl}">${setupUrl}</a></p><p>This link expires in 48 hours.</p>`,
+      text: `Hi,\n\nYou've been invited to ${session.instance_slug}.${host} as a ${body.role}.\n\nClick this link to set your password:\n${setupUrl}\n\nThis link expires in 48 hours.`,
       env: c.env,
     });
   }
