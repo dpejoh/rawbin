@@ -2,7 +2,7 @@
 import { Hono } from "hono";
 import { applyShuffle } from "../lib/shuffle";
 import { resolveRefs } from "../lib/resolveRefs";
-import { getInstanceSlug, verifyJWT, parseAuthHeader } from "../lib/auth";
+import { getInstanceSlug, verifyJWT, parseAuthHeader, meetsRole } from "../lib/auth";
 import type { SessionPayload } from "../lib/auth";
 
 interface Env {
@@ -11,8 +11,6 @@ interface Env {
   ASSETS: Fetcher;
   JWT_SECRET: string;
 }
-
-const R2_WORKER = "https://rawbin.dpejoh.com";
 
 function isValidSlug(s: string): boolean {
   return /^[a-zA-Z0-9_-]+$/.test(s);
@@ -42,9 +40,10 @@ clipboards.get("/clips/:slug", async (c) => {
 
   let output: string;
 
+  const baseUrl = `${new URL(c.req.url).protocol}//${c.req.header("host") ?? "rawbin.dpejoh.com"}`;
   try {
     const decoded = item.use_base64 ? atob(item.content) : item.content;
-    const resolved = await resolveRefs(decoded, c.env.DB, R2_WORKER);
+    const resolved = await resolveRefs(decoded, c.env.DB, baseUrl);
     if (resolved !== null) {
       const reEncoded = item.use_base64 ? btoa(resolved) : resolved;
       output = item.use_shuffle ? applyShuffle(reEncoded) : reEncoded;
@@ -64,9 +63,7 @@ async function requireRole(
   session: SessionPayload | null,
   minRole: string,
 ): Promise<boolean> {
-  if (!session) return false;
-  const hierarchy: Record<string, number> = { viewer: 0, yuri: 0, editor: 1, admin: 2 };
-  return (hierarchy[session.role] ?? 0) >= (hierarchy[minRole] ?? 0);
+  return meetsRole(session?.role ?? null, minRole);
 }
 
 clipboards.get("/api/clipboards", async (c) => {

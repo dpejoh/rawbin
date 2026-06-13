@@ -1,6 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 import { Hono } from "hono";
-import { verifyJWT, parseAuthHeader } from "../lib/auth";
+import { getInstanceSlug, verifyJWT, parseAuthHeader } from "../lib/auth";
 
 interface Env {
   DB: D1Database;
@@ -12,8 +12,8 @@ interface Env {
 const apps = new Hono<{ Bindings: Env }>();
 
 apps.get("/api/apps", async (c) => {
-  // Public GET — no auth required (frontend doesn't send token for this)
-  const instance_slug = "admin";
+  // Public GET — no auth required, derive instance from host
+  const instance_slug = getInstanceSlug(c.req.raw, new URL(c.req.url));
 
   const q = c.req.query("q");
   let items;

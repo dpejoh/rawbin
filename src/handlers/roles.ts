@@ -1,6 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 import { Hono } from "hono";
-import { verifyJWT, parseAuthHeader } from "../lib/auth";
+import { verifyJWT, parseAuthHeader, getAppDomain, ROLES } from "../lib/auth";
 import { sendEmail } from "../lib/email";
 
 interface Env {
@@ -47,8 +47,7 @@ roles.post("/api/roles", async (c) => {
   const body = await c.req.json<{ email?: string; role?: string }>();
   if (!body.email || !body.role) return c.json({ error: "Missing email or role" }, 400);
 
-  const validRoles = ["viewer", "editor", "admin", "yuri"];
-  if (!validRoles.includes(body.role)) return c.json({ error: "Invalid role" }, 400);
+  if (!ROLES.includes(body.role as typeof ROLES[number])) return c.json({ error: "Invalid role" }, 400);
 
   const existing = await c.env.DB.prepare(
     "SELECT email FROM users WHERE email = ? AND instance_slug = ?",
@@ -70,7 +69,8 @@ roles.post("/api/roles", async (c) => {
       "INSERT INTO invite_tokens (id, email, instance_slug, token, type, expires_at) VALUES (?, ?, ?, ?, 'invite', ?)",
     ).bind(crypto.randomUUID(), body.email, session.instance_slug, token, expiresAt).run();
 
-    const setupUrl = `https://${session.instance_slug}.rawbin.dpejoh.com?token=${token}`;
+    const host = getAppDomain(c.req.raw);
+    const setupUrl = `https://${session.instance_slug}.${host}?token=${token}`;
     await sendEmail({
       to: body.email,
       subject: "You've been invited to rawbin",

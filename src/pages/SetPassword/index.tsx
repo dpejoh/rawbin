@@ -15,7 +15,7 @@ export default function SetPasswordPage({ onDone }: { onDone: () => void }) {
 
   useEffect(() => {
     if (!token) { setError("Missing token"); return; }
-    fetch(`/api/set-password?token=${encodeURIComponent(token)}`)
+    fetch(`/api/auth/set-password?token=${encodeURIComponent(token)}`)
       .then(async (res) => {
         if (!res.ok) {
           const data = await res.json() as { error?: string };
@@ -35,7 +35,7 @@ export default function SetPasswordPage({ onDone }: { onDone: () => void }) {
     setSubmitting(true);
     setError("");
     try {
-      const res = await fetch("/api/set-password", {
+      const res = await fetch("/api/auth/set-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, password }),

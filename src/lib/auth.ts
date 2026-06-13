@@ -8,19 +8,57 @@ export interface SessionPayload {
   sid: string;
 }
 
+export const ROLES = ["viewer", "yuri", "editor", "admin"] as const;
+export const ROLE_HIERARCHY: Record<string, number> = { viewer: 0, yuri: 0, editor: 1, admin: 2 };
+
+export function meetsRole(userRole: string | null, minRole: string): boolean {
+  if (!userRole) return false;
+  return (ROLE_HIERARCHY[userRole] ?? 0) >= (ROLE_HIERARCHY[minRole] ?? 0);
+}
+
 export function getInstanceSlug(request: Request, url?: URL): string {
-  // Allow explicit override via ?instance= param
   const paramSlug = url?.searchParams.get("instance") ?? url?.searchParams.get("slug");
   if (paramSlug) return paramSlug;
 
   const host = request.headers.get("host") ?? "";
-  // e.g. yuri.rawbin.dpejoh.com → "yuri"
-  // e.g. rawbin.dpejoh.com → "admin" (bare domain = admin dashboard)
   const parts = host.split(".");
   if (parts.length >= 3) {
     return parts[0]!;
   }
   return "admin";
+}
+
+export function getAppDomain(request: Request): string {
+  const host = request.headers.get("host") ?? "";
+  return host || "rawbin.dpejoh.com";
+}
+
+export async function hashPassword(password: string, salt: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  const derivedBits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt: encoder.encode(salt),
+      iterations: 100_000,
+      hash: "SHA-256",
+    } as Pbkdf2Params,
+    keyMaterial,
+    256,
+  );
+  return Array.from(new Uint8Array(derivedBits))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+export async function verifyPassword(password: string, salt: string, hash: string): Promise<boolean> {
+  return (await hashPassword(password, salt)) === hash;
 }
 
 export async function verifyJWT(

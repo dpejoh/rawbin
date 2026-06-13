@@ -1,6 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 import { Hono } from "hono";
-import { verifyJWT, parseAuthHeader } from "../lib/auth";
+import { getInstanceSlug, verifyJWT, parseAuthHeader } from "../lib/auth";
 import { applyShuffle } from "../lib/shuffle";
 
 interface Env {
@@ -12,45 +12,11 @@ interface Env {
 
 const catalog = new Hono<{ Bindings: Env }>();
 
-// ── Rate limiting for public raw endpoint ─────────────────────
-
-async function checkRateLimit(env: Env, ip: string): Promise<boolean> {
-  const key = `ratelimit:${ip}`;
-  const row = await env.DB.prepare(
-    "SELECT value FROM resolve_config WHERE instance_slug = ?",
-  ).bind(key).first<{ value: string }>();
-  const now = Date.now();
-  const windowMs = 60_000; // 1 minute
-  const maxReqs = 60;
-
-  if (row) {
-    const [count, ts] = row.value.split(":").map(Number);
-    if (now - ts < windowMs) {
-      if (count >= maxReqs) return false;
-      await env.DB.prepare(
-        "UPDATE resolve_config SET config = ?, updated_at = datetime('now') WHERE instance_slug = ?",
-      ).bind(`${count + 1}:${ts}`, key).run();
-    } else {
-      await env.DB.prepare(
-        "UPDATE resolve_config SET config = ?, updated_at = datetime('now') WHERE instance_slug = ?",
-      ).bind(`1:${now}`, key).run();
-    }
-  } else {
-    await env.DB.prepare(
-      "INSERT INTO resolve_config (instance_slug, config, updated_at) VALUES (?, ?, datetime('now'))",
-    ).bind(key, `1:${now}`).run();
-  }
-  return true;
-}
-
-// ── Public keybox raw endpoint (rate-limited, shuffled) ───────
+// ── Public keybox raw endpoint (shuffled) ─────────────────────
 
 catalog.get("/raw/key/:source", async (c) => {
   const source = c.req.param("source");
-  const ip = c.req.header("cf-connecting-ip") ?? "unknown";
-  if (!(await checkRateLimit(c.env, ip))) return c.body("Rate limited", 429);
-
-  const instance_slug = c.req.query("instance") ?? "admin";
+  const instance_slug = getInstanceSlug(c.req.raw, new URL(c.req.url));
 
   // Find the entry with working status or latest for this source
   const entry = await c.env.DB.prepare(
@@ -75,7 +41,7 @@ catalog.get("/raw/key/:source/:version", async (c) => {
   const ip = c.req.header("cf-connecting-ip") ?? "unknown";
   if (!(await checkRateLimit(c.env, ip))) return c.body("Rate limited", 429);
 
-  const instance_slug = c.req.query("instance") ?? "admin";
+  const instance_slug = getInstanceSlug(c.req.raw, new URL(c.req.url));
 
   const entry = await c.env.DB.prepare(
     "SELECT * FROM keybox_history WHERE instance_slug = ? AND source = ? AND version = ? LIMIT 1",
@@ -101,7 +67,7 @@ async function requireAdmin(auth: string | null, env: Env): Promise<{ email: str
 }
 
 catalog.get("/api/catalog", async (c) => {
-  const instance_slug = c.req.query("instance") ?? "admin";
+  const instance_slug = getInstanceSlug(c.req.raw, new URL(c.req.url));
 
   // Check for recheck query
   const recheck = c.req.query("recheck");

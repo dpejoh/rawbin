@@ -108,7 +108,8 @@ export async function resolveRefs(
   let parsed: unknown;
   try {
     parsed = JSON.parse(decodedJson);
-  } catch {
+  } catch (err) {
+    console.error("resolveRefs: invalid JSON", err);
     return null;
   }
 
