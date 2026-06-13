@@ -35,7 +35,6 @@ export default function RolesPage({ token }: RolesPageProps) {
   const [newRole, setNewRole] = useState('editor');
   const [createOpen, setCreateOpen] = useState(false);
   const [createEmail, setCreateEmail] = useState('');
-  const [createPassword, setCreatePassword] = useState('');
   const [createSlug, setCreateSlug] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -64,7 +63,7 @@ export default function RolesPage({ token }: RolesPageProps) {
         body: JSON.stringify({ email: newEmail.trim(), role: newRole }),
       });
       if (res.ok) {
-        toast.success(`Role set for ${newEmail.trim()}`);
+        toast.success(`Invite sent to ${newEmail.trim()}`);
         setAddOpen(false);
         setNewEmail('');
         await fetchRoles();
@@ -92,19 +91,18 @@ export default function RolesPage({ token }: RolesPageProps) {
   }, [token, fetchRoles]);
 
   const handleCreate = useCallback(async () => {
-    if (!token || !createEmail.trim() || !createPassword || !createSlug.trim()) return;
+    if (!token || !createEmail.trim() || !createSlug.trim()) return;
     setCreating(true);
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ email: createEmail.trim(), password: createPassword, instance_slug: createSlug.trim() }),
+        body: JSON.stringify({ email: createEmail.trim(), instance_slug: createSlug.trim() }),
       });
       if (res.ok) {
-        toast.success(`Instance created for ${createEmail.trim()} → ${createSlug.trim()}.rawbin.dpejoh.com`);
+        toast.success(`Instance created — invite sent to ${createEmail.trim()}`);
         setCreateOpen(false);
         setCreateEmail('');
-        setCreatePassword('');
         setCreateSlug('');
       } else {
         const data = await res.json() as { error?: string };
@@ -112,7 +110,7 @@ export default function RolesPage({ token }: RolesPageProps) {
       }
     } catch { toast.error('Failed to create account'); }
     finally { setCreating(false); }
-  }, [token, createEmail, createPassword, createSlug]);
+  }, [token, createEmail, createSlug]);
 
   const entries = Object.entries(roles).sort(([a], [b]) => a.localeCompare(b));
 
@@ -195,7 +193,7 @@ export default function RolesPage({ token }: RolesPageProps) {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
-            <Button onClick={handleAdd} disabled={!newEmail.trim()}>Add</Button>
+            <Button onClick={handleAdd} disabled={!newEmail.trim()}>Invite</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -215,15 +213,6 @@ export default function RolesPage({ token }: RolesPageProps) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Password</Label>
-              <Input
-                type="password"
-                value={createPassword}
-                onChange={(e) => setCreatePassword(e.target.value)}
-                placeholder="Password"
-              />
-            </div>
-            <div className="space-y-1.5">
               <Label>Instance Slug</Label>
               <Input
                 value={createSlug}
@@ -237,7 +226,7 @@ export default function RolesPage({ token }: RolesPageProps) {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={!createEmail.trim() || !createPassword || !createSlug.trim() || creating}>
+            <Button onClick={handleCreate} disabled={!createEmail.trim() || !createSlug.trim() || creating}>
               {creating ? 'Creating...' : 'Create Instance'}
             </Button>
           </DialogFooter>

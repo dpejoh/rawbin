@@ -1,11 +1,12 @@
 import { useState, useCallback, useEffect, Suspense, lazy } from 'react';
-import { Toaster } from 'sonner';
+import { Toaster, toast } from 'sonner';
 import NavRail from './components/NavRail';
 import BottomNav from './components/BottomNav';
 import CommandPalette from './components/CommandPalette';
 import GlobalFab from './components/GlobalFab';
 import BackToTop from './components/BackToTop';
 import AuthGate from './components/AuthGate';
+import SetPasswordPage from './pages/SetPassword';
 import useAuth from './hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -52,6 +53,10 @@ export default function App() {
   const auth = useAuth();
   const { user, token, role, isLoading, signOut } = auth;
   const [page, setPage] = useState<Page>(getInitialPage);
+  const [setupToken, setSetupToken] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('token');
+  });
 
   useEffect(() => {
     localStorage.setItem('keybox:page', page);
@@ -64,6 +69,16 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.add('dark');
   }, []);
+
+  const handleSetupDone = useCallback(() => {
+    setSetupToken(null);
+    window.history.replaceState({}, '', '/');
+    toast.success('Password set! Please log in.');
+  }, []);
+
+  if (setupToken) {
+    return <SetPasswordPage onDone={handleSetupDone} />;
+  }
 
   if (isLoading) {
     return <LoadingScreen />;

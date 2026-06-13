@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { SignJWT, jwtVerify } from "jose";
 import { verifyJWT, parseAuthHeader } from "./lib/auth";
+import { sendEmail } from "./lib/email";
 import clipboards from "./handlers/clipboards";
 import r2 from "./handlers/r2";
 import apks from "./handlers/apks";
@@ -17,6 +18,8 @@ interface Env {
   RAW_BIN: R2Bucket;
   ASSETS: Fetcher;
   JWT_SECRET: string;
+  RESEND_API_KEY?: string;
+  FROM_EMAIL?: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -75,18 +78,16 @@ async function verifyPassword(password: string, salt: string, hash: string): Pro
 // ── Auth routes ──────────────────────────────────────────────
 
 app.post("/api/auth/register", async (c) => {
-  // Require admin auth
   const auth = parseAuthHeader(c.req.header("Authorization"));
   if (!auth) return c.json({ error: "Unauthorized" }, 401);
   const secret = new TextEncoder().encode(c.env.JWT_SECRET);
   const session = await verifyJWT(auth, secret, c.env.DB);
   if (!session || session.role !== "admin") return c.json({ error: "Forbidden" }, 403);
 
-  const body = await c.req.json<{ email?: string; password?: string; instance_slug?: string }>();
+  const body = await c.req.json<{ email?: string; instance_slug?: string }>();
   const email = body.email ?? "";
-  const password = body.password ?? "";
   const instance_slug = body.instance_slug ?? "";
-  if (!email || !password || !instance_slug) {
+  if (!email || !instance_slug) {
     return c.json({ error: "Missing fields" }, 400);
   }
 
@@ -95,20 +96,82 @@ app.post("/api/auth/register", async (c) => {
   ).bind(instance_slug).first();
   if (existing) return c.json({ error: "Instance already exists" }, 409);
 
+  // Create instance + user with empty password_hash
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      "INSERT INTO instances (slug, owner_email) VALUES (?, ?)",
+    ).bind(instance_slug, email),
+    c.env.DB.prepare(
+      "INSERT INTO users (email, password_hash, role, instance_slug) VALUES (?, '', 'admin', ?)",
+    ).bind(email, instance_slug),
+  ]);
+
+  // Generate setup token
+  const token = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+  await c.env.DB.prepare(
+    "INSERT INTO invite_tokens (id, email, instance_slug, token, type, expires_at) VALUES (?, ?, ?, ?, 'setup', ?)",
+  ).bind(crypto.randomUUID(), email, instance_slug, token, expiresAt).run();
+
+  // Send email
+  const setupUrl = `https://${instance_slug}.rawbin.dpejoh.com?token=${token}`;
+  await sendEmail({
+    to: email,
+    subject: "Set up your rawbin account",
+    html: `<p>Hi,</p><p>Your rawbin instance <strong>${instance_slug}.rawbin.dpejoh.com</strong> is ready.</p><p>Click the link below to set your password and activate your account:</p><p><a href="${setupUrl}">${setupUrl}</a></p><p>This link expires in 48 hours.</p>`,
+    text: `Hi,\n\nYour rawbin instance ${instance_slug}.rawbin.dpejoh.com is ready.\n\nClick this link to set your password:\n${setupUrl}\n\nThis link expires in 48 hours.`,
+    env: c.env,
+  });
+
+  return c.json({ ok: true, instance_slug }, 201);
+});
+
+// ── Set-password routes ─────────────────────────────────────
+
+app.get("/api/set-password", async (c) => {
+  const token = c.req.query("token");
+  if (!token) return c.json({ error: "Missing token" }, 400);
+
+  const row = await c.env.DB.prepare(
+    "SELECT email, instance_slug, used, expires_at FROM invite_tokens WHERE token = ?",
+  ).bind(token).first<{ email: string; instance_slug: string; used: number; expires_at: string }>();
+  if (!row) return c.json({ error: "Invalid token" }, 404);
+  if (row.used) return c.json({ error: "Token already used" }, 400);
+  if (new Date(row.expires_at) < new Date()) return c.json({ error: "Token expired" }, 400);
+
+  return c.json({ email: row.email, instance_slug: row.instance_slug });
+});
+
+app.post("/api/set-password", async (c) => {
+  const body = await c.req.json<{ token?: string; password?: string }>();
+  const token = body.token ?? "";
+  const password = body.password ?? "";
+  if (!token || !password) return c.json({ error: "Missing fields" }, 400);
+
+  const row = await c.env.DB.prepare(
+    "SELECT email, instance_slug, used, expires_at FROM invite_tokens WHERE token = ?",
+  ).bind(token).first<{ email: string; instance_slug: string; used: number; expires_at: string }>();
+  if (!row) return c.json({ error: "Invalid token" }, 404);
+  if (row.used) return c.json({ error: "Token already used" }, 400);
+  if (new Date(row.expires_at) < new Date()) return c.json({ error: "Token expired" }, 400);
+
   const salt = crypto.randomUUID();
   const hash = await hashPassword(password, salt);
   const stored = `${salt}:${hash}`;
 
   await c.env.DB.batch([
     c.env.DB.prepare(
-      "INSERT INTO instances (slug, owner_email) VALUES (?, ?)",
-    ).bind(instance_slug, email),
+      "UPDATE users SET password_hash = ? WHERE email = ? AND instance_slug = ?",
+    ).bind(stored, row.email, row.instance_slug),
     c.env.DB.prepare(
-      "INSERT INTO users (email, password_hash, role, instance_slug) VALUES (?, ?, 'admin', ?)",
-    ).bind(email, stored, instance_slug),
+      "UPDATE invite_tokens SET used = 1 WHERE token = ?",
+    ).bind(token),
+    c.env.DB.prepare(
+      "DELETE FROM sessions WHERE email = ? AND instance_slug = ?",
+    ).bind(row.email, row.instance_slug),
   ]);
 
-  return c.json({ ok: true, instance_slug }, 201);
+  return c.json({ ok: true });
 });
 
 app.post("/api/auth/login", async (c) => {

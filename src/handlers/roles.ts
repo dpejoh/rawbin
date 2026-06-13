@@ -1,12 +1,15 @@
 /// <reference types="@cloudflare/workers-types" />
 import { Hono } from "hono";
 import { verifyJWT, parseAuthHeader } from "../lib/auth";
+import { sendEmail } from "../lib/email";
 
 interface Env {
   DB: D1Database;
   RAW_BIN: R2Bucket;
   ASSETS: Fetcher;
   JWT_SECRET: string;
+  RESEND_API_KEY?: string;
+  FROM_EMAIL?: string;
 }
 
 const roles = new Hono<{ Bindings: Env }>();
@@ -56,11 +59,25 @@ roles.post("/api/roles", async (c) => {
       "UPDATE users SET role = ? WHERE email = ? AND instance_slug = ?",
     ).bind(body.role, body.email, session.instance_slug).run();
   } else {
-    // Create user — they'll need to request a password reset or be given a password
-    // For now, set a placeholder password hash
     await c.env.DB.prepare(
       "INSERT INTO users (email, password_hash, role, instance_slug) VALUES (?, '', ?, ?)",
     ).bind(body.email, body.role, session.instance_slug).run();
+
+    // Send invite email with setup link
+    const token = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+    await c.env.DB.prepare(
+      "INSERT INTO invite_tokens (id, email, instance_slug, token, type, expires_at) VALUES (?, ?, ?, ?, 'invite', ?)",
+    ).bind(crypto.randomUUID(), body.email, session.instance_slug, token, expiresAt).run();
+
+    const setupUrl = `https://${session.instance_slug}.rawbin.dpejoh.com?token=${token}`;
+    await sendEmail({
+      to: body.email,
+      subject: "You've been invited to rawbin",
+      html: `<p>Hi,</p><p>You've been invited to <strong>${session.instance_slug}.rawbin.dpejoh.com</strong> as a <strong>${body.role}</strong>.</p><p>Click the link below to set your password and get started:</p><p><a href="${setupUrl}">${setupUrl}</a></p><p>This link expires in 48 hours.</p>`,
+      text: `Hi,\n\nYou've been invited to ${session.instance_slug}.rawbin.dpejoh.com as a ${body.role}.\n\nClick this link to set your password:\n${setupUrl}\n\nThis link expires in 48 hours.`,
+      env: c.env,
+    });
   }
 
   return c.json({ email: body.email, role: body.role });
