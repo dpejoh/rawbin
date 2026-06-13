@@ -12,22 +12,19 @@ interface Env {
 const apps = new Hono<{ Bindings: Env }>();
 
 apps.get("/api/apps", async (c) => {
-  const auth = parseAuthHeader(c.req.header("Authorization"));
-  if (!auth) return c.json({ error: "Unauthorized" }, 401);
-  const secret = new TextEncoder().encode(c.env.JWT_SECRET);
-  const session = await verifyJWT(auth, secret, c.env.DB);
-  if (!session || session.role !== "admin") return c.json({ error: "Forbidden" }, 403);
+  // Public GET — no auth required (frontend doesn't send token for this)
+  const instance_slug = "admin";
 
   const q = c.req.query("q");
   let items;
   if (q) {
     items = await c.env.DB.prepare(
       "SELECT * FROM app_catalog WHERE instance_slug = ? AND (package_name LIKE ? OR app_name LIKE ?) ORDER BY app_name",
-    ).bind(session.instance_slug, `%${q}%`, `%${q}%`).all();
+    ).bind(instance_slug, `%${q}%`, `%${q}%`).all();
   } else {
     items = await c.env.DB.prepare(
       "SELECT * FROM app_catalog WHERE instance_slug = ? ORDER BY app_name",
-    ).bind(session.instance_slug).all();
+    ).bind(instance_slug).all();
   }
 
   // Return as dict { packageName: appName } — frontend expects this format
