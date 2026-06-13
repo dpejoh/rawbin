@@ -14,7 +14,7 @@ import {
   AUTH_EVENTS,
 } from "@netlify/identity";
 
-export type UserRole = "viewer" | "editor" | "admin";
+export type UserRole = "viewer" | "editor" | "admin" | "yuri";
 
 function getJWT(): string | null {
   const match = document.cookie.match(/\bnf_jwt=([^;]+)/);
@@ -33,7 +33,7 @@ export default function useAuth() {
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [recoveryToken, setRecoveryToken] = useState<string | null>(null);
 
-  const HIERARCHY: Record<string, number> = { viewer: 0, editor: 1, admin: 2 };
+  const HIERARCHY: Record<string, number> = { viewer: 0, yuri: 0, editor: 1, admin: 2 };
 
   const roleFromArray = useCallback((roles: string[]): UserRole => {
     let best: UserRole = "viewer";

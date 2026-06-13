@@ -42,7 +42,7 @@ async function setIdentityRole(email: string, newRole: string): Promise<void> {
 }
 
 function validRole(role: string): boolean {
-  return role === "viewer" || role === "editor" || role === "admin";
+  return role === "viewer" || role === "editor" || role === "admin" || role === "yuri";
 }
 
 export default async (req: Request) => {

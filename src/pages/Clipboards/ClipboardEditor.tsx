@@ -157,6 +157,7 @@ export default function ClipboardEditor({
   const rawUrl = clipboardUrl(clipboard.id, savedSlug || undefined);
   const canonicalUrl = clipboardUrl(clipboard.id);
   const charCount = content.length.toLocaleString();
+  const canEditContent = role === 'admin' || (role === 'yuri' && clipboard.slug === 'yuri');
 
   return (
     <div className="flex-1 p-8 overflow-auto max-w-2xl">
@@ -289,7 +290,7 @@ export default function ClipboardEditor({
               onChange={(e) => setContent(e.target.value)}
               placeholder="Start typing…"
               className="min-h-48 font-mono text-base border-0 resize-y focus-visible:ring-1 px-4 py-2"
-              readOnly={role !== 'admin'}
+              readOnly={!canEditContent}
             />
           </div>
         )}
@@ -302,14 +303,14 @@ export default function ClipboardEditor({
             <Copy className="size-3.5 mr-1" />
             Copy
           </Button>
-          {role === 'admin' && (
+          {canEditContent && (
             <Button variant="outline" size="sm" onClick={handlePaste}>
               <ClipboardIcon className="size-3.5 mr-1" />
               Paste
             </Button>
           )}
         </div>
-        {role === 'admin' && (
+        {canEditContent && (
           <div className="flex items-center gap-3 flex-wrap">
             {editing && (
               <Button variant="ghost" size="sm" onClick={handleCancelEdit}>

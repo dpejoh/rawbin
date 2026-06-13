@@ -31,7 +31,7 @@ export async function verifyRequest(): Promise<{ email: string; id: string; role
   }
 }
 
-const HIERARCHY: Record<string, number> = { viewer: 0, editor: 1, admin: 2 }
+const HIERARCHY: Record<string, number> = { viewer: 0, yuri: 0, editor: 1, admin: 2 }
 
 async function getCustomRole(email: string): Promise<string> {
   try {

@@ -182,7 +182,6 @@ export default async (req: Request) => {
       }
 
       case "PUT": {
-        if (!await requireRole(auth.email, "admin", auth.roles)) return fail("Forbidden");
         let body: unknown;
         try {
           body = (await req.json()) as unknown;
@@ -203,6 +202,19 @@ export default async (req: Request) => {
         const index = await getIndex();
         const item = index.find((i) => i.id === putData.id);
         if (!item) return fail("Not found");
+
+        const isYuriEditor = auth.roles.includes("yuri") && item.slug === "yuri";
+        if (isYuriEditor) {
+          if (putData.content !== undefined) {
+            const stored = item.useBase64 !== false ? Buffer.from(putData.content).toString("base64") : putData.content;
+            await setContent(item.id, stored);
+          }
+          item.updatedAt = new Date().toISOString();
+          await saveIndex(index);
+          return ok({ updated: true });
+        }
+
+        if (!await requireRole(auth.email, "admin", auth.roles)) return fail("Forbidden");
 
         const now = new Date().toISOString();
 
