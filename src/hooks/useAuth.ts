@@ -1,285 +1,132 @@
 import { useState, useEffect, useCallback } from "react";
-import {
-  getUser,
-  onAuthChange,
-  login as nlLogin,
-  logout as nlLogout,
-  signup as nlSignup,
-  handleAuthCallback,
-  refreshSession,
-  hydrateSession,
-  requestPasswordRecovery,
-  recoverPassword as nlRecoverPassword,
-  acceptInvite as nlAcceptInvite,
-  AUTH_EVENTS,
-} from "@netlify/identity";
 
 export type UserRole = "viewer" | "editor" | "admin" | "yuri";
+export type AuthMode = "login" | "signup";
 
-function getJWT(): string | null {
-  const match = document.cookie.match(/\bnf_jwt=([^;]+)/);
-  return match ? (match[1] ?? null) : null;
-}
-
-export type AuthMode = "login" | "signup" | "forgot" | "recovery" | "invite" | "confirm-sent" | "recovery-sent";
+const TOKEN_KEY = "rawbin:token";
 
 export default function useAuth() {
-  const [user, setUser] = useState<{ email: string; id: string } | null>(null);
+  const [user, setUser] = useState<{ email: string } | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [role, setRole] = useState<UserRole>("viewer");
+  const [slug, setSlug] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [mode, setMode] = useState<AuthMode>("login");
   const [error, setError] = useState<string | null>(null);
-  const [inviteToken, setInviteToken] = useState<string | null>(null);
-  const [recoveryToken, setRecoveryToken] = useState<string | null>(null);
 
-  const HIERARCHY: Record<string, number> = { viewer: 0, yuri: 0, editor: 1, admin: 2 };
-
-  const roleFromArray = useCallback((roles: string[]): UserRole => {
-    let best: UserRole = "viewer";
-    let bestLevel = 0;
-    for (const r of roles) {
-      const level = HIERARCHY[r] ?? 0;
-      if (level > bestLevel) {
-        bestLevel = level;
-        best = r as UserRole;
-      }
-    }
-    return best;
-  }, []);
-
-  const fetchRole = useCallback(async (jwt: string) => {
+  const syncSession = useCallback(async (jwt: string) => {
     try {
-      const [res, identityUser] = await Promise.all([
-        fetch("/.netlify/functions/roles", {
-          headers: { Authorization: `Bearer ${jwt}` },
-        }),
-        getUser(),
-      ]);
-      // Prefer identity roles (app_metadata.roles from Netlify Identity dashboard)
-      if (identityUser?.roles && identityUser.roles.length > 0) {
-        setRole(roleFromArray(identityUser.roles));
-        return;
-      }
-      // Fall back to custom store via API
+      const res = await fetch("/api/auth/me", {
+        headers: { Authorization: `Bearer ${jwt}` },
+      });
       if (res.ok) {
-        const data = (await res.json()) as { role?: string };
-        if (data.role === "editor" || data.role === "admin") setRole(data.role);
-        else setRole("viewer");
-      } else {
-        setRole("viewer");
+        const data = (await res.json()) as { email: string; role: string; slug: string };
+        setUser({ email: data.email });
+        setRole(data.role as UserRole);
+        setSlug(data.slug);
+        setToken(jwt);
+        return true;
       }
-    } catch {
-      setRole("viewer");
-    }
-  }, [roleFromArray]);
-
-  const syncSession = useCallback(async () => {
-    try {
-      await refreshSession();
     } catch {
       /* ignore */
     }
-    const jwt = getJWT();
-    const u = await getUser();
-    if (jwt && u) {
-      setToken(jwt);
-      setUser({ email: u.email ?? "", id: u.id });
-      await fetchRole(jwt);
-    } else if (u) {
-      setUser({ email: u.email ?? "", id: u.id });
-      const jwt2 = getJWT();
-      if (jwt2) {
-        setToken(jwt2);
-        await fetchRole(jwt2);
-      }
-    } else {
-      setUser(null);
-      setToken(null);
-      setRole("viewer");
-    }
-  }, [fetchRole]);
+    localStorage.removeItem(TOKEN_KEY);
+    setUser(null);
+    setToken(null);
+    setRole("viewer");
+    setSlug("");
+    return false;
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      // Check for recovery_token in URL hash — handle with recoverPassword()
-      // instead of handleAuthCallback() to avoid session issues with updateUser()
-      const hash = window.location.hash;
-      if (hash) {
-        const params = new URLSearchParams(hash.replace(/^#/, ""));
-        const rToken = params.get("recovery_token");
-        if (rToken) {
-          setRecoveryToken(rToken);
-          window.location.hash = "";
-          setMode("recovery");
-          setIsLoading(false);
-          return;
-        }
+      const stored = localStorage.getItem(TOKEN_KEY);
+      if (stored) {
+        await syncSession(stored);
       }
-
-      // Process other auth callback tokens (confirmation, invite, OAuth, email change)
-      try {
-        const result = await handleAuthCallback();
-        if (cancelled) return;
-        if (result) {
-          if (result.type === "invite" && result.token) {
-            setInviteToken(result.token);
-            setMode("invite");
-            setIsLoading(false);
-            return;
-          }
-          // OAuth, confirmation, email_change — user is logged in
-          await hydrateSession();
-          await syncSession();
-          if (!cancelled) setIsLoading(false);
-          return;
-        }
-      } catch {
-        /* no callback to process */
-      }
-
-      await syncSession();
       if (!cancelled) setIsLoading(false);
     })();
 
-    const unsub = onAuthChange((event, u) => {
-      if (event === AUTH_EVENTS.LOGIN) {
-        syncSession();
-      } else if (event === AUTH_EVENTS.LOGOUT) {
-        setUser(null);
-        setToken(null);
-        setRole("viewer");
-        setMode("login");
-      } else if (event === AUTH_EVENTS.TOKEN_REFRESH) {
-        const jwt = getJWT();
-        if (jwt) {
-          setToken(jwt);
-          fetchRole(jwt);
-        }
-      } else if (event === AUTH_EVENTS.USER_UPDATED) {
-        if (u) setUser({ email: u.email ?? "", id: u.id });
-      }
-    });
-
-    return () => {
-      cancelled = true;
-      unsub();
-    };
-  }, [syncSession, fetchRole]);
+    return () => { cancelled = true; };
+  }, [syncSession]);
 
   const login = useCallback(
     async (email: string, password: string) => {
       setError(null);
       try {
-        await nlLogin(email, password);
-        await syncSession();
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = (await res.json()) as {
+          token?: string;
+          email?: string;
+          role?: string;
+          slug?: string;
+          error?: string;
+        };
+        if (!res.ok || !data.token) {
+          throw new Error(data.error ?? "Login failed");
+        }
+        localStorage.setItem(TOKEN_KEY, data.token);
+        setToken(data.token);
+        setUser({ email: data.email ?? email });
+        setRole((data.role as UserRole) ?? "viewer");
+        setSlug(data.slug ?? "");
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Login failed";
         setError(msg);
         throw err;
       }
     },
-    [syncSession],
+    [],
   );
 
   const signup = useCallback(
-    async (email: string, password: string, name?: string) => {
+    async (email: string, password: string, instance_slug: string) => {
       setError(null);
       try {
-        const data = name ? { full_name: name } : undefined;
-        await nlSignup(email, password, data);
-        const jwt = getJWT();
-        if (jwt) {
-          await syncSession();
-        } else {
-          const u = await getUser();
-          if (u) {
-            setUser({ email: u.email ?? "", id: u.id });
-            const jwt2 = getJWT();
-            if (jwt2) {
-              setToken(jwt2);
-              await fetchRole(jwt2);
-            }
-          } else {
-            setMode("confirm-sent");
-          }
+        const res = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, instance_slug }),
+        });
+        const data = (await res.json()) as { error?: string; ok?: boolean };
+        if (!res.ok) {
+          throw new Error(data.error ?? "Registration failed");
         }
+        return data.ok;
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Signup failed";
+        const msg = err instanceof Error ? err.message : "Registration failed";
         setError(msg);
         throw err;
       }
     },
-    [syncSession, fetchRole],
-  );
-
-  const forgotPassword = useCallback(async (email: string) => {
-    setError(null);
-    try {
-      await requestPasswordRecovery(email);
-      setMode("recovery-sent");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to send recovery email";
-      setError(msg);
-      throw err;
-    }
-  }, []);
-
-  const resetPassword = useCallback(
-    async (password: string) => {
-      if (!recoveryToken) {
-        setError("No recovery token available. Please request a new password reset.");
-        return;
-      }
-      setError(null);
-      try {
-        await nlRecoverPassword(recoveryToken, password);
-        setRecoveryToken(null);
-        await hydrateSession();
-        await syncSession();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Failed to reset password";
-        setError(msg);
-        throw err;
-      }
-    },
-    [recoveryToken, syncSession],
-  );
-
-  const acceptInvite = useCallback(
-    async (password: string) => {
-      if (!inviteToken) {
-        setError("No invite token found");
-        return;
-      }
-      setError(null);
-      try {
-        await nlAcceptInvite(inviteToken, password);
-        setInviteToken(null);
-        await syncSession();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Failed to accept invite";
-        setError(msg);
-        throw err;
-      }
-    },
-    [inviteToken, syncSession],
+    [],
   );
 
   const signOut = useCallback(async () => {
-    try {
-      await nlLogout();
-    } catch {
-      /* ignore */
+    if (token) {
+      try {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch {
+        /* ignore */
+      }
     }
+    localStorage.removeItem(TOKEN_KEY);
     setUser(null);
     setToken(null);
     setRole("viewer");
+    setSlug("");
     setMode("login");
     setError(null);
-  }, []);
+  }, [token]);
 
   const clearError = useCallback(() => setError(null), []);
 
@@ -287,14 +134,12 @@ export default function useAuth() {
     user,
     token,
     role,
+    slug,
     isLoading,
     mode,
     error,
     login,
     signup,
-    forgotPassword,
-    resetPassword,
-    acceptInvite,
     signOut,
     setMode,
     clearError,

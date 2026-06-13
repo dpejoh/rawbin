@@ -2,17 +2,13 @@ import { useState, useEffect, useRef, type FormEvent } from "react";
 import type { UseAuthReturn } from "@/hooks/useAuth";
 
 export default function AuthGate(auth: UseAuthReturn) {
-  const {
-    mode, setMode, error, clearError, isLoading,
-    login, signup, forgotPassword, resetPassword, acceptInvite,
-  } = auth;
+  const { mode, setMode, error, clearError, isLoading, login, signup } = auth;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [name, setName] = useState("");
+  const [instanceSlug, setInstanceSlug] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [sentEmail, setSentEmail] = useState("");
   const firstInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => { firstInput.current?.focus(); }, [mode]);
@@ -32,47 +28,13 @@ export default function AuthGate(auth: UseAuthReturn) {
     e.preventDefault();
     if (password !== confirmPassword) {
       clearError();
-      return; // handled by submit button disabled state
+      return;
     }
     setSubmitting(true);
     try {
-      await signup(email, password, name || undefined);
-    } catch {
-      /* error is set by hook */
-    }
-    setSubmitting(false);
-  };
-
-  const handleForgot = async (e: FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      await forgotPassword(email);
-      setSentEmail(email);
-    } catch {
-      /* error is set by hook */
-    }
-    setSubmitting(false);
-  };
-
-  const handleRecoveryReset = async (e: FormEvent) => {
-    e.preventDefault();
-    if (password !== confirmPassword) return;
-    setSubmitting(true);
-    try {
-      await resetPassword(password);
-    } catch {
-      /* error is set by hook */
-    }
-    setSubmitting(false);
-  };
-
-  const handleAcceptInvite = async (e: FormEvent) => {
-    e.preventDefault();
-    if (password !== confirmPassword) return;
-    setSubmitting(true);
-    try {
-      await acceptInvite(password);
+      await signup(email, password, instanceSlug);
+      setMode("login");
+      clearError();
     } catch {
       /* error is set by hook */
     }
@@ -115,10 +77,7 @@ export default function AuthGate(auth: UseAuthReturn) {
               >
                 {submitting ? "Signing in..." : "Sign In"}
               </button>
-              <div className="flex justify-between text-xs">
-                <button type="button" onClick={() => { setMode("forgot"); clearError(); }} className="text-muted-foreground hover:text-foreground transition-colors">
-                  Forgot password?
-                </button>
+              <div className="flex justify-center text-xs">
                 <button type="button" onClick={() => { setMode("signup"); clearError(); }} className="text-muted-foreground hover:text-foreground transition-colors">
                   Create account
                 </button>
@@ -129,15 +88,6 @@ export default function AuthGate(auth: UseAuthReturn) {
           {mode === "signup" && (
             <form onSubmit={handleSignup} className="w-full space-y-3">
               <input
-                ref={firstInput}
-                type="text"
-                placeholder="Name (optional)"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoComplete="name"
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-              <input
                 type="email"
                 placeholder="Email"
                 value={email}
@@ -165,13 +115,21 @@ export default function AuthGate(auth: UseAuthReturn) {
                 autoComplete="new-password"
                 className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
+              <input
+                placeholder="Subdomain (e.g. yuri → yuri.rawbin.dpejoh.com)"
+                value={instanceSlug}
+                onChange={(e) => { setInstanceSlug(e.target.value); clearError(); }}
+                required
+                pattern="[a-zA-Z0-9-]+"
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
               {password && confirmPassword && password !== confirmPassword && (
                 <p className="text-xs text-destructive">Passwords do not match</p>
               )}
               {error && <p className="text-xs text-destructive">{error}</p>}
               <button
                 type="submit"
-                disabled={submitting || !email || !password || !confirmPassword || password !== confirmPassword}
+                disabled={submitting || !email || !password || !confirmPassword || password !== confirmPassword || !instanceSlug}
                 className="w-full h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
               >
                 {submitting ? "Creating account..." : "Create Account"}
@@ -182,145 +140,6 @@ export default function AuthGate(auth: UseAuthReturn) {
                   Sign in
                 </button>
               </p>
-            </form>
-          )}
-
-          {mode === "forgot" && (
-            <form onSubmit={handleForgot} className="w-full space-y-3">
-              <p className="text-sm text-muted-foreground text-center">
-                Enter your email and we'll send you a password recovery link.
-              </p>
-              <input
-                ref={firstInput}
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); clearError(); }}
-                required
-                autoComplete="email"
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-              {error && <p className="text-xs text-destructive">{error}</p>}
-              <button
-                type="submit"
-                disabled={submitting || !email}
-                className="w-full h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-              >
-                {submitting ? "Sending..." : "Send Recovery Email"}
-              </button>
-              <p className="text-xs text-center text-muted-foreground">
-                <button type="button" onClick={() => { setMode("login"); clearError(); }} className="underline hover:text-foreground transition-colors">
-                  Back to sign in
-                </button>
-              </p>
-            </form>
-          )}
-
-          {mode === "recovery-sent" && (
-            <div className="w-full text-center space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Recovery email sent to <strong>{sentEmail}</strong>. Check your inbox and click the link to reset your password.
-              </p>
-              <button
-                type="button"
-                onClick={() => { setMode("login"); clearError(); }}
-                className="text-xs text-muted-foreground underline hover:text-foreground transition-colors"
-              >
-                Back to sign in
-              </button>
-            </div>
-          )}
-
-          {mode === "confirm-sent" && (
-            <div className="w-full text-center space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Check your email for a confirmation link. You'll need to confirm your email before signing in.
-              </p>
-              <button
-                type="button"
-                onClick={() => { setMode("login"); clearError(); }}
-                className="text-xs text-muted-foreground underline hover:text-foreground transition-colors"
-              >
-                Back to sign in
-              </button>
-            </div>
-          )}
-
-          {mode === "recovery" && (
-            <form onSubmit={handleRecoveryReset} className="w-full space-y-3">
-              <p className="text-sm text-muted-foreground text-center">
-                Choose a new password for your account.
-              </p>
-              <input
-                ref={firstInput}
-                type="password"
-                placeholder="New password"
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); clearError(); }}
-                required
-                minLength={6}
-                autoComplete="new-password"
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-              <input
-                type="password"
-                placeholder="Confirm new password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-              {password && confirmPassword && password !== confirmPassword && (
-                <p className="text-xs text-destructive">Passwords do not match</p>
-              )}
-              {error && <p className="text-xs text-destructive">{error}</p>}
-              <button
-                type="submit"
-                disabled={submitting || !password || !confirmPassword || password !== confirmPassword}
-                className="w-full h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-              >
-                {submitting ? "Resetting..." : "Reset Password"}
-              </button>
-            </form>
-          )}
-
-          {mode === "invite" && (
-            <form onSubmit={handleAcceptInvite} className="w-full space-y-3">
-              <p className="text-sm text-muted-foreground text-center">
-                You've been invited. Set a password to create your account.
-              </p>
-              <input
-                ref={firstInput}
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); clearError(); }}
-                required
-                minLength={6}
-                autoComplete="new-password"
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-              <input
-                type="password"
-                placeholder="Confirm password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-              {password && confirmPassword && password !== confirmPassword && (
-                <p className="text-xs text-destructive">Passwords do not match</p>
-              )}
-              {error && <p className="text-xs text-destructive">{error}</p>}
-              <button
-                type="submit"
-                disabled={submitting || !password || !confirmPassword || password !== confirmPassword}
-                className="w-full h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-              >
-                {submitting ? "Creating account..." : "Accept Invite"}
-              </button>
             </form>
           )}
         </div>

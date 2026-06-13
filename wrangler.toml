@@ -1,0 +1,18 @@
+name = "rawbin"
+main = "src/worker.ts"
+compatibility_date = "2026-06-13"
+compatibility_flags = ["nodejs_compat"]
+
+assets = { directory = "./dist" }
+
+[[d1_databases]]
+binding = "DB"
+database_name = "rawbin-db"
+database_id = "e4200b0e-aba3-4358-9989-c103741c46b4"
+
+[[r2_buckets]]
+binding = "RAW_BIN"
+bucket_name = "rawbin"
+
+[vars]
+JWT_SECRET = "change-me-in-production"
