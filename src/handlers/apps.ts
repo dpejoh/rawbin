@@ -30,12 +30,12 @@ apps.get("/api/apps", async (c) => {
     ).bind(session.instance_slug).all();
   }
 
-  return c.json(items.results.map((r: Record<string, unknown>) => ({
-    id: r.id,
-    packageName: r.package_name,
-    appName: r.app_name,
-    createdAt: r.created_at,
-  })));
+  // Return as dict { packageName: appName } — frontend expects this format
+  const dict: Record<string, string> = {};
+  for (const r of items.results) {
+    dict[r.package_name as string] = r.app_name as string;
+  }
+  return c.json(dict);
 });
 
 apps.post("/api/apps/save", async (c) => {

@@ -103,29 +103,31 @@ async function requireAdmin(auth: string | null, env: Env): Promise<{ email: str
 catalog.get("/api/catalog", async (c) => {
   const instance_slug = c.req.query("instance") ?? "admin";
 
-  // Check for specific version query
+  // Check for recheck query
+  const recheck = c.req.query("recheck");
+  if (recheck) {
+    const session = await requireAdmin(parseAuthHeader(c.req.header("Authorization")), c.env);
+    if (!session) return c.json({ error: "Forbidden" }, 403);
+    const [source, version] = recheck.split(":");
+    if (source && version) {
+      // Mark as re-checked
+      await c.env.DB.prepare(
+        "UPDATE keybox_history SET updated_at = ? WHERE instance_slug = ? AND source = ? AND version = ?",
+      ).bind(new Date().toISOString(), session.instance_slug, source, version).run();
+      return c.json({ ok: true });
+    }
+  }
+
+  // Check for specific version query — returns raw content (not JSON)
   const v = c.req.query("v");
   if (v) {
     const [source, version] = v.split(":");
     if (source && version) {
       const entry = await c.env.DB.prepare(
-        "SELECT * FROM keybox_history WHERE instance_slug = ? AND source = ? AND version = ? LIMIT 1",
-      ).bind(instance_slug, source, version).first<{
-        id: string; serial: string; source: string; version: string;
-        content: string; status: string; created_at: string; updated_at: string;
-      }>();
+        "SELECT content FROM keybox_history WHERE instance_slug = ? AND source = ? AND version = ? LIMIT 1",
+      ).bind(instance_slug, source, version).first<{ content: string }>();
       if (!entry) return c.json(null);
-      return c.json({
-        id: entry.id,
-        serial: entry.serial,
-        source: entry.source,
-        version: entry.version,
-        text: entry.content,
-        content: entry.content,
-        status: entry.status,
-        createdAt: entry.created_at,
-        updatedAt: entry.updated_at,
-      });
+      return c.body(entry.content, 200, { "Content-Type": "text/plain" });
     }
   }
 
@@ -151,24 +153,33 @@ catalog.get("/api/catalog", async (c) => {
     source: r.source,
     version: r.version,
     serial: r.serial,
-    text: r.content,
+    text: "",  // Short label — was lost during migration
     timestamp: r.created_at,
     last_checked: r.updated_at,
     revoked: r.status === "revoked",
+    softbanned: r.status === "softbanned",
   }));
 
-  // Build latest per source
+  // Build latest per source (compare numerically when possible)
   const latest: Record<string, string> = {};
   for (const e of items.results) {
     const src = e.source as string;
     const ver = e.version as string;
-    if (!latest[src] || ver > latest[src]) {
+    const existing = latest[src];
+    if (!existing) {
       latest[src] = ver;
+    } else {
+      const a = parseInt(ver, 10);
+      const b = parseInt(existing, 10);
+      if (isNaN(a) || isNaN(b) ? ver > existing : a > b) {
+        latest[src] = ver;
+      }
     }
   }
 
-  // Find working entry (first "active" entry or latest overall)
-  const workingEntry = items.results.find((r) => r.status === "active") ?? items.results[0];
+  // Find working entry — latest active entry from the working source (or latest overall)
+  const activeEntries = items.results.filter((r) => r.status === "active");
+  const workingEntry = activeEntries.length > 0 ? activeEntries[0] : items.results[0];
   const working = workingEntry ? { source: workingEntry.source, version: workingEntry.version } : null;
 
   // Find auto-override
