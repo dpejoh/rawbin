@@ -1,8 +1,10 @@
 import { getStore } from "@netlify/blobs";
 import { randomUUID } from "node:crypto";
 import { applyShuffle } from "./_shuffle.mjs";
+import { resolveRefs } from "./_resolveRefs.mjs";
 
 const SITE_URL = process.env.URL ?? `https://${process.env.SITE_NAME}.netlify.app`;
+const R2_WORKER = process.env.R2_WORKER_URL ?? "http://localhost:8787";
 
 function ok(data: unknown) {
   return new Response(JSON.stringify(data), {
@@ -122,7 +124,26 @@ export default async (req: Request) => {
       if (!content) {
         return new Response("Not found", { status: 404 });
       }
-      const output = item.useShuffle ? applyShuffle(content) : content;
+
+      let output: string;
+
+      try {
+        const decoded = item.useBase64
+          ? Buffer.from(content, "base64").toString()
+          : content;
+        const resolved = await resolveRefs(decoded, R2_WORKER);
+        if (resolved !== null) {
+          const reEncoded = item.useBase64
+            ? Buffer.from(resolved).toString("base64")
+            : resolved;
+          output = item.useShuffle ? applyShuffle(reEncoded) : reEncoded;
+        } else {
+          output = item.useShuffle ? applyShuffle(content) : content;
+        }
+      } catch {
+        output = item.useShuffle ? applyShuffle(content) : content;
+      }
+
       return new Response(output, {
         status: 200,
         headers: { "Content-Type": "text/plain" },
