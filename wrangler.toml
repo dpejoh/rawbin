@@ -20,4 +20,4 @@ binding = "RAW_BIN"
 bucket_name = "rawbin"
 
 [vars]
-JWT_SECRET = "change-me-in-production"
+# JWT_SECRET set via: npx wrangler secret put JWT_SECRET

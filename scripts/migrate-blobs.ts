@@ -96,19 +96,17 @@ async function fetchJson<T>(url: string, token?: string): Promise<T> {
 }
 
 async function migrate() {
-  // Get a token from the old Netlify Identity
-  // You can also use a PAT or skip auth for public endpoints
-  // For this script, we'll use the admin credentials
-  const loginRes = await fetch(`${NETLIFY_BASE}/.netlify/functions/roles`, {
-    headers: { "Authorization": `Bearer ${process.env.TOKEN}` },
-  });
+  const token = process.env.TOKEN;
+  if (!token) {
+    console.log(`
+Usage: TOKEN="your-jwt" npx tsx scripts/migrate-blobs.ts
 
-  if (!loginRes.ok) {
-    console.log("Please set TOKEN env var. You can get it from localStorage.rawbin:token after logging into rawbin.netlify.app");
+Get the token from:
+  rawbin.dpejoh.com  →  localStorage.getItem('rawbin:token')
+  rawbin.netlify.app →  document.cookie.match(/\\bnf_jwt=([^;]+)/)?.[1]
+`);
     process.exit(1);
   }
-
-  const token = process.env.TOKEN!;
   const sqlStatements: string[] = [];
 
   // 1. Migrate APKs
@@ -147,12 +145,14 @@ async function migrate() {
 
   // 5. Migrate App Catalog
   console.log("=== Migrating App Catalog ===");
-  const apps = await fetchJson<OldAppEntry[]>(`${NETLIFY_BASE}/.netlify/functions/apps`, token);
-  for (const app of apps) {
-    const id = app.id ?? crypto.randomUUID();
-    sqlStatements.push(`INSERT OR IGNORE INTO app_catalog (id, instance_slug, package_name, app_name, created_at) VALUES ('${id}', '${INSTANCE_SLUG}', '${escape(app.packageName)}', '${escape(app.appName)}', datetime('now'));`);
+  const appsResp = await fetchJson<Record<string, string>>(`${NETLIFY_BASE}/.netlify/functions/apps`, token);
+  if (appsResp && typeof appsResp === "object") {
+    // Response is { packageName: appName, ... }
+    for (const [packageName, appName] of Object.entries(appsResp)) {
+      sqlStatements.push(`INSERT OR IGNORE INTO app_catalog (id, instance_slug, package_name, app_name, created_at) VALUES ('${crypto.randomUUID()}', '${INSTANCE_SLUG}', '${escape(packageName)}', '${escape(appName)}', datetime('now'));`);
+    }
+    console.log(`  ${Object.keys(appsResp).length} App Catalog entries`);
   }
-  console.log(`  ${apps.length} App Catalog entries`);
 
   // 6. Migrate Roles
   console.log("=== Migrating Roles ===");
