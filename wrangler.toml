@@ -5,6 +5,11 @@ compatibility_flags = ["nodejs_compat"]
 
 assets = { directory = "./dist" }
 
+routes = [
+  { pattern = "rawbin.dpejoh.com/*", zone_id = "4c1a06e3bc610fcd2e22ecba89a81392" },
+  { pattern = "*.rawbin.dpejoh.com/*", zone_id = "4c1a06e3bc610fcd2e22ecba89a81392" },
+]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "rawbin-db"
