@@ -5,12 +5,12 @@ import {
   login as nlLogin,
   logout as nlLogout,
   signup as nlSignup,
-  oauthLogin as nlOAuthLogin,
   handleAuthCallback,
   refreshSession,
+  hydrateSession,
   requestPasswordRecovery,
+  recoverPassword as nlRecoverPassword,
   acceptInvite as nlAcceptInvite,
-  updateUser as nlUpdateUser,
   AUTH_EVENTS,
 } from "@netlify/identity";
 
@@ -21,7 +21,7 @@ function getJWT(): string | null {
   return match ? (match[1] ?? null) : null;
 }
 
-export type AuthMode = "login" | "signup" | "forgot" | "recovery" | "invite" | "confirm-sent" | "recovery-sent" | "error";
+export type AuthMode = "login" | "signup" | "forgot" | "recovery" | "invite" | "confirm-sent" | "recovery-sent";
 
 export default function useAuth() {
   const [user, setUser] = useState<{ email: string; id: string } | null>(null);
@@ -31,6 +31,7 @@ export default function useAuth() {
   const [mode, setMode] = useState<AuthMode>("login");
   const [error, setError] = useState<string | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [recoveryToken, setRecoveryToken] = useState<string | null>(null);
 
   const fetchRole = useCallback(async (jwt: string) => {
     try {
@@ -79,25 +80,40 @@ export default function useAuth() {
     let cancelled = false;
 
     (async () => {
+      // Check for recovery_token in URL hash — handle with recoverPassword()
+      // instead of handleAuthCallback() to avoid session issues with updateUser()
+      const hash = window.location.hash;
+      if (hash) {
+        const params = new URLSearchParams(hash.replace(/^#/, ""));
+        const rToken = params.get("recovery_token");
+        if (rToken) {
+          setRecoveryToken(rToken);
+          window.location.hash = "";
+          setMode("recovery");
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Process other auth callback tokens (confirmation, invite, OAuth, email change)
       try {
         const result = await handleAuthCallback();
         if (cancelled) return;
         if (result) {
-          if (result.type === "recovery") {
-            setMode("recovery");
-            await syncSession();
-            setIsLoading(false);
-            return;
-          }
           if (result.type === "invite" && result.token) {
             setInviteToken(result.token);
             setMode("invite");
             setIsLoading(false);
             return;
           }
+          // OAuth, confirmation, email_change — user is logged in
+          await hydrateSession();
+          await syncSession();
+          if (!cancelled) setIsLoading(false);
+          return;
         }
       } catch {
-        /* no callback to process, or expired */
+        /* no callback to process */
       }
 
       await syncSession();
@@ -118,8 +134,6 @@ export default function useAuth() {
           setToken(jwt);
           fetchRole(jwt);
         }
-      } else if (event === AUTH_EVENTS.RECOVERY) {
-        setMode("recovery");
       } else if (event === AUTH_EVENTS.USER_UPDATED) {
         if (u) setUser({ email: u.email ?? "", id: u.id });
       }
@@ -154,10 +168,8 @@ export default function useAuth() {
         await nlSignup(email, password, data);
         const jwt = getJWT();
         if (jwt) {
-          // autoconfirm is on — user is logged in
           await syncSession();
         } else {
-          // autoconfirm is off — check if user was created
           const u = await getUser();
           if (u) {
             setUser({ email: u.email ?? "", id: u.id });
@@ -191,17 +203,26 @@ export default function useAuth() {
     }
   }, []);
 
-  const resetPassword = useCallback(async (password: string) => {
-    setError(null);
-    try {
-      await nlUpdateUser({ password });
-      setMode("login");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to reset password";
-      setError(msg);
-      throw err;
-    }
-  }, []);
+  const resetPassword = useCallback(
+    async (password: string) => {
+      if (!recoveryToken) {
+        setError("No recovery token available. Please request a new password reset.");
+        return;
+      }
+      setError(null);
+      try {
+        await nlRecoverPassword(recoveryToken, password);
+        setRecoveryToken(null);
+        await hydrateSession();
+        await syncSession();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Failed to reset password";
+        setError(msg);
+        throw err;
+      }
+    },
+    [recoveryToken, syncSession],
+  );
 
   const acceptInvite = useCallback(
     async (password: string) => {
@@ -212,6 +233,7 @@ export default function useAuth() {
       setError(null);
       try {
         await nlAcceptInvite(inviteToken, password);
+        setInviteToken(null);
         await syncSession();
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed to accept invite";
@@ -221,10 +243,6 @@ export default function useAuth() {
     },
     [inviteToken, syncSession],
   );
-
-  const oauthLogin = useCallback((provider: "google" | "github" | "gitlab" | "bitbucket") => {
-    nlOAuthLogin(provider);
-  }, []);
 
   const signOut = useCallback(async () => {
     try {
@@ -248,13 +266,11 @@ export default function useAuth() {
     isLoading,
     mode,
     error,
-    inviteToken,
     login,
     signup,
     forgotPassword,
     resetPassword,
     acceptInvite,
-    oauthLogin,
     signOut,
     setMode,
     clearError,

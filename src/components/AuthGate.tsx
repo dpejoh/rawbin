@@ -1,16 +1,10 @@
 import { useState, useEffect, useRef, type FormEvent } from "react";
 import type { UseAuthReturn } from "@/hooks/useAuth";
 
-const PROVIDERS = [
-  { id: "google" as const, label: "Google" },
-  { id: "github" as const, label: "GitHub" },
-];
-
 export default function AuthGate(auth: UseAuthReturn) {
   const {
     mode, setMode, error, clearError, isLoading,
     login, signup, forgotPassword, resetPassword, acceptInvite,
-    oauthLogin,
   } = auth;
 
   const [email, setEmail] = useState("");
@@ -128,22 +122,6 @@ export default function AuthGate(auth: UseAuthReturn) {
                 <button type="button" onClick={() => { setMode("signup"); clearError(); }} className="text-muted-foreground hover:text-foreground transition-colors">
                   Create account
                 </button>
-              </div>
-              <div className="relative my-4">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border" /></div>
-                <div className="relative flex justify-center text-xs"><span className="bg-background px-2 text-muted-foreground">or continue with</span></div>
-              </div>
-              <div className="flex gap-2">
-                {PROVIDERS.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => oauthLogin(p.id)}
-                    className="flex-1 h-10 rounded-md border border-input bg-background text-sm text-foreground hover:bg-accent transition-colors"
-                  >
-                    {p.label}
-                  </button>
-                ))}
               </div>
             </form>
           )}
