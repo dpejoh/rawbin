@@ -70,8 +70,6 @@ async function resolveRef(
       name: item.name,
       version: item.version,
       versionCode: item.versionCode,
-      author: item.author,
-      description: item.description,
       size: item.size,
     };
   }
