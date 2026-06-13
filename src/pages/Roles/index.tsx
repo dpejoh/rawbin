@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Trash2, UserPlus, Shield } from 'lucide-react';
+import { Trash2, UserPlus, Shield, UserRoundPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +33,11 @@ export default function RolesPage({ token }: RolesPageProps) {
   const [addOpen, setAddOpen] = useState(false);
   const [newEmail, setNewEmail] = useState('');
   const [newRole, setNewRole] = useState('editor');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createEmail, setCreateEmail] = useState('');
+  const [createPassword, setCreatePassword] = useState('');
+  const [createSlug, setCreateSlug] = useState('');
+  const [creating, setCreating] = useState(false);
 
   const fetchRoles = useCallback(async () => {
     if (!token) return;
@@ -86,15 +91,44 @@ export default function RolesPage({ token }: RolesPageProps) {
     } catch { toast.error('Failed to remove'); }
   }, [token, fetchRoles]);
 
+  const handleCreate = useCallback(async () => {
+    if (!token || !createEmail.trim() || !createPassword || !createSlug.trim()) return;
+    setCreating(true);
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email: createEmail.trim(), password: createPassword, instance_slug: createSlug.trim() }),
+      });
+      if (res.ok) {
+        toast.success(`Account created for ${createEmail.trim()} → ${createSlug.trim()}.rawbin.dpejoh.com`);
+        setCreateOpen(false);
+        setCreateEmail('');
+        setCreatePassword('');
+        setCreateSlug('');
+      } else {
+        const data = await res.json() as { error?: string };
+        toast.error(data.error ?? 'Failed to create account');
+      }
+    } catch { toast.error('Failed to create account'); }
+    finally { setCreating(false); }
+  }, [token, createEmail, createPassword, createSlug]);
+
   const entries = Object.entries(roles).sort(([a], [b]) => a.localeCompare(b));
 
   return (
     <PageLayout title="User Roles" count={`${Object.keys(roles).length} user${Object.keys(roles).length !== 1 ? 's' : ''}`} maxWidth="sm"
       actions={
-        <Button size="sm" onClick={() => setAddOpen(true)}>
-          <UserPlus className="size-4 mr-1" />
-          Add User
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
+            <UserRoundPlus className="size-4 mr-1" />
+            Create Account
+          </Button>
+          <Button size="sm" onClick={() => setAddOpen(true)}>
+            <UserPlus className="size-4 mr-1" />
+            Add User
+          </Button>
+        </div>
       }
     >
 
@@ -162,6 +196,50 @@ export default function RolesPage({ token }: RolesPageProps) {
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
             <Button onClick={handleAdd} disabled={!newEmail.trim()}>Add</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Create Account</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input
+                value={createEmail}
+                onChange={(e) => setCreateEmail(e.target.value)}
+                placeholder="user@example.com"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Password</Label>
+              <Input
+                type="password"
+                value={createPassword}
+                onChange={(e) => setCreatePassword(e.target.value)}
+                placeholder="Password"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Subdomain</Label>
+              <Input
+                value={createSlug}
+                onChange={(e) => setCreateSlug(e.target.value)}
+                placeholder="e.g. yuri"
+              />
+              <p className="text-xs text-muted-foreground">
+                They'll log in at {createSlug || '...'}.rawbin.dpejoh.com
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreate} disabled={!createEmail.trim() || !createPassword || !createSlug.trim() || creating}>
+              {creating ? 'Creating...' : 'Create'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
