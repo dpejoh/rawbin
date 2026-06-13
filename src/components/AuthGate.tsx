@@ -2,12 +2,10 @@ import { useState, useEffect, useRef, type FormEvent } from "react";
 import type { UseAuthReturn } from "@/hooks/useAuth";
 
 export default function AuthGate(auth: UseAuthReturn) {
-  const { mode, setMode, error, clearError, isLoading, login, signup } = auth;
+  const { mode, error, clearError, isLoading, login } = auth;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [instanceSlug, setInstanceSlug] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const firstInput = useRef<HTMLInputElement>(null);
 
@@ -18,23 +16,6 @@ export default function AuthGate(auth: UseAuthReturn) {
     setSubmitting(true);
     try {
       await login(email, password);
-    } catch {
-      /* error is set by hook */
-    }
-    setSubmitting(false);
-  };
-
-  const handleSignup = async (e: FormEvent) => {
-    e.preventDefault();
-    if (password !== confirmPassword) {
-      clearError();
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await signup(email, password, instanceSlug);
-      setMode("login");
-      clearError();
     } catch {
       /* error is set by hook */
     }
@@ -77,71 +58,9 @@ export default function AuthGate(auth: UseAuthReturn) {
               >
                 {submitting ? "Signing in..." : "Sign In"}
               </button>
-              <div className="flex justify-center text-xs">
-                <button type="button" onClick={() => { setMode("signup"); clearError(); }} className="text-muted-foreground hover:text-foreground transition-colors">
-                  Create account
-                </button>
-              </div>
             </form>
           )}
 
-          {mode === "signup" && (
-            <form onSubmit={handleSignup} className="w-full space-y-3">
-              <input
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); clearError(); }}
-                required
-                autoComplete="email"
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-              <input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); clearError(); }}
-                required
-                minLength={6}
-                autoComplete="new-password"
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-              <input
-                type="password"
-                placeholder="Confirm password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-              <input
-                placeholder="Subdomain (e.g. yuri → yuri.rawbin.dpejoh.com)"
-                value={instanceSlug}
-                onChange={(e) => { setInstanceSlug(e.target.value); clearError(); }}
-                required
-                pattern="[a-zA-Z0-9-]+"
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-              {password && confirmPassword && password !== confirmPassword && (
-                <p className="text-xs text-destructive">Passwords do not match</p>
-              )}
-              {error && <p className="text-xs text-destructive">{error}</p>}
-              <button
-                type="submit"
-                disabled={submitting || !email || !password || !confirmPassword || password !== confirmPassword || !instanceSlug}
-                className="w-full h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-              >
-                {submitting ? "Creating account..." : "Create Account"}
-              </button>
-              <p className="text-xs text-center text-muted-foreground">
-                Already have an account?{" "}
-                <button type="button" onClick={() => { setMode("login"); clearError(); }} className="underline hover:text-foreground transition-colors">
-                  Sign in
-                </button>
-              </p>
-            </form>
-          )}
         </div>
       </div>
     </div>

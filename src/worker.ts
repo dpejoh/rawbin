@@ -21,6 +21,18 @@ interface Env {
 
 const app = new Hono<{ Bindings: Env }>();
 
+// ── HTTPS redirect ──────────────────────────────────────────
+
+app.use("*", async (c, next) => {
+  const proto = c.req.header("x-forwarded-proto");
+  if (proto === "http") {
+    const url = new URL(c.req.url);
+    url.protocol = "https:";
+    return c.redirect(url.toString(), 301);
+  }
+  await next();
+});
+
 // ── CORS ──────────────────────────────────────────────────────
 
 app.use("*", cors({
@@ -63,6 +75,13 @@ async function verifyPassword(password: string, salt: string, hash: string): Pro
 // ── Auth routes ──────────────────────────────────────────────
 
 app.post("/api/auth/register", async (c) => {
+  // Require admin auth
+  const auth = parseAuthHeader(c.req.header("Authorization"));
+  if (!auth) return c.json({ error: "Unauthorized" }, 401);
+  const secret = new TextEncoder().encode(c.env.JWT_SECRET);
+  const session = await verifyJWT(auth, secret, c.env.DB);
+  if (!session || session.role !== "admin") return c.json({ error: "Forbidden" }, 403);
+
   const body = await c.req.json<{ email?: string; password?: string; instance_slug?: string }>();
   const email = body.email ?? "";
   const password = body.password ?? "";
