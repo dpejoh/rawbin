@@ -101,7 +101,7 @@ export default function RolesPage({ token }: RolesPageProps) {
         body: JSON.stringify({ email: createEmail.trim(), password: createPassword, instance_slug: createSlug.trim() }),
       });
       if (res.ok) {
-        toast.success(`Account created for ${createEmail.trim()} → ${createSlug.trim()}.rawbin.dpejoh.com`);
+        toast.success(`Instance created for ${createEmail.trim()} → ${createSlug.trim()}.rawbin.dpejoh.com`);
         setCreateOpen(false);
         setCreateEmail('');
         setCreatePassword('');
@@ -122,7 +122,7 @@ export default function RolesPage({ token }: RolesPageProps) {
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
             <UserRoundPlus className="size-4 mr-1" />
-            Create Account
+            Create Instance
           </Button>
           <Button size="sm" onClick={() => setAddOpen(true)}>
             <UserPlus className="size-4 mr-1" />
@@ -203,7 +203,7 @@ export default function RolesPage({ token }: RolesPageProps) {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-xs">
           <DialogHeader>
-            <DialogTitle>Create Account</DialogTitle>
+            <DialogTitle>Create Instance</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
@@ -224,7 +224,7 @@ export default function RolesPage({ token }: RolesPageProps) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Subdomain</Label>
+              <Label>Instance Slug</Label>
               <Input
                 value={createSlug}
                 onChange={(e) => setCreateSlug(e.target.value)}
@@ -238,7 +238,7 @@ export default function RolesPage({ token }: RolesPageProps) {
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button onClick={handleCreate} disabled={!createEmail.trim() || !createPassword || !createSlug.trim() || creating}>
-              {creating ? 'Creating...' : 'Create'}
+              {creating ? 'Creating...' : 'Create Instance'}
             </Button>
           </DialogFooter>
         </DialogContent>
