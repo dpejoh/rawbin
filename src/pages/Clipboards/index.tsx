@@ -65,11 +65,12 @@ export default function ClipboardsPage({ token, role }: ClipboardsPageProps) {
     const ok = await remove(token, id);
     if (ok) {
       toast.success('Clipboard deleted');
+      await fetchAll(token);
     } else {
       toast.error('Failed to delete clipboard');
     }
     setDeleteTarget(null);
-  }, [token, remove]);
+  }, [token, remove, fetchAll]);
 
   const handleBatchDelete = useCallback(async (ids: string[]) => {
     if (!token) return;
@@ -78,8 +79,9 @@ export default function ClipboardsPage({ token, role }: ClipboardsPageProps) {
       const res = await remove(token, id);
       if (res) ok++; else fail++;
     }
+    await fetchAll(token);
     toast(fail === 0 ? `Deleted ${ok} clipboard${ok !== 1 ? 's' : ''}` : `${ok} deleted, ${fail} failed`);
-  }, [token, remove]);
+  }, [token, remove, fetchAll]);
 
   const handleCopyUrl = useCallback(async (id: string) => {
     const cb = clipboards.find((c) => c.id === id);

@@ -104,6 +104,11 @@ export default function FilesPage({ token, role }: FilesPageProps) {
     finally { setIsLoading(false); }
   }, [token]);
 
+  const handleUploaded = useCallback(async () => {
+    setUploadOpen(false);
+    await fetchFiles();
+  }, [fetchFiles]);
+
   useEffect(() => { fetchFiles(); }, [fetchFiles]);
 
   const enterFolder = useCallback((id: string, name: string) => {
@@ -139,13 +144,13 @@ export default function FilesPage({ token, role }: FilesPageProps) {
       body: JSON.stringify({ id: deleteTarget.id }),
     });
     if (res.ok) {
-      setAllItems(prev => prev.filter(f => f.id !== deleteTarget.id));
       toast.success('Deleted');
+      await fetchFiles();
     } else {
       toast.error('Failed to delete');
     }
     setDeleteTarget(null);
-  }, [token, deleteTarget]);
+  }, [token, deleteTarget, fetchFiles]);
 
   const handleCreateFolder = useCallback(async (name: string) => {
     if (!token) return;
@@ -155,17 +160,12 @@ export default function FilesPage({ token, role }: FilesPageProps) {
       body: JSON.stringify({ name, parentId: currentFolderId }),
     });
     if (res.ok) {
-      const { id } = await res.json() as { id: string };
-      const now = new Date().toISOString();
-      setAllItems(prev => [...prev, {
-        id, name, mimeType: 'inode/directory', size: 0,
-        parentId: currentFolderId, isFolder: true, createdAt: now, updatedAt: now,
-      }]);
       toast.success('Folder created');
+      await fetchFiles();
     } else {
       toast.error((await res.text()) || 'Failed to create folder');
     }
-  }, [token, currentFolderId]);
+  }, [token, currentFolderId, fetchFiles]);
 
   const uploadFile = useCallback(async (file: File): Promise<string> => {
     if (!token) throw new Error('No token');
@@ -198,22 +198,16 @@ export default function FilesPage({ token, role }: FilesPageProps) {
     setIsDragging(0);
     const files = Array.from(e.dataTransfer.files);
     if (!files.length) return;
-    const now = new Date().toISOString();
     let ok = 0; let fail = 0;
-    const newItems: FileItem[] = [];
     for (const f of files) {
       try {
-        const id = await uploadFile(f);
-        newItems.push({
-          id, name: f.name, mimeType: f.type || 'application/octet-stream',
-          size: f.size, parentId: currentFolderId, createdAt: now, updatedAt: now,
-        });
+        await uploadFile(f);
         ok++;
       } catch { fail++; }
     }
-    if (newItems.length > 0) setAllItems(prev => [...prev, ...newItems]);
+    if (ok > 0) await fetchFiles();
     toast(fail === 0 ? `${ok} file${ok !== 1 ? 's' : ''} uploaded` : `${ok} uploaded, ${fail} failed`);
-  }, [uploadFile, currentFolderId]);
+  }, [uploadFile, currentFolderId, fetchFiles]);
 
   const totalSize = visibleItems.reduce((acc, f) => acc + f.size, 0);
   const fileCount = visibleItems.filter(f => !f.isFolder).length;
@@ -425,7 +419,7 @@ export default function FilesPage({ token, role }: FilesPageProps) {
           token={token}
           currentFolderId={currentFolderId}
           onClose={() => setUploadOpen(false)}
-          onUploaded={() => setUploadOpen(false)}
+          onUploaded={handleUploaded}
         />
 
         <CreateFolderDialog

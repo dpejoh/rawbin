@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Key, Clipboard, Folder, ListChecks, Puzzle, Smartphone, Shield, LogOut, Code2 } from 'lucide-react';
+import { Key, Clipboard, Folder, ListChecks, Puzzle, Smartphone, Globe, Shield, LogOut, Code2 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -31,7 +31,7 @@ const navItems: { id: Page; icon: React.ReactNode; label: string }[] = [
 
 export default function NavRail({ activePage, onNavigate, userInitials, onSignOut, role }: NavRailProps) {
   const items = role === 'admin'
-    ? [...navItems, { id: 'roles' as Page, icon: <Shield className="size-5" />, label: 'Roles' }]
+    ? [...navItems, { id: 'instances' as Page, icon: <Globe className="size-5" />, label: 'Instances' }, { id: 'roles' as Page, icon: <Shield className="size-5" />, label: 'Roles' }]
     : navItems;
 
   return (

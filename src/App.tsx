@@ -17,12 +17,13 @@ const AppCatalog = lazy(() => import('./pages/AppCatalog'));
 const ModulesPage = lazy(() => import('./pages/Modules'));
 const APKsPage = lazy(() => import('./pages/APKs'));
 const RolesPage = lazy(() => import('./pages/Roles'));
+const InstancesPage = lazy(() => import('./pages/Instances'));
 
-export type Page = 'keybox' | 'clipboards' | 'files' | 'apps' | 'modules' | 'apks' | 'roles';
+export type Page = 'keybox' | 'clipboards' | 'files' | 'apps' | 'modules' | 'apks' | 'roles' | 'instances';
 
 function getInitialPage(): Page {
   const stored = localStorage.getItem('keybox:page');
-  if (stored === 'keybox' || stored === 'clipboards' || stored === 'files' || stored === 'modules' || stored === 'apks' || stored === 'roles') return stored;
+  if (stored === 'keybox' || stored === 'clipboards' || stored === 'files' || stored === 'modules' || stored === 'apks' || stored === 'roles' || stored === 'instances') return stored;
   return 'keybox';
 }
 
@@ -105,6 +106,7 @@ export default function App() {
           {page === 'apps' && <AppCatalog token={token} role={role} />}
           {page === 'modules' && <ModulesPage token={token} role={role} />}
           {page === 'apks' && <APKsPage token={token} role={role} />}
+          {page === 'instances' && <InstancesPage token={token} role={role} />}
           {page === 'roles' && <RolesPage token={token} role={role} />}
         </Suspense>
       </main>

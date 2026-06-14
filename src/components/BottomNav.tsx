@@ -1,4 +1,4 @@
-import { Key, Clipboard, Folder, ListChecks, Puzzle, Smartphone, Shield } from 'lucide-react';
+import { Key, Clipboard, Folder, ListChecks, Puzzle, Smartphone, Globe, Shield } from 'lucide-react';
 import type { Page } from '../App';
 import type { UserRole } from '../hooks/useAuth';
 
@@ -19,7 +19,7 @@ const allActions: { value: Page; label: string; icon: React.ReactNode }[] = [
 
 export default function BottomNav({ activePage, onNavigate, role }: BottomNavProps) {
   const items = role === 'admin'
-    ? [...allActions, { value: 'roles' as Page, label: 'Roles', icon: <Shield className="size-5" /> }]
+    ? [...allActions, { value: 'instances' as Page, label: 'Instances', icon: <Globe className="size-5" /> }, { value: 'roles' as Page, label: 'Roles', icon: <Shield className="size-5" /> }]
     : allActions;
 
   return (

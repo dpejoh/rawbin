@@ -22,7 +22,9 @@ export function getInstanceSlug(request: Request, url?: URL): string {
 
   const host = request.headers.get("host") ?? "";
   const parts = host.split(".");
-  if (parts.length >= 3) {
+  // bare domain (e.g. rawbin.dpejoh.com → 3 parts) → "admin"
+  // subdomain (e.g. yuri.rawbin.dpejoh.com → 4 parts) → "yuri"
+  if (parts.length >= 4) {
     return parts[0]!;
   }
   return "admin";

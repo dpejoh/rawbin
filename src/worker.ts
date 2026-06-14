@@ -10,6 +10,7 @@ import files from "./handlers/files";
 import apps from "./handlers/apps";
 import roles from "./handlers/roles";
 import catalog from "./handlers/catalog";
+import instances from "./handlers/instances";
 
 interface Env {
   DB: D1Database;
@@ -66,6 +67,7 @@ app.route("/", files);
 app.route("/", apps);
 app.route("/", roles);
 app.route("/", catalog);
+app.route("/", instances);
 
 // ── Static assets (fallback) ─────────────────────────────────
 
